@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func TestCasbinAuthorization_Any(t *testing.T) {
+func TestCasbinStringAuthorization_Any(t *testing.T) {
 	type args struct {
 		values []string
 		object string
@@ -30,13 +30,13 @@ func TestCasbinAuthorization_Any(t *testing.T) {
 		wantErr bool
 	}{
 		{"test_permission_casbin_admin_get", args{[]string{"admin", "test"}, "/admin/test", "GET"}, false},
-		{"test_permission_casbin_admin_post", args{[]string{"admin", "test"}, "/admin/test", "GET"}, false},
+		{"test_permission_casbin_admin_post", args{[]string{"admin", "test"}, "/admin/test", "POST"}, false},
 		{"test_permission_casbin_lite_admin", args{[]string{"lite_admin", "test"}, "/admin/test", "GET"}, false},
 		{"test_permission_casbin_lite_admin_no_access", args{[]string{"lite_admin", "test"}, "/admin/test", "DELETE"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewCasbinAuthorization("./test_permissions_authorization_policy.csv")
+			c := NewCasbinStringAuthorization("./test_permissions_authorization_policy.csv")
 			if err := c.Any(tt.args.values, tt.args.object, tt.args.action); (err != nil) != tt.wantErr {
 				t.Errorf("CasbinAuthorization.Any() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -44,7 +44,7 @@ func TestCasbinAuthorization_Any(t *testing.T) {
 	}
 }
 
-func TestCasbinAuthorization_All(t *testing.T) {
+func TestCasbinStringAuthorization_All(t *testing.T) {
 	type args struct {
 		values []string
 		object string
@@ -61,7 +61,7 @@ func TestCasbinAuthorization_All(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewCasbinAuthorization("./test_permissions_authorization_policy.csv")
+			c := NewCasbinStringAuthorization("./test_permissions_authorization_policy.csv")
 			if err := c.All(tt.args.values, tt.args.object, tt.args.action); (err != nil) != tt.wantErr {
 				t.Errorf("CasbinAuthorization.All() error = %v, wantErr %v", err, tt.wantErr)
 			}

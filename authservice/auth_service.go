@@ -84,6 +84,27 @@ func (a *AuthService) GetServiceReg(serviceID string) (*ServiceReg, error) {
 	return &service, loadServicesError
 }
 
+// GetServiceRegWithPubKey returns the service registration record for the given ID if found and validates the PubKey
+func (a *AuthService) GetServiceRegWithPubKey(serviceID string) (*ServiceReg, error) {
+	serviceReg, err := a.GetServiceReg(serviceID)
+	if err != nil || serviceReg == nil {
+		return nil, fmt.Errorf("failed to retrieve service reg: %v", err)
+	}
+
+	if serviceReg.PubKey == nil {
+		return nil, fmt.Errorf("service pub key is nil for id %s", serviceID)
+	}
+
+	if serviceReg.PubKey.Key == nil {
+		err = serviceReg.PubKey.LoadKeyFromPem()
+		if err != nil || serviceReg.PubKey.Key == nil {
+			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", serviceID, err)
+		}
+	}
+
+	return serviceReg, nil
+}
+
 // LoadServices loads the subscribed service registration records and caches them
 // 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
 func (a *AuthService) LoadServices() error {
@@ -143,20 +164,9 @@ func (a *AuthService) ValidateServiceRegistrationKey(privKey *rsa.PrivateKey) er
 		return errors.New("provided priv key is nil")
 	}
 
-	service, err := a.GetServiceReg(a.serviceID)
-	if err != nil || service == nil {
-		return fmt.Errorf("no service registration found with id %s: %v", a.serviceID, err)
-	}
-
-	if service.PubKey == nil {
-		return fmt.Errorf("no service pub key registered for id %s", a.serviceID)
-	}
-
-	if service.PubKey.Key == nil {
-		err = service.PubKey.LoadKeyFromPem()
-		if err != nil || service.PubKey.Key == nil {
-			return fmt.Errorf("service pub key is invalid for id %s: %v", a.serviceID, err)
-		}
+	service, err := a.GetServiceRegWithPubKey(a.serviceID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
 	if service.PubKey.Key.Equal(privKey.PublicKey) {
@@ -318,24 +328,15 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	}
 
 	validate := validator.New()
-	serviceErrors := map[string]error{}
 	for _, service := range services {
 		err = validate.Struct(service)
 		if err != nil {
 			return nil, fmt.Errorf("error validating service data: %v", err)
 		}
-		err = service.PubKey.LoadKeyFromPem()
-		if err != nil {
-			serviceErrors[service.ServiceID] = err
-		}
+		service.PubKey.LoadKeyFromPem()
 	}
 
-	err = nil
-	if len(serviceErrors) > 0 {
-		err = fmt.Errorf("error loading services: %v", serviceErrors)
-	}
-
-	return services, err
+	return services, nil
 }
 
 // NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance for the provided auth services url
@@ -416,6 +417,10 @@ type PubKey struct {
 
 // LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
 func (p *PubKey) LoadKeyFromPem() error {
+	if p == nil {
+		return fmt.Errorf("pubkey is nil")
+	}
+
 	key, err := jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
 	if err != nil {
 		p.Key = nil

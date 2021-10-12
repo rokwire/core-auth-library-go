@@ -71,6 +71,46 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 	}
 }
 
+func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
+	authPubKey := testutils.GetSamplePubKey()
+	testServiceReg := authservice.ServiceReg{"test", "https://test.rokwire.com", nil}
+	authServiceReg := authservice.ServiceReg{"auth", "https://auth.rokwire.com", authPubKey}
+
+	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
+	subscribed := []string{"auth"}
+
+	type args struct {
+		serviceID string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *authservice.ServiceReg
+		wantErr bool
+	}{
+		{"return reg when found and key valid", args{"auth"}, &authServiceReg, false},
+		{"return err when found and key invalid", args{"test"}, nil, true},
+		{"return err when not found", args{"example"}, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, err := testutils.SetupTestAuthService(testutils.SetupMockServiceLoader(subscribed, serviceRegs, nil))
+			if err != nil || a == nil {
+				t.Errorf("Error initializing test auth service: %v", err)
+				return
+			}
+			got, err := a.GetServiceRegWithPubKey(tt.args.serviceID)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("AuthService.GetServiceRegWithPubKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AuthService.GetServiceRegWithPubKey() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAuthService_SubscribeServices(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: nil}
@@ -273,6 +313,7 @@ func TestPubKey_LoadKeyFromPem(t *testing.T) {
 	}{
 		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem()), false, testutils.GetSamplePubKey().Key, testutils.GetSamplePubKeyFingerprint()},
 		{"return error on invalid pem", setupPubKeyFromPem("test"), true, nil, ""},
+		{"return error on nil pubkey", nil, true, nil, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -280,12 +321,19 @@ func TestPubKey_LoadKeyFromPem(t *testing.T) {
 				t.Errorf("PubKey.LoadKeyFromPem() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if tt.wantKey == nil {
-				if tt.p.Key != nil {
+				if tt.p != nil && tt.p.Key != nil {
 					t.Errorf("PubKey.LoadKeyFromPem() key = %v, want nil", tt.p.Key)
 				}
 			} else {
 				if !tt.p.Key.Equal(tt.wantKey) {
 					t.Errorf("PubKey.LoadKeyFromPem() key = %v, want %v", tt.p.Key, tt.wantKey)
+				}
+			}
+			if tt.p == nil {
+				if tt.wantKid != "" {
+					t.Errorf("PubKey.LoadKeyFromPem() kid = nil, want %v", tt.wantKid)
+				} else {
+					return
 				}
 			}
 			if tt.p.Kid != tt.wantKid {
