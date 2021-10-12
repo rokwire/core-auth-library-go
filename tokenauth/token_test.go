@@ -1,11 +1,11 @@
 // Copyright 2021 Board of Trustees of the University of Illinois.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,7 +38,7 @@ func setupTestTokenAuth(acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) 
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	permissionAuth := authorization.NewCasbinAuthorization("./test_permissions_authorization_policy.csv")
+	permissionAuth := authorization.NewCasbinStringAuthorization("./test_permissions_authorization_policy.csv")
 	scopeAuth := authorization.NewCasbinScopeAuthorization("./test_scope_authorization_policy.csv", "sample")
 	return tokenauth.NewTokenAuth(acceptRokwire, auth, permissionAuth, scopeAuth)
 }
@@ -53,7 +53,7 @@ func generateTestToken(claims *tokenauth.Claims, key *rsa.PrivateKey) (string, e
 	return token.SignedString(key)
 }
 
-func getTestClaims(sub string, aud string, orgID string, purpose string, issuer string, permissions string, scope string, exp int64) *tokenauth.Claims {
+func getTestClaims(sub string, aud string, orgID string, purpose string, issuer string, permissions string, scope string, auth_type string, exp int64) *tokenauth.Claims {
 	return &tokenauth.Claims{
 		StandardClaims: jwt.StandardClaims{
 			Audience:  aud,
@@ -61,20 +61,20 @@ func getTestClaims(sub string, aud string, orgID string, purpose string, issuer 
 			ExpiresAt: exp,
 			IssuedAt:  time.Now().Unix(),
 			Issuer:    issuer,
-		}, OrgID: orgID, Purpose: purpose, Permissions: permissions, Scope: scope,
+		}, OrgID: orgID, Purpose: purpose, Permissions: permissions, Scope: scope, AuthType: auth_type,
 	}
 }
 
 func getSampleValidClaims() *tokenauth.Claims {
 	exp := time.Now().Add(30 * time.Minute)
 	return getTestClaims("test_user_id", "rokwire", "test_org_id", "access",
-		"https://auth.rokwire.com", "example_permission", "all:all:all", exp.Unix())
+		"https://auth.rokwire.com", "example_permission,test_permission,sample_admin", "all:all:all", "email", exp.Unix())
 }
 
 func getSampleExpiredClaims() *tokenauth.Claims {
 	exp := time.Now().Add(-5 * time.Minute)
 	return getTestClaims("test_user_id", "rokwire", "test_org_id", "access",
-		"https://auth.rokwire.com", "example_permission", "all:all:all", exp.Unix())
+		"https://auth.rokwire.com", "example_permission", "all:all:all", "email", exp.Unix())
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {

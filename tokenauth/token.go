@@ -70,8 +70,8 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 			return nil, fmt.Errorf("known invalid token")
 		}
 	}
-	authServiceReg, err := t.authService.GetServiceReg("auth")
-	if err != nil || authServiceReg == nil || authServiceReg.PubKey == nil || authServiceReg.PubKey.Key == nil {
+	authServiceReg, err := t.authService.GetServiceRegWithPubKey("auth")
+	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve auth service pub key: %v", err)
 	}
 
