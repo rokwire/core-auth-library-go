@@ -36,18 +36,19 @@ const (
 type Claims struct {
 	// Required Standard Claims: sub, aud, exp, iat
 	jwt.StandardClaims
-	OrgID       string `json:"org_id" validate:"required"`
-	AppID       string `json:"app_id"`
-	Purpose     string `json:"purpose" validate:"required"`
-	AuthType    string `json:"auth_type" validate:"required"`
-	Permissions string `json:"permissions"`
-	Scope       string `json:"scope"`
-	Anonymous   bool   `json:"anonymous"`
+	OrgID         string `json:"org_id" validate:"required"`    // Organization ID
+	AppID         string `json:"app_id"`                        // Application ID
+	Purpose       string `json:"purpose" validate:"required"`   // Token purpose (eg. access, csrf...)
+	AuthType      string `json:"auth_type" validate:"required"` // Authentication method (eg. email, phone...)
+	Permissions   string `json:"permissions"`                   // Granted permissions
+	Scope         string `json:"scope"`                         // Granted scope
+	Anonymous     bool   `json:"anonymous"`                     // Is the user anonymous?
+	Authenticated bool   `json:"authenticated"`                 // Did the user authenticate? (false on refresh)
 
 	//TODO: Once the new user ID scheme has been adopted across all services these claims should be removed
-	UID   string `json:"uid,omitempty"`
-	Email string `json:"email,omitempty"`
-	Phone string `json:"phone,omitempty"`
+	UID   string `json:"uid,omitempty"`   // Unique user identifier for specified "auth_type"
+	Email string `json:"email,omitempty"` // User email address
+	Phone string `json:"phone,omitempty"` // User phone number
 }
 
 // TokenAuth contains configurations and helper functions required to validate tokens
