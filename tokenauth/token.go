@@ -45,10 +45,13 @@ type Claims struct {
 	Anonymous     bool   `json:"anonymous"`                     // Is the user anonymous?
 	Authenticated bool   `json:"authenticated"`                 // Did the user authenticate? (false on refresh)
 
-	//TODO: Once the new user ID scheme has been adopted across all services these claims should be removed
-	UID   string `json:"uid,omitempty"`   // Unique user identifier for specified "auth_type"
+	// User Data: DO NOT USE AS IDENTIFIER OR SHARE WITH THIRD-PARTY SERVICES
+	Name  string `json:"name,omitempty"`  // User full name
 	Email string `json:"email,omitempty"` // User email address
 	Phone string `json:"phone,omitempty"` // User phone number
+
+	//TODO: Once the new user ID scheme has been adopted across all services these claims should be removed
+	UID string `json:"uid,omitempty"` // Unique user identifier for specified "auth_type"
 }
 
 // TokenAuth contains configurations and helper functions required to validate tokens
