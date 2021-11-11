@@ -44,6 +44,7 @@ type Claims struct {
 	Scope         string `json:"scope"`                         // Granted scope
 	Anonymous     bool   `json:"anonymous"`                     // Is the user anonymous?
 	Authenticated bool   `json:"authenticated"`                 // Did the user authenticate? (false on refresh)
+	Service       bool   `json:"service"`                       // Is this token for a service account?
 
 	// User Data: DO NOT USE AS IDENTIFIER OR SHARE WITH THIRD-PARTY SERVICES
 	Name  string `json:"name,omitempty"`  // User full name
