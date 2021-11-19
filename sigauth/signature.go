@@ -118,43 +118,18 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 	return nil
 }
 
-// CheckRequestSignature validates the signature on the provided request
+// CheckRequestServiceSignature validates the signature on the provided request
 // 	The request must be signed by one of the services in requiredServiceIDs. If nil, any valid signature
 //	from a subscribed service will be accepted
 // 	Returns the service ID of the signing service
-func (s *SignatureAuth) CheckRequestSignature(r *http.Request, requiredServiceIDs []string) (string, error) {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return "", errors.New("request missing authorization header")
-	}
-
-	digestHeader := r.Header.Get("Digest")
-
-	digest, err := GetRequestDigest(r)
+func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, requiredServiceIDs []string) (string, error) {
+	sigString, sigAuthHeader, err := s.checkRequest(r)
 	if err != nil {
-		return "", fmt.Errorf("unable to build request digest: %v", err)
-	}
-
-	if digest != digestHeader {
-		return "", errors.New("message digest does not match digest header")
-	}
-
-	sigAuthHeader, err := ParseSignatureAuthHeader(authHeader)
-	if err != nil {
-		return "", fmt.Errorf("error parsing signature authorization header: %v", err)
-	}
-
-	if sigAuthHeader.Algorithm != "rsa-sha256" {
-		return "", fmt.Errorf("signing algorithm (%s) does not match rsa-sha256", sigAuthHeader.Algorithm)
+		return "", err
 	}
 
 	if requiredServiceIDs != nil && !authutils.ContainsString(requiredServiceIDs, sigAuthHeader.KeyId) {
 		return "", fmt.Errorf("request signer (%s) is not one of the required services %v", sigAuthHeader.KeyId, requiredServiceIDs)
-	}
-
-	sigString, err := BuildSignatureString(r, sigAuthHeader.Headers)
-	if err != nil {
-		return "", fmt.Errorf("error building signature string: %v", err)
 	}
 
 	err = s.CheckServiceSignature(sigAuthHeader.KeyId, []byte(sigString), sigAuthHeader.Signature)
@@ -163,6 +138,56 @@ func (s *SignatureAuth) CheckRequestSignature(r *http.Request, requiredServiceID
 	}
 
 	return sigAuthHeader.KeyId, nil
+}
+
+// CheckRequestSignature validates the signature on the provided request
+// 	The request must be signed by the private key paired with the provided public key
+func (s *SignatureAuth) CheckRequestSignature(r *http.Request, pubKey *rsa.PublicKey) error {
+	sigString, sigAuthHeader, err := s.checkRequest(r)
+	if err != nil {
+		return err
+	}
+
+	err = s.CheckSignature(pubKey, []byte(sigString), sigAuthHeader.Signature)
+	if err != nil {
+		return fmt.Errorf("error validating signature: %v", err)
+	}
+
+	return nil
+}
+
+func (s *SignatureAuth) checkRequest(r *http.Request) (string, *SignatureAuthHeader, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", nil, errors.New("request missing authorization header")
+	}
+
+	digestHeader := r.Header.Get("Digest")
+
+	digest, err := GetRequestDigest(r)
+	if err != nil {
+		return "", nil, fmt.Errorf("unable to build request digest: %v", err)
+	}
+
+	if digest != digestHeader {
+		return "", nil, errors.New("message digest does not match digest header")
+	}
+
+	sigAuthHeader, err := ParseSignatureAuthHeader(authHeader)
+	if err != nil {
+		return "", nil, fmt.Errorf("error parsing signature authorization header: %v", err)
+	}
+
+	if sigAuthHeader.Algorithm != "rsa-sha256" {
+		return "", nil, fmt.Errorf("signing algorithm (%s) does not match rsa-sha256", sigAuthHeader.Algorithm)
+	}
+
+	sigString, err := BuildSignatureString(r, sigAuthHeader.Headers)
+	if err != nil {
+		return "", nil, fmt.Errorf("error building signature string: %v", err)
+	}
+
+	return sigString, sigAuthHeader, nil
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance

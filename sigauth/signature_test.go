@@ -15,6 +15,7 @@
 package sigauth_test
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -123,7 +124,7 @@ func TestSignatureAuth_SignRequest(t *testing.T) {
 	}
 }
 
-func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
+func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
@@ -149,13 +150,41 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return
 			}
-			got, err := s.CheckRequestSignature(tt.args.r, tt.args.requiredServiceIDs)
+			got, err := s.CheckRequestServiceSignature(tt.args.r, tt.args.requiredServiceIDs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
 				t.Errorf("SignatureAuth.CheckRequestSignature() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
+	type args struct {
+		r      *http.Request
+		pubKey *rsa.PublicKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := setupTestSignatureAuth(nil)
+			if err != nil || s == nil {
+				t.Errorf("Error initializing test signature auth: %v", err)
+				return
+			}
+			err = s.CheckRequestSignature(tt.args.r, tt.args.pubKey)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
 		})
 	}
