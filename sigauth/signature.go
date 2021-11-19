@@ -54,13 +54,18 @@ func (s *SignatureAuth) Sign(message []byte) (string, error) {
 	return sigB64, nil
 }
 
-// CheckSignature validates the provided message signature from the given service
-func (s *SignatureAuth) CheckSignature(serviceID string, message []byte, signature string) error {
+// CheckServiceSignature validates the provided message signature from the given service
+func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, signature string) error {
 	serviceReg, err := s.authService.GetServiceRegWithPubKey(serviceID)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
+	return s.CheckSignature(serviceReg.PubKey.Key, message, signature)
+}
+
+// CheckSignature validates the provided message signature from the given public key
+func (s *SignatureAuth) CheckSignature(pubKey *rsa.PublicKey, message []byte, signature string) error {
 	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return fmt.Errorf("error decoding signature: %v", err)
@@ -71,7 +76,7 @@ func (s *SignatureAuth) CheckSignature(serviceID string, message []byte, signatu
 		return fmt.Errorf("error hashing message: %v", err)
 	}
 
-	err = rsa.VerifyPSS(serviceReg.PubKey.Key, crypto.SHA256, hash, sigBytes, nil)
+	err = rsa.VerifyPSS(pubKey, crypto.SHA256, hash, sigBytes, nil)
 	if err != nil {
 		return fmt.Errorf("error verifying signature: %v", err)
 	}
@@ -152,7 +157,7 @@ func (s *SignatureAuth) CheckRequestSignature(r *http.Request, requiredServiceID
 		return "", fmt.Errorf("error building signature string: %v", err)
 	}
 
-	err = s.CheckSignature(sigAuthHeader.KeyId, []byte(sigString), sigAuthHeader.Signature)
+	err = s.CheckServiceSignature(sigAuthHeader.KeyId, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return "", fmt.Errorf("error validating signature: %v", err)
 	}
