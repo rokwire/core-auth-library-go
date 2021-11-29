@@ -15,6 +15,7 @@
 package sigauth
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -239,12 +240,14 @@ func GetRequestDigest(r *http.Request) (string, error) {
 	}
 	r.Body.Close()
 
+	r.Body = ioutil.NopCloser(bytes.NewReader(body))
+
 	hash, err := authutils.HashSha256(body)
 	if err != nil {
 		return "", fmt.Errorf("error hashing request body: %v", err)
 	}
 
-	return "SHA-256=" + string(hash), nil
+	return "SHA-256=" + base64.StdEncoding.EncodeToString(hash), nil
 }
 
 // -------------------- SignatureAuthHeader --------------------
@@ -309,13 +312,13 @@ func ParseSignatureAuthHeader(header string) (*SignatureAuthHeader, error) {
 	sigHeader := SignatureAuthHeader{}
 
 	for _, param := range strings.Split(header, ",") {
-		parts := strings.Split(param, "=")
-		if len(parts) < 2 {
+		parts := strings.SplitN(param, "=", 2)
+		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid format for param: %s", param)
 		}
 
 		key := parts[0]
-		val := parts[1]
+		val := strings.ReplaceAll(parts[1], "\"", "")
 
 		err := sigHeader.SetField(key, val)
 		if err != nil {
