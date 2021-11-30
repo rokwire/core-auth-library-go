@@ -67,6 +67,10 @@ func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, 
 
 // CheckSignature validates the provided message signature from the given public key
 func (s *SignatureAuth) CheckSignature(pubKey *rsa.PublicKey, message []byte, signature string) error {
+	if pubKey == nil {
+		return errors.New("public key is nil")
+	}
+
 	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return fmt.Errorf("error decoding signature: %v", err)
@@ -144,6 +148,10 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, requiredSe
 // CheckRequestSignature validates the signature on the provided request
 // 	The request must be signed by the private key paired with the provided public key
 func (s *SignatureAuth) CheckRequestSignature(r *http.Request, pubKey *rsa.PublicKey) error {
+	if pubKey == nil {
+		return errors.New("public key is nil")
+	}
+
 	sigString, sigAuthHeader, err := s.checkRequest(r)
 	if err != nil {
 		return err
