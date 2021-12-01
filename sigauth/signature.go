@@ -81,6 +81,10 @@ func (s *SignatureAuth) CheckSignature(serviceID string, message []byte, signatu
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
 func (s *SignatureAuth) SignRequest(r *http.Request) error {
+	if r == nil {
+		return fmt.Errorf("request is nil")
+	}
+
 	digest, err := GetRequestDigest(r)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
@@ -118,6 +122,10 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 //	from a subscribed service will be accepted
 // 	Returns the service ID of the signing service
 func (s *SignatureAuth) CheckRequestSignature(r *http.Request, requiredServiceIDs []string) (string, error) {
+	if r == nil {
+		return "", fmt.Errorf("request is nil")
+	}
+
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return "", errors.New("request missing authorization header")
