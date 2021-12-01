@@ -16,6 +16,7 @@ package sigauth_test
 
 import (
 	"bytes"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -38,7 +39,7 @@ func setupTestSignatureAuth(mockLoader *mocks.ServiceRegLoader) (*sigauth.Signat
 	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), auth)
 }
 
-func TestSignatureAuth_CheckSignature(t *testing.T) {
+func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
@@ -68,14 +69,47 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 				t.Errorf("SignatureAuth.Sign() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if err := s.CheckSignature(tt.args.serviceID, tt.args.message, signature); (err != nil) != tt.wantErr {
+			if err := s.CheckServiceSignature(tt.args.serviceID, tt.args.message, signature); (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckSignature() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
+func TestSignatureAuth_CheckSignature(t *testing.T) {
+	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
+	subscribed := []string{"auth"}
+
+	type args struct {
+		pubKey    *rsa.PublicKey
+		message   []byte
+		signature string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockLoader := testutils.SetupMockServiceLoader(subscribed, serviceRegsValid, nil)
+			s, err := setupTestSignatureAuth(mockLoader)
+			if err != nil || s == nil {
+				t.Errorf("Error initializing test signature auth: %v", err)
+				return
+			}
+			if err := s.CheckSignature(tt.args.pubKey, tt.args.message, tt.args.signature); (err != nil) != tt.wantErr {
+				t.Errorf("SignatureAuth.CheckSignature() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
@@ -130,13 +164,47 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 			}
 			test_req.Body = ioutil.NopCloser(bytes.NewReader(data))
 
-			got, err := s.CheckRequestSignature(tt.args.r, tt.args.requiredServiceIDs)
+			got, err := s.CheckRequestServiceSignature(tt.args.r, tt.args.requiredServiceIDs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if (got != tt.want) && !tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
+	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
+	subscribed := []string{"auth"}
+
+	type args struct {
+		r      *http.Request
+		pubKey *rsa.PublicKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockLoader := testutils.SetupMockServiceLoader(subscribed, serviceRegsValid, nil)
+			s, err := setupTestSignatureAuth(mockLoader)
+			if err != nil || s == nil {
+				t.Errorf("Error initializing test signature auth: %v", err)
+				return
+			}
+			err = s.CheckRequestSignature(tt.args.r, tt.args.pubKey)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
 		})
 	}

@@ -15,6 +15,7 @@
 package authutils
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -22,6 +23,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 )
 
 // ContainsString returns true if the provided value is in the provided slice
@@ -93,4 +96,9 @@ func HashSha256(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("error writing data: %v", err)
 	}
 	return hasher.Sum(nil), nil
+}
+
+// ResetRequestBody sets r.Body to read from data (use to read from r.Body multiple times)
+func ResetRequestBody(r *http.Request, data []byte) {
+	r.Body = ioutil.NopCloser(bytes.NewReader(data))
 }
