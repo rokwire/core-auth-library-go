@@ -15,7 +15,6 @@
 package sigauth
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -99,7 +98,9 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
-	r.Header.Set("Digest", digest)
+	if digest != "" {
+		r.Header.Set("Digest", digest)
+	}
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
@@ -249,18 +250,27 @@ func BuildSignatureString(r *http.Request, headers []string) (string, error) {
 
 // GetRequestLine returns the request line for the provided request
 func GetRequestLine(r *http.Request) string {
-	return fmt.Sprintf("%s %s %s", r.Method, r.RequestURI, r.Proto)
+	if r == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%s %s %s", r.Method, r.URL.Path, r.Proto)
 }
 
 // GetRequestDigest returns the SHA256 digest of the provided request body
 func GetRequestDigest(r *http.Request) (string, error) {
+	if r == nil {
+		return "", errors.New("request is nil")
+	}
+	if r.Body == nil {
+		return "", nil
+	}
+
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading request body: %v", err)
 	}
 	r.Body.Close()
-
-	r.Body = ioutil.NopCloser(bytes.NewReader(body))
 
 	hash, err := authutils.HashSha256(body)
 	if err != nil {
@@ -316,7 +326,7 @@ func (s *SignatureAuthHeader) Build() (string, error) {
 
 	extensions := ""
 	if s.Extensions != "" {
-		extensions = fmt.Sprintf("extensions=\"%s\",", extensions)
+		extensions = fmt.Sprintf("extensions=\"%s\",", s.Extensions)
 	}
 
 	return fmt.Sprintf("Signature keyId=\"%s\",algorithm=\"%s\",%s%ssignature=\"%s\"", s.KeyId, s.Algorithm, headers, extensions, s.Signature), nil
@@ -333,7 +343,7 @@ func ParseSignatureAuthHeader(header string) (*SignatureAuthHeader, error) {
 
 	for _, param := range strings.Split(header, ",") {
 		parts := strings.SplitN(param, "=", 2)
-		if len(parts) != 2 {
+		if len(parts[0]) == 0 || len(parts[1]) == 0 {
 			return nil, fmt.Errorf("invalid format for param: %s", param)
 		}
 
