@@ -20,9 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"os"
 	"reflect"
 	"strconv"
 	"testing"
@@ -53,30 +51,6 @@ func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.ServiceRegLoader, privK
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
 	return sigauth.NewSignatureAuth(privKey, auth)
-}
-
-func loadRSAKeyPairFromFiles() (*rsa.PrivateKey, *rsa.PublicKey, error) {
-	privateKeyPath := os.Getenv("TEST_PRIVATE_KEY_PATH")
-	privKeyPem, err := ioutil.ReadFile(privateKeyPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Could not find test private key file: %v", err)
-	}
-	privKey, err := jwt.ParseRSAPrivateKeyFromPEM(privKeyPem)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to parse private key: %v", err)
-	}
-
-	publicKeyPath := os.Getenv("TEST_PUBLIC_KEY_PATH")
-	pubKeyPem, err := ioutil.ReadFile(publicKeyPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Could not find test public key file: %v", err)
-	}
-	pubKey, err := jwt.ParseRSAPublicKeyFromPEM(pubKeyPem)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Failed to parse public key: %v", err)
-	}
-
-	return privKey, pubKey, nil
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
@@ -123,9 +97,10 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceLoader(nil, serviceRegsValid, nil)
 
-	privKey, pubKey, err := loadRSAKeyPairFromFiles()
+	privKey := testutils.GetSamplePrivKey()
+	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
 	if err != nil {
-		t.Errorf("Error loading RSA keypair: %v", err)
+		t.Errorf("Error loading sample public key: %v", err)
 	}
 
 	type args struct {
@@ -227,12 +202,8 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceLoader(nil, serviceRegsValid, nil)
 
-	privKey, pubKey, err := loadRSAKeyPairFromFiles()
-	if err != nil {
-		t.Errorf("Error loading RSA keypair: %v", err)
-	}
-
-	samplePubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
+	privKey := testutils.GetSamplePrivKey()
+	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
 	if err != nil {
 		t.Errorf("Error loading sample public key: %v", err)
 	}
@@ -260,10 +231,8 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{name: "custom_keypair", args: args{r: testReq, privKey: privKey, pubKey: pubKey}, wantErr: false},
-		{name: "bad_keypair", args: args{r: testReq, privKey: testutils.GetSamplePrivKey(), pubKey: pubKey}, wantErr: true},
-		{name: "bad_keypair2", args: args{r: testReq, privKey: privKey, pubKey: samplePubKey}, wantErr: true},
-		{name: "sample_keypair", args: args{r: testReq, privKey: testutils.GetSamplePrivKey(), pubKey: samplePubKey}, wantErr: false},
+		{name: "sample_keypair", args: args{r: testReq, privKey: privKey, pubKey: pubKey}, wantErr: false},
+		{name: "nil_pub_key", args: args{r: testReq, privKey: privKey, pubKey: nil}, wantErr: true},
 		{name: "nil_request", args: args{r: nilReq, privKey: privKey, pubKey: pubKey}, wantErr: true},
 		{name: "empty_body", args: args{r: testEmptyBody, privKey: privKey, pubKey: pubKey}, wantErr: false},
 	}
