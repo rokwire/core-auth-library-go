@@ -15,6 +15,7 @@
 package sigauth
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -271,6 +272,8 @@ func GetRequestDigest(r *http.Request) (string, error) {
 		return "", fmt.Errorf("error reading request body: %v", err)
 	}
 	r.Body.Close()
+
+	r.Body = ioutil.NopCloser(bytes.NewReader(body))
 
 	hash, err := authutils.HashSha256(body)
 	if err != nil {
