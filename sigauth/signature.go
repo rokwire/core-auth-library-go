@@ -91,11 +91,17 @@ func (s *SignatureAuth) CheckSignature(pubKey *rsa.PublicKey, message []byte, si
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
 func (s *SignatureAuth) SignRequest(r *http.Request) error {
+	if r == nil {
+		return errors.New("request is nil")
+	}
+
 	digest, err := GetRequestDigest(r)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
-	r.Header.Set("Digest", digest)
+	if digest != "" {
+		r.Header.Set("Digest", digest)
+	}
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
@@ -128,6 +134,10 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 //	from a subscribed service will be accepted
 // 	Returns the service ID of the signing service
 func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, requiredServiceIDs []string) (string, error) {
+	if r == nil {
+		return "", errors.New("request is nil")
+	}
+
 	sigString, sigAuthHeader, err := s.checkRequest(r)
 	if err != nil {
 		return "", err
@@ -148,6 +158,10 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, requiredSe
 // CheckRequestSignature validates the signature on the provided request
 // 	The request must be signed by the private key paired with the provided public key
 func (s *SignatureAuth) CheckRequestSignature(r *http.Request, pubKey *rsa.PublicKey) error {
+	if r == nil {
+		return errors.New("request is nil")
+	}
+
 	if pubKey == nil {
 		return errors.New("public key is nil")
 	}
@@ -237,11 +251,22 @@ func BuildSignatureString(r *http.Request, headers []string) (string, error) {
 
 // GetRequestLine returns the request line for the provided request
 func GetRequestLine(r *http.Request) string {
-	return fmt.Sprintf("%s %s %s", r.Method, r.RequestURI, r.Proto)
+	if r == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%s %s %s", r.Method, r.URL.Path, r.Proto)
 }
 
 // GetRequestDigest returns the SHA256 digest of the provided request body
 func GetRequestDigest(r *http.Request) (string, error) {
+	if r == nil {
+		return "", errors.New("request is nil")
+	}
+	if r.Body == nil {
+		return "", nil
+	}
+
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading request body: %v", err)
@@ -304,7 +329,7 @@ func (s *SignatureAuthHeader) Build() (string, error) {
 
 	extensions := ""
 	if s.Extensions != "" {
-		extensions = fmt.Sprintf("extensions=\"%s\",", extensions)
+		extensions = fmt.Sprintf("extensions=\"%s\",", s.Extensions)
 	}
 
 	return fmt.Sprintf("Signature keyId=\"%s\",algorithm=\"%s\",%s%ssignature=\"%s\"", s.KeyId, s.Algorithm, headers, extensions, s.Signature), nil
@@ -321,7 +346,7 @@ func ParseSignatureAuthHeader(header string) (*SignatureAuthHeader, error) {
 
 	for _, param := range strings.Split(header, ",") {
 		parts := strings.SplitN(param, "=", 2)
-		if len(parts) != 2 {
+		if len(parts[0]) == 0 || len(parts[1]) == 0 {
 			return nil, fmt.Errorf("invalid format for param: %s", param)
 		}
 
