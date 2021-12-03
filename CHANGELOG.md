@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [1.0.4] - 2021-12-03
+### Added 
+- Write unit tests for sigauth package [#17](https://github.com/rokwire/core-auth-library-go/pull/17)
+- Check request signatures with any public key [#13](https://github.com/rokwire/core-auth-library-go/pull/13)
+
 ## [1.0.3] - 2021-11-23
 ### Added 
 - Admin token claim [#15](https://github.com/rokwire/core-auth-library-go/issues/15)
