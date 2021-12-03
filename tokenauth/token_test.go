@@ -140,7 +140,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 		{"return error on wrong aud", args{invalidAudToken, "access"}, true, nil, true, ""},
 		{"return error on wrong purpose", args{validToken, "csrf"}, true, nil, true, ""},
 		{"return error on unpermitted rokwire token", args{validToken, "access"}, false, nil, true, ""},
-		//TODO: Fille <invalid retry token> and <valid token after refresh>
+		//TODO: Fill <invalid retry token> and <valid token after refresh> placeholders
 		// {"return error on retry invalid token", args{"<invalid retry token>", "access"}, true, nil, true, "initial token check returned invalid, error on retry"},
 		// {"return claims after refresh", args{"<valid token after refresh>", "access"}, true, &tokenauth.Claims{}, false, ""},
 	}

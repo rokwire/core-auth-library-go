@@ -1,11 +1,11 @@
 // Copyright 2021 Board of Trustees of the University of Illinois.
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -15,6 +15,7 @@
 package authutils
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -22,6 +23,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 )
 
 // ContainsString returns true if the provided value is in the provided slice
@@ -93,4 +96,9 @@ func HashSha256(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("error writing data: %v", err)
 	}
 	return hasher.Sum(nil), nil
+}
+
+// ResetRequestBody sets r.Body to read from data (use to read from r.Body multiple times)
+func ResetRequestBody(r *http.Request, data []byte) {
+	r.Body = ioutil.NopCloser(bytes.NewReader(data))
 }
