@@ -400,9 +400,10 @@ func NewServiceRegSubscriptions(subscribedServices []string) *ServiceRegSubscrip
 
 // ServiceReg represents a service registration record
 type ServiceReg struct {
-	ServiceID string  `json:"service_id" bson:"service_id" validate:"required"`
-	Host      string  `json:"host" bson:"host" validate:"required"`
-	PubKey    *PubKey `json:"pub_key" bson:"pub_key"`
+	ServiceID        string  `json:"service_id" bson:"service_id" validate:"required"`
+	ServiceAccountID string  `json:"service_account_id" bson:"service_account_id"`
+	Host             string  `json:"host" bson:"host" validate:"required"`
+	PubKey           *PubKey `json:"pub_key" bson:"pub_key"`
 }
 
 // -------------------- PubKey --------------------
