@@ -85,20 +85,20 @@ func (a *AuthService) GetServiceReg(id string) (*ServiceReg, error) {
 }
 
 // GetServiceRegWithPubKey returns the service registration record for the given ID if found and validates the PubKey
-func (a *AuthService) GetServiceRegWithPubKey(serviceID string) (*ServiceReg, error) {
-	serviceReg, err := a.GetServiceReg(serviceID)
+func (a *AuthService) GetServiceRegWithPubKey(id string) (*ServiceReg, error) {
+	serviceReg, err := a.GetServiceReg(id)
 	if err != nil || serviceReg == nil {
 		return nil, fmt.Errorf("failed to retrieve service reg: %v", err)
 	}
 
 	if serviceReg.PubKey == nil {
-		return nil, fmt.Errorf("service pub key is nil for id %s", serviceID)
+		return nil, fmt.Errorf("service pub key is nil for id %s", id)
 	}
 
 	if serviceReg.PubKey.Key == nil {
 		err = serviceReg.PubKey.LoadKeyFromPem()
 		if err != nil || serviceReg.PubKey.Key == nil {
-			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", serviceID, err)
+			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", id, err)
 		}
 	}
 
