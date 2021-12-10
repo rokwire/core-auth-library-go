@@ -54,7 +54,7 @@ func (a *AuthService) GetServiceID() string {
 }
 
 // GetServiceReg returns the service registration record for the given ID if found
-func (a *AuthService) GetServiceReg(serviceID string) (*ServiceReg, error) {
+func (a *AuthService) GetServiceReg(id string) (*ServiceReg, error) {
 	a.servicesLock.RLock()
 	servicesUpdated := a.servicesUpdated
 	maxRefreshFreq := a.maxRefreshCacheFreq
@@ -71,14 +71,14 @@ func (a *AuthService) GetServiceReg(serviceID string) (*ServiceReg, error) {
 	if a.services == nil {
 		return nil, fmt.Errorf("services could not be loaded: %v", loadServicesError)
 	}
-	itemValue, ok := a.services.Load(serviceID)
+	itemValue, ok := a.services.Load(id)
 	if !ok {
-		return nil, fmt.Errorf("service could not be found for id: %s - %v", serviceID, loadServicesError)
+		return nil, fmt.Errorf("service could not be found for id: %s - %v", id, loadServicesError)
 	}
 
 	service, ok = itemValue.(ServiceReg)
 	if !ok {
-		return nil, fmt.Errorf("service could not be parsed for id: %s - %v", serviceID, loadServicesError)
+		return nil, fmt.Errorf("service could not be parsed for id: %s - %v", id, loadServicesError)
 	}
 
 	return &service, loadServicesError
@@ -199,6 +199,7 @@ func (a *AuthService) setServices(services []ServiceReg) {
 	if len(services) > 0 {
 		for _, service := range services {
 			a.services.Store(service.ServiceID, service)
+			a.services.Store(service.ServiceAccountID, service)
 		}
 	}
 
