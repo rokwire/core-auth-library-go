@@ -105,10 +105,10 @@ func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 func main() {
 	serviceID := "sample"
 	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
-	serviceLoader := authservice.NewRemoteServiceRegLoader("https://auth.rokwire.com/services", nil)
+	dataLoader := authservice.NewRemoteAuthDataLoader("https://auth.rokwire.com/services", nil)
 
 	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", serviceLoader)
+	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", dataLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}

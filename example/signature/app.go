@@ -118,10 +118,10 @@ func main() {
 	// 	that this service will receive signed requests from.
 	services := []string{"example2"}
 	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
-	serviceLoader := authservice.NewRemoteServiceRegLoader("https://auth.rokwire.com/services", services)
+	dataLoader := authservice.NewRemoteAuthDataLoader("https://auth.rokwire.com/services", services)
 
 	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService("example", "https://sample.rokwire.com", serviceLoader)
+	authService, err := authservice.NewAuthService("example", "https://sample.rokwire.com", dataLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}

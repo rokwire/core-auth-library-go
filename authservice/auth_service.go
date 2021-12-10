@@ -35,7 +35,7 @@ import (
 
 // AuthService contains the configurations to interface with the auth service
 type AuthService struct {
-	serviceLoader ServiceRegLoader
+	dataLoader AuthDataLoader
 
 	// ID of implementing service
 	serviceID string
@@ -108,7 +108,7 @@ func (a *AuthService) GetServiceRegWithPubKey(serviceID string) (*ServiceReg, er
 // LoadServices loads the subscribed service registration records and caches them
 // 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
 func (a *AuthService) LoadServices() error {
-	services, loadServicesError := a.serviceLoader.LoadServices()
+	services, loadServicesError := a.dataLoader.LoadServices()
 	if services != nil {
 		a.setServices(services)
 	}
@@ -121,7 +121,7 @@ func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error 
 	newSub := false
 
 	for _, serviceID := range serviceIDs {
-		subscribed := a.serviceLoader.SubscribeService(serviceID)
+		subscribed := a.dataLoader.SubscribeService(serviceID)
 		if subscribed {
 			newSub = true
 		}
@@ -140,7 +140,7 @@ func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error 
 // UnsubscribeServices unsubscribes from the provided service
 func (a *AuthService) UnsubscribeServices(serviceIDs []string) {
 	for _, serviceID := range serviceIDs {
-		a.serviceLoader.UnsubscribeService(serviceID)
+		a.dataLoader.UnsubscribeService(serviceID)
 	}
 }
 
@@ -209,14 +209,14 @@ func (a *AuthService) setServices(services []ServiceReg) {
 }
 
 // NewAuthService creates and configures a new AuthService instance
-func NewAuthService(serviceID string, serviceHost string, serviceLoader ServiceRegLoader) (*AuthService, error) {
+func NewAuthService(serviceID string, serviceHost string, dataLoader AuthDataLoader) (*AuthService, error) {
 	// Subscribe to the implementing service to validate registration
-	serviceLoader.SubscribeService(serviceID)
+	dataLoader.SubscribeService(serviceID)
 
 	lock := &sync.RWMutex{}
 	services := &syncmap.Map{}
 
-	auth := &AuthService{serviceLoader: serviceLoader, serviceID: serviceID, services: services, servicesLock: lock,
+	auth := &AuthService{dataLoader: dataLoader, serviceID: serviceID, services: services, servicesLock: lock,
 		minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60}
 
 	err := auth.LoadServices()
@@ -248,14 +248,14 @@ func (a *AuthService) CheckForRefresh() (bool, error) {
 }
 
 // NewTestAuthService creates and configures a new AuthService instance for testing purposes
-func NewTestAuthService(serviceID string, serviceHost string, serviceLoader ServiceRegLoader) (*AuthService, error) {
+func NewTestAuthService(serviceID string, serviceHost string, dataLoader AuthDataLoader) (*AuthService, error) {
 	// Subscribe to the implementing service to validate registration
-	serviceLoader.SubscribeService(serviceID)
+	dataLoader.SubscribeService(serviceID)
 
 	lock := &sync.RWMutex{}
 	services := &syncmap.Map{}
 
-	auth := &AuthService{serviceLoader: serviceLoader, serviceID: serviceID, services: services, servicesLock: lock,
+	auth := &AuthService{dataLoader: dataLoader, serviceID: serviceID, services: services, servicesLock: lock,
 		minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60}
 	err := auth.LoadServices()
 	if err != nil {
@@ -263,6 +263,62 @@ func NewTestAuthService(serviceID string, serviceHost string, serviceLoader Serv
 	}
 
 	return auth, nil
+}
+
+// -------------------- DataLoader --------------------
+
+// AuthDataLoader declares an interface to load data from an auth service
+type AuthDataLoader interface {
+	// GetDeletedAccounts loads deleted account IDs
+	GetDeletedAccounts(token string) ([]string, error)
+	ServiceRegLoader
+}
+
+//RemoteAuthDataLoaderImpl provides a AuthDataLoader implemntation for a remote auth service
+type RemoteAuthDataLoaderImpl struct {
+	authServicesUrl string // URL of auth services endpoint
+	*RemoteServiceRegLoaderImpl
+}
+
+// GetDeletedAccounts implements AuthDataLoader interface
+func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(token string) ([]string, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", r.dataLoader.authServicesUrl, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error requesting deleted accounts: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading body of deleted accounts response: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("error getting deleted accounts: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var deletedAccounts []string
+	err = json.Unmarshal(body, &deletedAccounts)
+	if err != nil {
+		return nil, fmt.Errorf("error on unmarshal deleted accounts response: %v", err)
+	}
+
+	return deletedAccounts, nil
+}
+
+// NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
+func NewRemoteAuthDataLoader(authServicesUrl string, subscribedServices []string) *RemoteAuthDataLoaderImpl {
+	serviceRegLoader := NewRemoteServiceRegLoader(subscribedServices)
+	return &RemoteAuthDataLoaderImpl{authServicesUrl: authServicesUrl, RemoteServiceRegLoaderImpl: serviceRegLoader}
 }
 
 // -------------------- ServiceRegLoader --------------------
@@ -283,7 +339,7 @@ type ServiceRegLoader interface {
 
 //RemoteServiceRegLoaderImpl provides a ServiceRegLoader implemntation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
-	authServicesUrl string // URL of auth services endpoint
+	dataLoader RemoteAuthDataLoaderImpl
 	*ServiceRegSubscriptions
 }
 
@@ -294,7 +350,7 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.authServicesUrl, nil)
+	req, err := http.NewRequest("GET", r.dataLoader.authServicesUrl, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to load services: %v", err)
 	}
@@ -340,9 +396,9 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 }
 
 // NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance for the provided auth services url
-func NewRemoteServiceRegLoader(authServicesUrl string, subscribedServices []string) *RemoteServiceRegLoaderImpl {
+func NewRemoteServiceRegLoader(subscribedServices []string) *RemoteServiceRegLoaderImpl {
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
-	return &RemoteServiceRegLoaderImpl{authServicesUrl: authServicesUrl, ServiceRegSubscriptions: subscriptions}
+	return &RemoteServiceRegLoaderImpl{ServiceRegSubscriptions: subscriptions}
 }
 
 // -------------------- ServiceRegSubscriptions --------------------

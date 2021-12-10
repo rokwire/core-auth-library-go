@@ -54,7 +54,7 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := testutils.SetupTestAuthService(testutils.SetupMockServiceLoader(subscribed, serviceRegs, nil))
+			a, err := testutils.SetupTestAuthService(testutils.SetupMockDataLoader(subscribed, serviceRegs, nil))
 			if err != nil || a == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
@@ -94,7 +94,7 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := testutils.SetupTestAuthService(testutils.SetupMockServiceLoader(subscribed, serviceRegs, nil))
+			a, err := testutils.SetupTestAuthService(testutils.SetupMockDataLoader(subscribed, serviceRegs, nil))
 			if err != nil || a == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
@@ -132,7 +132,7 @@ func TestAuthService_SubscribeServices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceLoader(subscribed, serviceRegs, nil)
+			mockLoader := testutils.SetupMockDataLoader(subscribed, serviceRegs, nil)
 			a, err := testutils.SetupTestAuthService(mockLoader)
 			if err != nil || a == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
@@ -177,7 +177,7 @@ func TestAuthService_ValidateServiceRegistration(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceLoader(subscribed, tt.loadServicesResp, nil)
+			mockLoader := testutils.SetupMockDataLoader(subscribed, tt.loadServicesResp, nil)
 			a, err := testutils.SetupTestAuthService(mockLoader)
 			if err != nil || a == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
@@ -238,7 +238,7 @@ LrSVbitnfQD1AgMBAAE=
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceLoader(subscribed, tt.loadServicesResp, nil)
+			mockLoader := testutils.SetupMockDataLoader(subscribed, tt.loadServicesResp, nil)
 			a, err := testutils.SetupTestAuthService(mockLoader)
 			if err != nil || a == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
