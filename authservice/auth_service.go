@@ -15,6 +15,7 @@
 package authservice
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -270,62 +271,72 @@ func NewTestAuthService(serviceID string, serviceHost string, dataLoader AuthDat
 // AuthDataLoader declares an interface to load data from an auth service
 type AuthDataLoader interface {
 	// GetAccessToken gets an access token
-	GetAccessToken(token string, path string) (string, error)
+	GetAccessToken(token string, path string) error
 	// GetDeletedAccounts loads deleted account IDs
-	GetDeletedAccounts(token string, path string) ([]string, error)
+	GetDeletedAccounts(path string) ([]string, error)
 	ServiceRegLoader
 }
 
 //RemoteAuthDataLoaderImpl provides a AuthDataLoader implemntation for a remote auth service
 type RemoteAuthDataLoaderImpl struct {
-	authServicesHost string // URL of auth services endpoint
+	authServicesHost string // URL of auth services host
+	accessToken      AccessToken
+
 	*RemoteServiceRegLoaderImpl
 }
 
 // GetAccessToken implements AuthDataLoader interface
-func (r *RemoteAuthDataLoaderImpl) GetAccessToken(token string, path string) (string, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.dataLoader.authServicesHost+path, nil)
+func (r *RemoteAuthDataLoaderImpl) GetAccessToken(token string, path string) error {
+	params := map[string]interface{}{
+		"auth_type": "static_token",
+		"creds": map[string]string{
+			"token": token,
+		},
+	}
+	data, err := json.Marshal(params)
 	if err != nil {
-		return "", fmt.Errorf("error formatting request to get deleted accounts: %v", err)
+		return fmt.Errorf("error marshaling request body toget access token: %v", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", r.dataLoader.authServicesHost+path, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("error formatting request to get access token: %v", err)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("error requesting deleted accounts: %v", err)
+		return fmt.Errorf("error requesting access token: %v", err)
 	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("error reading body of deleted accounts response: %v", err)
+		return fmt.Errorf("error reading body of access token response: %v", err)
 	}
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("error getting deleted accounts: %d - %s", resp.StatusCode, string(body))
+		return fmt.Errorf("error getting access token: %d - %s", resp.StatusCode, string(body))
 	}
 
-	var accessToken AccessToken
-	err = json.Unmarshal(body, &accessToken)
+	err = json.Unmarshal(body, &r.accessToken)
 	if err != nil {
-		return "", fmt.Errorf("error on unmarshal deleted accounts response: %v", err)
+		return fmt.Errorf("error on unmarshal access token response: %v", err)
 	}
 
-	return accessToken.Token, nil
+	return nil
 }
 
 // GetDeletedAccounts implements AuthDataLoader interface
-func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(token string, path string) ([]string, error) {
+func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(path string) ([]string, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", r.dataLoader.authServicesHost+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Authorization", fmt.Sprintf("%s %s", r.accessToken.TokenType, r.accessToken.Token))
 
 	resp, err := client.Do(req)
 	if err != nil {
