@@ -277,7 +277,7 @@ type AuthDataLoader interface {
 	ServiceRegLoader
 }
 
-//RemoteAuthDataLoaderImpl provides a AuthDataLoader implemntation for a remote auth service
+//RemoteAuthDataLoaderImpl provides a AuthDataLoader implementation for a remote auth service
 type RemoteAuthDataLoaderImpl struct {
 	authServicesHost string // URL of auth services host
 	accessToken      AccessToken
@@ -303,6 +303,8 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(token string, path string) err
 	if err != nil {
 		return fmt.Errorf("error formatting request to get access token: %v", err)
 	}
+
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -394,7 +396,7 @@ type ServiceRegLoader interface {
 	UnsubscribeService(serviceID string) bool
 }
 
-//RemoteServiceRegLoaderImpl provides a ServiceRegLoader implemntation for a remote auth service
+//RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
 	dataLoader *RemoteAuthDataLoaderImpl
 	path       string
