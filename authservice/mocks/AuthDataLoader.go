@@ -12,18 +12,19 @@ type AuthDataLoader struct {
 	mock.Mock
 
 	authServicesHost string
+	serviceToken     string
 	accessToken      authservice.AccessToken
 
 	*ServiceRegLoader
 }
 
-// GetAccessToken provides a mock function with given fields: token, path
-func (_m *AuthDataLoader) GetAccessToken(token string, path string) error {
-	ret := _m.Called(token, path)
+// GetAccessToken provides a mock function with given fields: path
+func (_m *AuthDataLoader) GetAccessToken(path string) error {
+	ret := _m.Called(path)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string, string) error); ok {
-		r0 = rf(token, path)
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(path)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -54,77 +55,10 @@ func (_m *AuthDataLoader) GetDeletedAccounts(path string) ([]string, error) {
 	return r0, r1
 }
 
-// GetSubscribedServices provides a mock function with given fields:
-func (_m *AuthDataLoader) GetSubscribedServices() []string {
-	ret := _m.Called()
-
-	var r0 []string
-	if rf, ok := ret.Get(0).(func() []string); ok {
-		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]string)
-		}
-	}
-
-	return r0
-}
-
-// LoadServices provides a mock function with given fields:
-func (_m *AuthDataLoader) LoadServices() ([]authservice.ServiceReg, error) {
-	ret := _m.Called()
-
-	var r0 []authservice.ServiceReg
-	if rf, ok := ret.Get(0).(func() []authservice.ServiceReg); ok {
-		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]authservice.ServiceReg)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func() error); ok {
-		r1 = rf()
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// SubscribeService provides a mock function with given fields: serviceID
-func (_m *AuthDataLoader) SubscribeService(serviceID string) bool {
-	ret := _m.Called(serviceID)
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(string) bool); ok {
-		r0 = rf(serviceID)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	return r0
-}
-
-// UnsubscribeService provides a mock function with given fields: serviceID
-func (_m *AuthDataLoader) UnsubscribeService(serviceID string) bool {
-	ret := _m.Called(serviceID)
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(string) bool); ok {
-		r0 = rf(serviceID)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	return r0
-}
-
-func NewAuthDataLoader(authServicesHost string, serviceRegPath string, subscribedServices []string) *AuthDataLoader {
+func NewAuthDataLoader(authServicesHost string, serviceToken string, serviceRegPath string, subscribedServices []string) *AuthDataLoader {
 	serviceRegLoader := NewServiceRegLoader(serviceRegPath, subscribedServices)
 
-	dataLoader := AuthDataLoader{authServicesHost: authServicesHost, ServiceRegLoader: serviceRegLoader}
+	dataLoader := AuthDataLoader{authServicesHost: authServicesHost, serviceToken: serviceToken, ServiceRegLoader: serviceRegLoader}
 	serviceRegLoader.dataLoader = &dataLoader
 
 	return &dataLoader

@@ -54,6 +54,10 @@ func (a *AuthService) GetServiceID() string {
 	return a.serviceID
 }
 
+func (a *AuthService) GetAccessToken(path string) error {
+	return a.dataLoader.GetAccessToken(path)
+}
+
 // GetServiceReg returns the service registration record for the given ID if found
 func (a *AuthService) GetServiceReg(serviceID string) (*ServiceReg, error) {
 	a.servicesLock.RLock()
@@ -271,7 +275,7 @@ func NewTestAuthService(serviceID string, serviceHost string, dataLoader AuthDat
 // AuthDataLoader declares an interface to load data from an auth service
 type AuthDataLoader interface {
 	// GetAccessToken gets an access token
-	GetAccessToken(token string, path string) error
+	GetAccessToken(path string) error
 	// GetDeletedAccounts loads deleted account IDs
 	GetDeletedAccounts(path string) ([]string, error)
 	ServiceRegLoader
@@ -280,17 +284,18 @@ type AuthDataLoader interface {
 //RemoteAuthDataLoaderImpl provides a AuthDataLoader implementation for a remote auth service
 type RemoteAuthDataLoaderImpl struct {
 	authServicesHost string // URL of auth services host
+	serviceToken     string
 	accessToken      AccessToken
 
 	*RemoteServiceRegLoaderImpl
 }
 
 // GetAccessToken implements AuthDataLoader interface
-func (r *RemoteAuthDataLoaderImpl) GetAccessToken(token string, path string) error {
+func (r *RemoteAuthDataLoaderImpl) GetAccessToken(path string) error {
 	params := map[string]interface{}{
 		"auth_type": "static_token",
 		"creds": map[string]string{
-			"token": token,
+			"token": r.serviceToken,
 		},
 	}
 	data, err := json.Marshal(params)
@@ -353,6 +358,7 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(path string) ([]string, er
 	}
 
 	if resp.StatusCode != 200 {
+		//TODO: automatically get new access token and call GetDeletedAccounts once more if receive 401
 		return nil, fmt.Errorf("error getting deleted accounts: %d - %s", resp.StatusCode, string(body))
 	}
 
@@ -366,10 +372,11 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(path string) ([]string, er
 }
 
 // NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
-func NewRemoteAuthDataLoader(authServicesHost string, serviceRegPath string, subscribedServices []string) *RemoteAuthDataLoaderImpl {
+func NewRemoteAuthDataLoader(authServicesHost string, serviceToken string, serviceRegPath string, subscribedServices []string) *RemoteAuthDataLoaderImpl {
 	serviceRegLoader := NewRemoteServiceRegLoader(serviceRegPath, subscribedServices)
 
-	dataLoader := RemoteAuthDataLoaderImpl{authServicesHost: authServicesHost, RemoteServiceRegLoaderImpl: serviceRegLoader}
+	dataLoader := RemoteAuthDataLoaderImpl{authServicesHost: authServicesHost, serviceToken: serviceToken,
+		RemoteServiceRegLoaderImpl: serviceRegLoader}
 	serviceRegLoader.dataLoader = &dataLoader
 
 	return &dataLoader

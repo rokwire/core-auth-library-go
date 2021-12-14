@@ -115,6 +115,9 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	if claims.Purpose != purpose {
 		return nil, fmt.Errorf("token purpose (%s) does not match %s", claims.Purpose, purpose)
 	}
+	if claims.ExpiresAt <= time.Now().Unix() {
+		return nil, fmt.Errorf("token is expired %d", claims.ExpiresAt)
+	}
 
 	aud := strings.Split(claims.Audience, ",")
 	if !(authutils.ContainsString(aud, t.authService.GetServiceID()) || (t.acceptRokwireTokens && authutils.ContainsString(aud, AudRokwire))) {
@@ -138,18 +141,15 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	kid, _ := parsedToken.Header["kid"].(string)
 	if kid != authServiceReg.PubKey.Kid {
 		if !parsedToken.Valid {
-			if claims.ExpiresAt > time.Now().Unix() {
-				refreshed, refreshErr := t.authService.CheckForRefresh()
-				if refreshErr != nil {
-					return nil, fmt.Errorf("initial token check returned invalid, error on retry: %v", refreshErr)
-				}
-				if refreshed {
-					return t.retryCheckToken(token, purpose)
-				} else {
-					return nil, fmt.Errorf("token invalid: %v", tokenErr)
-				}
+			refreshed, refreshErr := t.authService.CheckForRefresh()
+			if refreshErr != nil {
+				return nil, fmt.Errorf("initial token check returned invalid, error on retry: %v", refreshErr)
 			}
-			return nil, fmt.Errorf("token is expired %d", claims.ExpiresAt)
+			if refreshed {
+				return t.retryCheckToken(token, purpose)
+			} else {
+				return nil, fmt.Errorf("token invalid: %v", tokenErr)
+			}
 		}
 		return nil, fmt.Errorf("token has valid signature but invalid kid %s", kid)
 	}
