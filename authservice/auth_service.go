@@ -54,6 +54,7 @@ func (a *AuthService) GetServiceID() string {
 	return a.serviceID
 }
 
+// GetDeletedAccounts returns a list of deleted account IDs from the auth service
 func (a *AuthService) GetDeletedAccounts(path string) ([]string, error) {
 	accountIDs, err := a.dataLoader.GetDeletedAccounts(path)
 	if err != nil {
@@ -407,6 +408,7 @@ func NewRemoteAuthDataLoader(authServicesHost string, accessTokenPath string, se
 	return &dataLoader
 }
 
+// AccessToken represents an access token granted by a remote auth service
 type AccessToken struct {
 	Token     string `json:"access_token"`
 	TokenType string `json:"token_type"`
