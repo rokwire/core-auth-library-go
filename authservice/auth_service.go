@@ -59,6 +59,7 @@ func (a *AuthService) GetDeletedAccounts(path string) ([]string, error) {
 	accountIDs, err := a.dataLoader.GetDeletedAccounts(path)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
+			// access token may have expired, so get a new one and try once more
 			tokenErr := a.dataLoader.GetAccessToken()
 			if tokenErr != nil {
 				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)

@@ -24,8 +24,8 @@ import (
 )
 
 func main() {
-    serviceLoader := authservice.NewRemoteServiceRegLoader("https://rokwire.illinois.edu/auth", nil)
-	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", serviceLoader)
+    dataLoader := authservice.NewRemoteAuthDataLoader("https://rokwire.illinois.edu/auth", "/access-token", "example_token", "/service-regs", nil)
+	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", dataLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
