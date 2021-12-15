@@ -13,13 +13,13 @@ type AuthDataLoader struct {
 	*ServiceRegLoader
 }
 
-// GetAccessToken provides a mock function with given fields: path
-func (_m *AuthDataLoader) GetAccessToken(path string) error {
-	ret := _m.Called(path)
+// GetAccessToken provides a mock function with given fields:
+func (_m *AuthDataLoader) GetAccessToken() error {
+	ret := _m.Called()
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(string) error); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func() error); ok {
+		r0 = rf()
 	} else {
 		r0 = ret.Error(0)
 	}

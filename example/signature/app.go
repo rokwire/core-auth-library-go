@@ -118,7 +118,7 @@ func main() {
 	// 	that this service will receive signed requests from.
 	services := []string{"example2"}
 	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
-	dataLoader := authservice.NewRemoteAuthDataLoader("https://auth.rokwire.com/services", "sample_token", "/service-regs", services)
+	dataLoader := authservice.NewRemoteAuthDataLoader("https://auth.rokwire.com/services", "/access-token", "sample_token", "/service-regs", services)
 
 	// Instantiate AuthService instance
 	authService, err := authservice.NewAuthService("example", "https://sample.rokwire.com", dataLoader)
