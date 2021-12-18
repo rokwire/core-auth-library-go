@@ -80,7 +80,7 @@ func (a *AuthService) GetDeletedAccounts(path string) ([]string, error) {
 }
 
 // GetServiceReg returns the service registration record for the given ID if found
-func (a *AuthService) GetServiceReg(serviceID string) (*ServiceReg, error) {
+func (a *AuthService) GetServiceReg(id string) (*ServiceReg, error) {
 	a.servicesLock.RLock()
 	servicesUpdated := a.servicesUpdated
 	maxRefreshFreq := a.maxRefreshCacheFreq
@@ -97,34 +97,34 @@ func (a *AuthService) GetServiceReg(serviceID string) (*ServiceReg, error) {
 	if a.services == nil {
 		return nil, fmt.Errorf("services could not be loaded: %v", loadServicesError)
 	}
-	itemValue, ok := a.services.Load(serviceID)
+	itemValue, ok := a.services.Load(id)
 	if !ok {
-		return nil, fmt.Errorf("service could not be found for id: %s - %v", serviceID, loadServicesError)
+		return nil, fmt.Errorf("service could not be found for id: %s - %v", id, loadServicesError)
 	}
 
 	service, ok = itemValue.(ServiceReg)
 	if !ok {
-		return nil, fmt.Errorf("service could not be parsed for id: %s - %v", serviceID, loadServicesError)
+		return nil, fmt.Errorf("service could not be parsed for id: %s - %v", id, loadServicesError)
 	}
 
 	return &service, loadServicesError
 }
 
 // GetServiceRegWithPubKey returns the service registration record for the given ID if found and validates the PubKey
-func (a *AuthService) GetServiceRegWithPubKey(serviceID string) (*ServiceReg, error) {
-	serviceReg, err := a.GetServiceReg(serviceID)
+func (a *AuthService) GetServiceRegWithPubKey(id string) (*ServiceReg, error) {
+	serviceReg, err := a.GetServiceReg(id)
 	if err != nil || serviceReg == nil {
 		return nil, fmt.Errorf("failed to retrieve service reg: %v", err)
 	}
 
 	if serviceReg.PubKey == nil {
-		return nil, fmt.Errorf("service pub key is nil for id %s", serviceID)
+		return nil, fmt.Errorf("service pub key is nil for id %s", id)
 	}
 
 	if serviceReg.PubKey.Key == nil {
 		err = serviceReg.PubKey.LoadKeyFromPem()
 		if err != nil || serviceReg.PubKey.Key == nil {
-			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", serviceID, err)
+			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", id, err)
 		}
 	}
 
@@ -225,6 +225,7 @@ func (a *AuthService) setServices(services []ServiceReg) {
 	if len(services) > 0 {
 		for _, service := range services {
 			a.services.Store(service.ServiceID, service)
+			a.services.Store(service.ServiceAccountID, service)
 		}
 	}
 
@@ -552,9 +553,10 @@ func NewServiceRegSubscriptions(subscribedServices []string) *ServiceRegSubscrip
 
 // ServiceReg represents a service registration record
 type ServiceReg struct {
-	ServiceID string  `json:"service_id" bson:"service_id" validate:"required"`
-	Host      string  `json:"host" bson:"host" validate:"required"`
-	PubKey    *PubKey `json:"pub_key" bson:"pub_key"`
+	ServiceID        string  `json:"service_id" bson:"service_id" validate:"required"`
+	ServiceAccountID string  `json:"service_account_id" bson:"service_account_id"`
+	Host             string  `json:"host" bson:"host" validate:"required"`
+	PubKey           *PubKey `json:"pub_key" bson:"pub_key"`
 }
 
 // -------------------- PubKey --------------------

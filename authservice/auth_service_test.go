@@ -34,14 +34,14 @@ func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {
 
 func TestAuthService_GetServiceReg(t *testing.T) {
 	authPubKey := testutils.GetSamplePubKey()
-	testServiceReg := authservice.ServiceReg{"test", "https://test.rokwire.com", nil}
-	authServiceReg := authservice.ServiceReg{"auth", "https://auth.rokwire.com", authPubKey}
+	testServiceReg := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", nil}
+	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", authPubKey}
 
 	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
 	type args struct {
-		serviceID string
+		id string
 	}
 	tests := []struct {
 		name    string
@@ -49,7 +49,8 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 		want    *authservice.ServiceReg
 		wantErr bool
 	}{
-		{"return reg when found", args{"auth"}, &authServiceReg, false},
+		{"return reg when found by serviceID", args{"auth"}, &authServiceReg, false},
+		{"return reg when found by serviceAccountID", args{"6050ec62-d552-4fed-b11f-15a01bb1afc1"}, &authServiceReg, false},
 		{"return err when not found", args{"example"}, nil, true},
 	}
 	for _, tt := range tests {
@@ -59,7 +60,7 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			got, err := a.GetServiceReg(tt.args.serviceID)
+			got, err := a.GetServiceReg(tt.args.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.GetServiceReg() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -73,14 +74,14 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 
 func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 	authPubKey := testutils.GetSamplePubKey()
-	testServiceReg := authservice.ServiceReg{"test", "https://test.rokwire.com", nil}
-	authServiceReg := authservice.ServiceReg{"auth", "https://auth.rokwire.com", authPubKey}
+	testServiceReg := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", nil}
+	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", authPubKey}
 
 	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
 	type args struct {
-		serviceID string
+		id string
 	}
 	tests := []struct {
 		name    string
@@ -88,7 +89,8 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 		want    *authservice.ServiceReg
 		wantErr bool
 	}{
-		{"return reg when found and key valid", args{"auth"}, &authServiceReg, false},
+		{"return reg when found by serviceID and key valid", args{"auth"}, &authServiceReg, false},
+		{"return reg when found by serviceAccountID and key valid", args{"6050ec62-d552-4fed-b11f-15a01bb1afc1"}, &authServiceReg, false},
 		{"return err when found and key invalid", args{"test"}, nil, true},
 		{"return err when not found", args{"example"}, nil, true},
 	}
@@ -99,7 +101,7 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			got, err := a.GetServiceRegWithPubKey(tt.args.serviceID)
+			got, err := a.GetServiceRegWithPubKey(tt.args.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.GetServiceRegWithPubKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -112,8 +114,8 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 }
 
 func TestAuthService_SubscribeServices(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
-	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: nil}
+	testServiceReg := authservice.ServiceReg{ServiceID: "test", ServiceAccountID: "dec8d277-b775-47a2-b7b0-ce8482871b67", Host: "https://test.rokwire.com", PubKey: nil}
+	authServiceReg := authservice.ServiceReg{ServiceID: "auth", ServiceAccountID: "6050ec62-d552-4fed-b11f-15a01bb1afc1", Host: "https://auth.rokwire.com", PubKey: nil}
 	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
@@ -156,8 +158,8 @@ func TestAuthService_SubscribeServices(t *testing.T) {
 }
 
 func TestAuthService_ValidateServiceRegistration(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
-	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: nil}
+	testServiceReg := authservice.ServiceReg{ServiceID: "test", ServiceAccountID: "dec8d277-b775-47a2-b7b0-ce8482871b67", Host: "https://test.rokwire.com", PubKey: nil}
+	authServiceReg := authservice.ServiceReg{ServiceID: "auth", ServiceAccountID: "6050ec62-d552-4fed-b11f-15a01bb1afc1", Host: "https://auth.rokwire.com", PubKey: nil}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	serviceRegsMissing := []authservice.ServiceReg{authServiceReg}
 	subscribed := []string{"auth"}
@@ -206,12 +208,11 @@ LrSVbitnfQD1AgMBAAE=
 	wrongKey := setupPubKeyFromPem(wrongKeyPem)
 
 	wrongKey.LoadKeyFromPem()
+	testServiceReg := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", pubKey}
+	testServiceRegNoKey := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", nil}
+	testServiceRegWrongKey := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", wrongKey}
 
-	testServiceReg := authservice.ServiceReg{"test", "https://test.rokwire.com", pubKey}
-	testServiceRegNoKey := authservice.ServiceReg{"test", "https://test.rokwire.com", nil}
-	testServiceRegWrongKey := authservice.ServiceReg{"test", "https://test.rokwire.com", wrongKey}
-
-	authServiceReg := authservice.ServiceReg{"auth", "https://auth.rokwire.com", nil}
+	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", nil}
 
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	serviceRegsMissing := []authservice.ServiceReg{authServiceReg}
