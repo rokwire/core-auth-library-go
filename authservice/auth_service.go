@@ -426,11 +426,9 @@ func (r *RemoteAuthDataLoaderImpl) getDeletedAccounts(callback func([]string) er
 		r.logger.Error(err.Error())
 	}
 
-	if callback != nil {
-		err = callback(accountIDs)
-		if err != nil && r.logger != nil {
-			r.logger.Errorf("Received error from callback function: %v", err)
-		}
+	err = callback(accountIDs)
+	if err != nil && r.logger != nil {
+		r.logger.Errorf("Received error from callback function: %v", err)
 	}
 
 	duration := time.Hour * time.Duration(r.config.GetDeletedAccountsPeriod)
