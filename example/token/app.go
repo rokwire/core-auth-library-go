@@ -22,6 +22,7 @@ import (
 	"github.com/rokwire/core-auth-library-go/authorization"
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/tokenauth"
+	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for token auth
@@ -104,8 +105,23 @@ func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 
 func main() {
 	serviceID := "sample"
-	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
-	dataLoader := authservice.NewRemoteAuthDataLoader("https://auth.rokwire.com/services", "/access-token", "sample_token", "/service-regs", nil)
+	// Instantiate a remote AuthDataLoader to load auth service registration record from auth service
+	config := authservice.RemoteAuthDataLoaderConfig{
+		AuthServicesHost: "https://auth.rokwire.com/services",
+		ServiceToken:     "sample_token",
+
+		AccessTokenPath:     "/access-token",
+		DeletedAccountsPath: "/deleted-accounts",
+		ServiceRegPath:      "/service-regs",
+
+		DeletedAccountsCallback:  nil,
+		GetDeletedAccountsPeriod: 2,
+	}
+	logger := logs.NewLogger("example", nil)
+	dataLoader, err := authservice.NewRemoteAuthDataLoader(config, nil, logger)
+	if err != nil {
+		log.Fatalf("Error initializing remote data loader: %v", err)
+	}
 
 	// Instantiate AuthService instance
 	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", dataLoader)

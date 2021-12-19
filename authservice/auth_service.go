@@ -28,6 +28,7 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/authutils"
+	"github.com/rokwire/logging-library-go/logs"
 	"golang.org/x/sync/syncmap"
 	"gopkg.in/go-playground/validator.v9"
 )
@@ -52,31 +53,6 @@ type AuthService struct {
 // GetServiceID returns the ID of the implementing service
 func (a *AuthService) GetServiceID() string {
 	return a.serviceID
-}
-
-// GetDeletedAccounts returns a list of deleted account IDs from the auth service
-func (a *AuthService) GetDeletedAccounts(path string) ([]string, error) {
-	accountIDs, err := a.dataLoader.GetDeletedAccounts(path)
-	if err != nil {
-		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
-			// access token may have expired, so get a new one and try once more
-			tokenErr := a.dataLoader.GetAccessToken()
-			if tokenErr != nil {
-				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
-			}
-
-			accountIDs, err = a.dataLoader.GetDeletedAccounts(path)
-			if err != nil {
-				return nil, err
-			}
-
-			return accountIDs, nil
-		}
-
-		return nil, err
-	}
-
-	return accountIDs, nil
 }
 
 // GetServiceReg returns the service registration record for the given ID if found
@@ -256,11 +232,6 @@ func NewAuthService(serviceID string, serviceHost string, dataLoader AuthDataLoa
 		return nil, fmt.Errorf("unable to validate service registration: please contact the auth service system admin to register your service - %v", err)
 	}
 
-	err = auth.dataLoader.GetAccessToken()
-	if err != nil {
-		return nil, fmt.Errorf("error getting access token: %v", err)
-	}
-
 	return auth, nil
 }
 
@@ -304,19 +275,35 @@ type AuthDataLoader interface {
 	// GetAccessToken gets an access token
 	GetAccessToken() error
 	// GetDeletedAccounts loads deleted account IDs
-	GetDeletedAccounts(path string) ([]string, error)
+	GetDeletedAccounts() ([]string, error)
 	ServiceRegLoader
 }
 
 //RemoteAuthDataLoaderImpl provides a AuthDataLoader implementation for a remote auth service
 type RemoteAuthDataLoaderImpl struct {
-	authServicesHost string // URL of auth services host
-	accessTokenPath  string
+	config RemoteAuthDataLoaderConfig
 
-	serviceToken string
-	accessToken  AccessToken
+	accessToken AccessToken
+
+	timerDone               chan bool
+	getDeletedAccountsTimer *time.Timer
+
+	logger *logs.Logger
 
 	*RemoteServiceRegLoaderImpl
+}
+
+//RemoteAuthDataLoaderConfig represents a configuration for a remote data loader
+type RemoteAuthDataLoaderConfig struct {
+	AuthServicesHost string // URL of auth services host
+	ServiceToken     string
+
+	AccessTokenPath     string
+	DeletedAccountsPath string
+	ServiceRegPath      string
+
+	DeletedAccountsCallback  func([]string) error
+	GetDeletedAccountsPeriod int64
 }
 
 // GetAccessToken implements AuthDataLoader interface
@@ -324,7 +311,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
 	params := map[string]interface{}{
 		"auth_type": "static_token",
 		"creds": map[string]string{
-			"token": r.serviceToken,
+			"token": r.config.ServiceToken,
 		},
 	}
 	data, err := json.Marshal(params)
@@ -333,7 +320,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", r.authServicesHost+r.accessTokenPath, bytes.NewReader(data))
+	req, err := http.NewRequest("POST", r.config.AuthServicesHost+r.config.AccessTokenPath, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("error formatting request to get access token: %v", err)
 	}
@@ -365,9 +352,33 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
 }
 
 // GetDeletedAccounts implements AuthDataLoader interface
-func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(path string) ([]string, error) {
+func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
+	accountIDs, err := r.requestDeletedAccounts()
+	if err != nil {
+		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
+			// access token may have expired, so get a new one and try once more
+			tokenErr := r.GetAccessToken()
+			if tokenErr != nil {
+				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
+			}
+
+			accountIDs, err = r.requestDeletedAccounts()
+			if err != nil {
+				return nil, err
+			}
+
+			return accountIDs, nil
+		}
+
+		return nil, err
+	}
+
+	return accountIDs, nil
+}
+
+func (r *RemoteAuthDataLoaderImpl) requestDeletedAccounts() ([]string, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.authServicesHost+path, nil)
+	req, err := http.NewRequest("GET", r.config.AuthServicesHost+r.config.DeletedAccountsPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
@@ -399,15 +410,58 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts(path string) ([]string, er
 	return deletedAccounts, nil
 }
 
-// NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
-func NewRemoteAuthDataLoader(authServicesHost string, accessTokenPath string, serviceToken string, serviceRegPath string, subscribedServices []string) *RemoteAuthDataLoaderImpl {
-	serviceRegLoader := NewRemoteServiceRegLoader(serviceRegPath, subscribedServices)
+func (r *RemoteAuthDataLoaderImpl) setupGetDeletedAccountsTimer() {
+	//cancel if active
+	if r.getDeletedAccountsTimer != nil {
+		r.timerDone <- true
+		r.getDeletedAccountsTimer.Stop()
+	}
 
-	dataLoader := RemoteAuthDataLoaderImpl{authServicesHost: authServicesHost, accessTokenPath: accessTokenPath,
-		serviceToken: serviceToken, RemoteServiceRegLoaderImpl: serviceRegLoader}
+	r.getDeletedAccounts(r.config.DeletedAccountsCallback)
+}
+
+func (r *RemoteAuthDataLoaderImpl) getDeletedAccounts(callback func([]string) error) {
+	accountIDs, err := r.GetDeletedAccounts()
+	if err != nil && r.logger != nil {
+		r.logger.Error(err.Error())
+	}
+
+	if callback != nil {
+		err = callback(accountIDs)
+		if err != nil && r.logger != nil {
+			r.logger.Errorf("Received error from callback function: %v", err)
+		}
+	}
+
+	duration := time.Hour * time.Duration(r.config.GetDeletedAccountsPeriod)
+	r.getDeletedAccountsTimer = time.NewTimer(duration)
+	select {
+	case <-r.getDeletedAccountsTimer.C:
+		// timer expired
+		r.getDeletedAccountsTimer = nil
+
+		r.getDeletedAccounts(callback)
+	case <-r.timerDone:
+		// timer aborted
+		r.getDeletedAccountsTimer = nil
+	}
+}
+
+// NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
+func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServices []string, logger *logs.Logger) (*RemoteAuthDataLoaderImpl, error) {
+	if config.DeletedAccountsCallback == nil {
+		return nil, errors.New("deleted accounts callback must not be nil")
+	}
+
+	serviceRegLoader := NewRemoteServiceRegLoader(subscribedServices)
+
+	timerDone := make(chan bool)
+
+	dataLoader := RemoteAuthDataLoaderImpl{config: config, timerDone: timerDone, logger: logger, RemoteServiceRegLoaderImpl: serviceRegLoader}
 	serviceRegLoader.dataLoader = &dataLoader
 
-	return &dataLoader
+	dataLoader.setupGetDeletedAccountsTimer()
+	return &dataLoader, nil
 }
 
 // AccessToken represents an access token granted by a remote auth service
@@ -435,7 +489,6 @@ type ServiceRegLoader interface {
 //RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
 	dataLoader *RemoteAuthDataLoaderImpl
-	path       string
 
 	*ServiceRegSubscriptions
 }
@@ -447,7 +500,7 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.dataLoader.authServicesHost+r.path, nil)
+	req, err := http.NewRequest("GET", r.dataLoader.config.AuthServicesHost+r.dataLoader.config.ServiceRegPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to load services: %v", err)
 	}
@@ -493,9 +546,9 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 }
 
 // NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance for the provided auth services url
-func NewRemoteServiceRegLoader(path string, subscribedServices []string) *RemoteServiceRegLoaderImpl {
+func NewRemoteServiceRegLoader(subscribedServices []string) *RemoteServiceRegLoaderImpl {
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
-	return &RemoteServiceRegLoaderImpl{path: path, ServiceRegSubscriptions: subscriptions}
+	return &RemoteServiceRegLoaderImpl{ServiceRegSubscriptions: subscriptions}
 }
 
 // -------------------- ServiceRegSubscriptions --------------------

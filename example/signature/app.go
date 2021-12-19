@@ -24,6 +24,7 @@ import (
 
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/sigauth"
+	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for signature auth
@@ -117,8 +118,23 @@ func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
 	services := []string{"example2"}
-	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
-	dataLoader := authservice.NewRemoteAuthDataLoader("https://auth.rokwire.com/services", "/access-token", "sample_token", "/service-regs", services)
+	// Instantiate a remote AuthDataLoader to load service registration records from auth service
+	config := authservice.RemoteAuthDataLoaderConfig{
+		AuthServicesHost: "https://auth.rokwire.com/services",
+		ServiceToken:     "sample_token",
+
+		AccessTokenPath:     "/access-token",
+		DeletedAccountsPath: "/deleted-accounts",
+		ServiceRegPath:      "/service-regs",
+
+		DeletedAccountsCallback:  nil,
+		GetDeletedAccountsPeriod: 2,
+	}
+	logger := logs.NewLogger("example", nil)
+	dataLoader, err := authservice.NewRemoteAuthDataLoader(config, services, logger)
+	if err != nil {
+		log.Fatalf("Error initializing remote data loader: %v", err)
+	}
 
 	// Instantiate AuthService instance
 	authService, err := authservice.NewAuthService("example", "https://sample.rokwire.com", dataLoader)

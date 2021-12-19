@@ -27,13 +27,13 @@ func (_m *AuthDataLoader) GetAccessToken() error {
 	return r0
 }
 
-// GetDeletedAccounts provides a mock function with given fields: path
-func (_m *AuthDataLoader) GetDeletedAccounts(path string) ([]string, error) {
-	ret := _m.Called(path)
+// GetDeletedAccounts provides a mock function with given fields:
+func (_m *AuthDataLoader) GetDeletedAccounts() ([]string, error) {
+	ret := _m.Called()
 
 	var r0 []string
-	if rf, ok := ret.Get(0).(func(string) []string); ok {
-		r0 = rf(path)
+	if rf, ok := ret.Get(0).(func() []string); ok {
+		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]string)
@@ -41,8 +41,8 @@ func (_m *AuthDataLoader) GetDeletedAccounts(path string) ([]string, error) {
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string) error); ok {
-		r1 = rf(path)
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
 	} else {
 		r1 = ret.Error(1)
 	}
