@@ -109,6 +109,11 @@ func (we WebAdapter) signatureAuthWrapFunction(handler http.HandlerFunc, service
 	}
 }
 
+func printDeletedAccountIDs(accountIDs []string) error {
+	log.Printf("Deleted account IDs: %v\n", accountIDs)
+	return nil
+}
+
 // NewWebAdapter creates new WebAdapter instance
 func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 	return WebAdapter{signatureAuth: signatureAuth}
@@ -123,12 +128,7 @@ func main() {
 		AuthServicesHost: "https://auth.rokwire.com/services",
 		ServiceToken:     "sample_token",
 
-		AccessTokenPath:     "/access-token",
-		DeletedAccountsPath: "/deleted-accounts",
-		ServiceRegPath:      "/service-regs",
-
-		DeletedAccountsCallback:  nil,
-		GetDeletedAccountsPeriod: 2,
+		DeletedAccountsCallback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
 	dataLoader, err := authservice.NewRemoteAuthDataLoader(config, services, logger)

@@ -23,8 +23,19 @@ import (
   "github.com/rokwire/core-auth-library-go/authservice"
 )
 
+func printDeletedAccountIDs(accountIDs []string) error {
+	log.Printf("Deleted account IDs: %v\n", accountIDs)
+	return nil
+}
+
 func main() {
-    dataLoader := authservice.NewRemoteAuthDataLoader("https://rokwire.illinois.edu/auth", "/access-token", "example_token", "/service-regs", nil)
+    config := authservice.RemoteAuthDataLoaderConfig{
+		AuthServicesHost: "https://rokwire.illinois.edu/auth",
+		ServiceToken:     "example_token",
+
+		DeletedAccountsCallback: printDeletedAccountIDs,
+	}
+    dataLoader := authservice.NewRemoteAuthDataLoader(config, nil)
 	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", dataLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)

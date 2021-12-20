@@ -447,9 +447,16 @@ func (r *RemoteAuthDataLoaderImpl) getDeletedAccounts(callback func([]string) er
 
 // NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
 func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServices []string, logger *logs.Logger) (*RemoteAuthDataLoaderImpl, error) {
+	if config.AuthServicesHost == "" {
+		return nil, errors.New("auth services host is missing")
+	}
+	if config.ServiceToken == "" {
+		return nil, errors.New("service token is missing")
+	}
 	if config.DeletedAccountsCallback == nil {
 		return nil, errors.New("deleted accounts callback must not be nil")
 	}
+	constructDataLoaderConfig(&config)
 
 	serviceRegLoader := NewRemoteServiceRegLoader(subscribedServices)
 
@@ -460,6 +467,32 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 
 	dataLoader.setupGetDeletedAccountsTimer()
 	return &dataLoader, nil
+}
+
+func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
+	defaultConfig := RemoteAuthDataLoaderConfig{
+		AccessTokenPath:     "/bbs/access-token",
+		DeletedAccountsPath: "/bbs/deleted-accounts",
+		ServiceRegPath:      "/bbs/service-regs",
+
+		GetDeletedAccountsPeriod: 2,
+	}
+
+	if config.AuthServicesHost == "" {
+		config.AuthServicesHost = defaultConfig.AuthServicesHost
+	}
+	if config.AccessTokenPath == "" {
+		config.AccessTokenPath = defaultConfig.AccessTokenPath
+	}
+	if config.DeletedAccountsPath == "" {
+		config.DeletedAccountsPath = defaultConfig.DeletedAccountsPath
+	}
+	if config.ServiceRegPath == "" {
+		config.ServiceRegPath = defaultConfig.ServiceRegPath
+	}
+	if config.GetDeletedAccountsPeriod <= 0 {
+		config.GetDeletedAccountsPeriod = defaultConfig.GetDeletedAccountsPeriod
+	}
 }
 
 // AccessToken represents an access token granted by a remote auth service
