@@ -35,7 +35,7 @@ func main() {
 
 		DeletedAccountsCallback: printDeletedAccountIDs,
 	}
-    dataLoader := authservice.NewRemoteAuthDataLoader(config, nil)
+	dataLoader := authservice.NewRemoteAuthDataLoader(config, nil)
 	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", dataLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)

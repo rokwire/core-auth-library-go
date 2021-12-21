@@ -296,14 +296,14 @@ type RemoteAuthDataLoaderImpl struct {
 //RemoteAuthDataLoaderConfig represents a configuration for a remote data loader
 type RemoteAuthDataLoaderConfig struct {
 	AuthServicesHost string // URL of auth services host
-	ServiceToken     string
+	ServiceToken     string // Static token issued by the auth service, used to get access tokens from the auth service
 
-	AccessTokenPath     string
-	DeletedAccountsPath string
-	ServiceRegPath      string
+	AccessTokenPath     string // Path to auth service access token endpoint
+	DeletedAccountsPath string // Path to auth service deleted accounts endpoint
+	ServiceRegPath      string // Path to auth service service registration endpoint
 
-	DeletedAccountsCallback  func([]string) error
-	GetDeletedAccountsPeriod int64
+	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
+	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
 }
 
 // GetAccessToken implements AuthDataLoader interface
@@ -450,11 +450,8 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 	if config.AuthServicesHost == "" {
 		return nil, errors.New("auth services host is missing")
 	}
-	if config.ServiceToken == "" {
+	if config.ServiceToken == "" && config.DeletedAccountsCallback != nil {
 		return nil, errors.New("service token is missing")
-	}
-	if config.DeletedAccountsCallback == nil {
-		return nil, errors.New("deleted accounts callback must not be nil")
 	}
 	constructDataLoaderConfig(&config)
 
@@ -465,33 +462,25 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 	dataLoader := RemoteAuthDataLoaderImpl{config: config, timerDone: timerDone, logger: logger, RemoteServiceRegLoaderImpl: serviceRegLoader}
 	serviceRegLoader.dataLoader = &dataLoader
 
-	dataLoader.setupGetDeletedAccountsTimer()
+	if config.DeletedAccountsCallback != nil {
+		dataLoader.setupGetDeletedAccountsTimer()
+	}
+
 	return &dataLoader, nil
 }
 
 func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
-	defaultConfig := RemoteAuthDataLoaderConfig{
-		AccessTokenPath:     "/bbs/access-token",
-		DeletedAccountsPath: "/bbs/deleted-accounts",
-		ServiceRegPath:      "/bbs/service-regs",
-
-		GetDeletedAccountsPeriod: 2,
-	}
-
-	if config.AuthServicesHost == "" {
-		config.AuthServicesHost = defaultConfig.AuthServicesHost
-	}
 	if config.AccessTokenPath == "" {
-		config.AccessTokenPath = defaultConfig.AccessTokenPath
+		config.AccessTokenPath = "/bbs/access-token"
 	}
 	if config.DeletedAccountsPath == "" {
-		config.DeletedAccountsPath = defaultConfig.DeletedAccountsPath
+		config.DeletedAccountsPath = "/bbs/deleted-accounts"
 	}
 	if config.ServiceRegPath == "" {
-		config.ServiceRegPath = defaultConfig.ServiceRegPath
+		config.ServiceRegPath = "/bbs/service-regs"
 	}
 	if config.GetDeletedAccountsPeriod <= 0 {
-		config.GetDeletedAccountsPeriod = defaultConfig.GetDeletedAccountsPeriod
+		config.GetDeletedAccountsPeriod = 2
 	}
 }
 
