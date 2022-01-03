@@ -15,14 +15,12 @@
 package sigauth
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -90,12 +88,12 @@ func (s *SignatureAuth) CheckSignature(pubKey *rsa.PublicKey, message []byte, si
 }
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
-func (s *SignatureAuth) SignRequest(r *http.Request) error {
+func (s *SignatureAuth) SignRequest(r *http.Request, body []byte) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
 
-	digest, err := GetRequestDigest(r)
+	digest, err := GetRequestDigest(body)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -133,12 +131,12 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 // 	The request must be signed by one of the services in requiredServiceIDs. If nil, any valid signature
 //	from a subscribed service will be accepted
 // 	Returns the service ID of the signing service
-func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, requiredServiceIDs []string) (string, error) {
+func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, body []byte, requiredServiceIDs []string) (string, error) {
 	if r == nil {
 		return "", errors.New("request is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.checkRequest(r)
+	sigString, sigAuthHeader, err := s.checkRequest(r, body)
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +155,7 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, requiredSe
 
 // CheckRequestSignature validates the signature on the provided request
 // 	The request must be signed by the private key paired with the provided public key
-func (s *SignatureAuth) CheckRequestSignature(r *http.Request, pubKey *rsa.PublicKey) error {
+func (s *SignatureAuth) CheckRequestSignature(r *http.Request, body []byte, pubKey *rsa.PublicKey) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
@@ -166,7 +164,7 @@ func (s *SignatureAuth) CheckRequestSignature(r *http.Request, pubKey *rsa.Publi
 		return errors.New("public key is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.checkRequest(r)
+	sigString, sigAuthHeader, err := s.checkRequest(r, body)
 	if err != nil {
 		return err
 	}
@@ -179,7 +177,7 @@ func (s *SignatureAuth) CheckRequestSignature(r *http.Request, pubKey *rsa.Publi
 	return nil
 }
 
-func (s *SignatureAuth) checkRequest(r *http.Request) (string, *SignatureAuthHeader, error) {
+func (s *SignatureAuth) checkRequest(r *http.Request, body []byte) (string, *SignatureAuthHeader, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		return "", nil, errors.New("request missing authorization header")
@@ -187,7 +185,7 @@ func (s *SignatureAuth) checkRequest(r *http.Request) (string, *SignatureAuthHea
 
 	digestHeader := r.Header.Get("Digest")
 
-	digest, err := GetRequestDigest(r)
+	digest, err := GetRequestDigest(body)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -259,21 +257,10 @@ func GetRequestLine(r *http.Request) string {
 }
 
 // GetRequestDigest returns the SHA256 digest of the provided request body
-func GetRequestDigest(r *http.Request) (string, error) {
-	if r == nil {
-		return "", errors.New("request is nil")
-	}
-	if r.Body == nil {
+func GetRequestDigest(body []byte) (string, error) {
+	if len(body) == 0 {
 		return "", nil
 	}
-
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading request body: %v", err)
-	}
-	r.Body.Close()
-
-	r.Body = ioutil.NopCloser(bytes.NewReader(body))
 
 	hash, err := authutils.HashSha256(body)
 	if err != nil {
