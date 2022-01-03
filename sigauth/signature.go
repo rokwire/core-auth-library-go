@@ -39,6 +39,7 @@ type SignatureAuth struct {
 	serviceKey *rsa.PrivateKey
 }
 
+// GetAccessToken gets an access token from an auth service using signature auth
 func (s *SignatureAuth) GetAccessToken(accountID string) error {
 	params := map[string]interface{}{
 		"auth_type": "signature",
