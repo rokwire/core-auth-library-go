@@ -273,7 +273,7 @@ func NewTestAuthService(serviceID string, serviceHost string, dataLoader AuthDat
 // AuthDataLoader declares an interface to load data from an auth service
 type AuthDataLoader interface {
 	// GetAccessToken gets an access token
-	GetAccessToken() error
+	GetAccessToken(req *http.Request) error
 	// GetDeletedAccounts loads deleted account IDs
 	GetDeletedAccounts() ([]string, error)
 	ServiceRegLoader
@@ -302,31 +302,34 @@ type RemoteAuthDataLoaderConfig struct {
 	DeletedAccountsPath string // Path to auth service deleted accounts endpoint
 	ServiceRegPath      string // Path to auth service service registration endpoint
 
+	AccessTokenRequest       *http.Request
 	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
 	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
 }
 
 // GetAccessToken implements AuthDataLoader interface
-func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
-	params := map[string]interface{}{
-		"auth_type": "static_token",
-		"creds": map[string]string{
-			"token": r.config.ServiceToken,
-		},
-	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return fmt.Errorf("error marshaling request body toget access token: %v", err)
+func (r *RemoteAuthDataLoaderImpl) GetAccessToken(req *http.Request) error {
+	if req == nil {
+		params := map[string]interface{}{
+			"auth_type": "static_token",
+			"creds": map[string]string{
+				"token": r.config.ServiceToken,
+			},
+		}
+		data, err := json.Marshal(params)
+		if err != nil {
+			return fmt.Errorf("error marshaling request body toget access token: %v", err)
+		}
+
+		req, err = http.NewRequest("POST", r.config.AuthServicesHost+r.config.AccessTokenPath, bytes.NewReader(data))
+		if err != nil {
+			return fmt.Errorf("error formatting request to get access token: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", r.config.AuthServicesHost+r.config.AccessTokenPath, bytes.NewReader(data))
-	if err != nil {
-		return fmt.Errorf("error formatting request to get access token: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error requesting access token: %v", err)
@@ -357,7 +360,7 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
 			// access token may have expired, so get a new one and try once more
-			tokenErr := r.GetAccessToken()
+			tokenErr := r.GetAccessToken(r.config.AccessTokenRequest)
 			if tokenErr != nil {
 				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
 			}

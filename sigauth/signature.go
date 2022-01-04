@@ -36,57 +36,37 @@ import (
 type SignatureAuth struct {
 	authService *authservice.AuthService
 
-	serviceKey *rsa.PrivateKey
+	serviceAccountID string
+	serviceKey       *rsa.PrivateKey
 }
 
-// GetAccessToken gets an access token from an auth service using signature auth
-func (s *SignatureAuth) GetAccessToken(accountID string) error {
+// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
+func (s *SignatureAuth) BuildAccessTokenRequest() (*http.Request, error) {
 	params := map[string]interface{}{
 		"auth_type": "signature",
 		"creds": map[string]string{
-			"id": accountID,
+			"id": s.serviceAccountID,
 		},
 	}
 	data, err := json.Marshal(params)
 	if err != nil {
-		return fmt.Errorf("error marshaling body for get access token: %v", err)
+		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
 	}
 
 	r, err := http.NewRequest(http.MethodPost, "http://localhost:80/core/tps/account/token", bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("error creating request for get access token: %v", err)
+		return nil, fmt.Errorf("error creating request for get access token: %v", err)
 	}
 
 	r.Header.Set("Content-Type", "application/json")
 
 	err = s.SignRequest(r)
 	if err != nil {
-		return fmt.Errorf("error signing request for get access token: %v", err)
+		return nil, fmt.Errorf("error signing request for get access token: %v", err)
 	}
 
 	r.Body = ioutil.NopCloser(bytes.NewReader(data))
-
-	client := &http.Client{}
-	resp, err := client.Do(r)
-	if err != nil {
-		return fmt.Errorf("error sending request for get access token: %v", err)
-	}
-	if resp == nil {
-		return errors.New("response is nil for get access token")
-	}
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("error reading body for get access token: %v", err)
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("error getting access token: %d", resp.StatusCode)
-	}
-
-	fmt.Println(string(body))
-	//TODO: set accessToken in RemoteAuthDataLoader
-	return nil
+	return r, nil
 }
 
 // Sign generates and returns a signature for the provided message
