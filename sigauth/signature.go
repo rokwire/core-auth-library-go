@@ -41,7 +41,7 @@ type SignatureAuth struct {
 }
 
 // BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest() (*http.Request, error) {
+func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string) (*http.Request, error) {
 	params := map[string]interface{}{
 		"auth_type": "signature",
 		"creds": map[string]string{
@@ -53,7 +53,7 @@ func (s *SignatureAuth) BuildAccessTokenRequest() (*http.Request, error) {
 		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
 	}
 
-	r, err := http.NewRequest(http.MethodPost, "http://localhost:80/core/tps/account/token", bytes.NewReader(data))
+	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request for get access token: %v", err)
 	}
