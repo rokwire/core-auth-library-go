@@ -38,6 +38,7 @@ type Claims struct {
 	jwt.StandardClaims
 	OrgID         string `json:"org_id" validate:"required"`    // Organization ID
 	AppID         string `json:"app_id"`                        // Application ID
+	SessionID     string `json:"session_id"`                    // Session ID
 	Purpose       string `json:"purpose" validate:"required"`   // Token purpose (eg. access, csrf...)
 	AuthType      string `json:"auth_type" validate:"required"` // Authentication method (eg. email, phone...)
 	Permissions   string `json:"permissions"`                   // Granted permissions
