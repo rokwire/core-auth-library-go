@@ -19,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardize fetching certain data from a remote auth service [#20](https://github.com/rokwire/core-auth-library-go/issues/20)
 - Link service accounts to service registrations [#19](https://github.com/rokwire/core-auth-library-go/issues/19)
 
+## [1.0.5] - 2021-12-21
+### Added
+- Standardize fetching certain data from a remote auth service [#20](https://github.com/rokwire/core-auth-library-go/issues/20)
+- Link service accounts to service registrations [#19](https://github.com/rokwire/core-auth-library-go/issues/19)
+
 ## [1.0.4] - 2021-12-03
 ### Added 
 - Write unit tests for sigauth package [#17](https://github.com/rokwire/core-auth-library-go/pull/17)
