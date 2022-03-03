@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Changed
+- Improve signature interfaces for request body [#29](https://github.com/rokwire/core-auth-library-go/issues/29)
 ### Fixed
 - Content length header missing when signing request [#27](https://github.com/rokwire/core-auth-library-go/issues/27)
 ### Added

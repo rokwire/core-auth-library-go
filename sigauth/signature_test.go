@@ -28,7 +28,6 @@ import (
 	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/authservice/mocks"
-	"github.com/rokwire/core-auth-library-go/authutils"
 	"github.com/rokwire/core-auth-library-go/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/sigauth"
 )
@@ -162,6 +161,7 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 
 	type args struct {
 		r                  *http.Request
+		body               []byte
 		requiredServiceIDs []string
 	}
 	tests := []struct {
@@ -170,21 +170,20 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "nil_request", args: args{r: nilReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: true},
-		{name: "success", args: args{r: testReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
-		{name: "bad_service_id", args: args{r: testReq, requiredServiceIDs: []string{"auth"}}, want: "auth", wantErr: true},
-		{name: "empty_body", args: args{r: testEmptyBody, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
+		{name: "nil_request", args: args{r: nilReq, body: nil, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: true},
+		{name: "success", args: args{r: testReq, body: data, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
+		{name: "bad_service_id", args: args{r: testReq, body: data, requiredServiceIDs: []string{"auth"}}, want: "auth", wantErr: true},
+		{name: "empty_body", args: args{r: testEmptyBody, body: nil, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = s.SignRequest(tt.args.r)
+			err = s.SignRequest(tt.args.r, tt.args.body)
 			if err != nil && !tt.wantErr {
 				t.Errorf("SignatureAuth.SignRequest() error = %v", err)
 				return
 			}
-			authutils.ResetRequestBody(testReq, data)
 
-			got, err := s.CheckRequestServiceSignature(tt.args.r, tt.args.requiredServiceIDs)
+			got, err := s.CheckRequestServiceSignature(tt.args.r, tt.args.body, tt.args.requiredServiceIDs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -223,6 +222,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	type args struct {
 		r       *http.Request
+		body    []byte
 		privKey *rsa.PrivateKey
 		pubKey  *rsa.PublicKey
 	}
@@ -231,10 +231,10 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{name: "sample_keypair", args: args{r: testReq, privKey: privKey, pubKey: pubKey}, wantErr: false},
-		{name: "nil_pub_key", args: args{r: testReq, privKey: privKey, pubKey: nil}, wantErr: true},
-		{name: "nil_request", args: args{r: nilReq, privKey: privKey, pubKey: pubKey}, wantErr: true},
-		{name: "empty_body", args: args{r: testEmptyBody, privKey: privKey, pubKey: pubKey}, wantErr: false},
+		{name: "sample_keypair", args: args{r: testReq, body: data, privKey: privKey, pubKey: pubKey}, wantErr: false},
+		{name: "nil_pub_key", args: args{r: testReq, body: data, privKey: privKey, pubKey: nil}, wantErr: true},
+		{name: "nil_request", args: args{r: nilReq, body: nil, privKey: privKey, pubKey: pubKey}, wantErr: true},
+		{name: "empty_body", args: args{r: testEmptyBody, body: nil, privKey: privKey, pubKey: pubKey}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -243,19 +243,17 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return
 			}
-			err = s.SignRequest(tt.args.r)
+			err = s.SignRequest(tt.args.r, tt.args.body)
 			if err != nil && !tt.wantErr {
 				t.Errorf("SignatureAuth.SignRequest() error = %v", err)
 				return
 			}
-			authutils.ResetRequestBody(testReq, data)
 
-			err = s.CheckRequestSignature(tt.args.r, tt.args.pubKey)
+			err = s.CheckRequestSignature(tt.args.r, tt.args.body, tt.args.pubKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			authutils.ResetRequestBody(testReq, data)
 		})
 	}
 }
@@ -330,12 +328,9 @@ func TestGetRequestDigest(t *testing.T) {
 		},
 	}
 	data, _ := json.Marshal(params)
-	testReq, _ := http.NewRequest(http.MethodPost, "http://test.rokwire.com/test", bytes.NewReader(data))
-
-	testEmptyBody, _ := http.NewRequest(http.MethodGet, "http://test.rokwire.com/test", nil)
 
 	type args struct {
-		r *http.Request
+		body []byte
 	}
 	tests := []struct {
 		name       string
@@ -344,13 +339,13 @@ func TestGetRequestDigest(t *testing.T) {
 		wantLength int
 		wantErr    bool
 	}{
-		{name: "success", args: args{r: testReq}, wantDigest: "SHA-256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantLength: len(data), wantErr: false},
-		{name: "nil_request", args: args{r: nil}, wantDigest: "", wantLength: 0, wantErr: true},
-		{name: "empty_body", args: args{r: testEmptyBody}, wantDigest: "", wantLength: 0, wantErr: false},
+		{name: "success", args: args{body: data}, wantDigest: "SHA-256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantLength: len(data), wantErr: false},
+		{name: "empty_body", args: args{body: make([]byte, 0)}, wantDigest: "", wantLength: 0, wantErr: false},
+		{name: "nil_body", args: args{body: nil}, wantDigest: "", wantLength: 0, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDigest, gotLength, err := sigauth.GetRequestDigest(tt.args.r)
+			gotDigest, gotLength, err := sigauth.GetRequestDigest(tt.args.body)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetRequestDigest() error = %v, wantErr %v", err, tt.wantErr)
 				return
