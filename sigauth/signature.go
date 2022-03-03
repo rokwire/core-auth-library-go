@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/rokwire/core-auth-library-go/authservice"
@@ -93,13 +94,15 @@ func (s *SignatureAuth) SignRequest(r *http.Request, body []byte) error {
 		return errors.New("request is nil")
 	}
 
-	digest, err := GetRequestDigest(body)
+	digest, length, err := GetRequestDigest(body)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
 	if digest != "" {
 		r.Header.Set("Digest", digest)
 	}
+
+	r.Header.Set("Content-Length", strconv.Itoa(length))
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
@@ -185,7 +188,7 @@ func (s *SignatureAuth) checkRequest(r *http.Request, body []byte) (string, *Sig
 
 	digestHeader := r.Header.Get("Digest")
 
-	digest, err := GetRequestDigest(body)
+	digest, _, err := GetRequestDigest(body)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -212,10 +215,12 @@ func (s *SignatureAuth) checkRequest(r *http.Request, body []byte) (string, *Sig
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey *rsa.PrivateKey, authService *authservice.AuthService) (*SignatureAuth, error) {
-	err := authService.ValidateServiceRegistrationKey(serviceKey)
-	if err != nil {
-		return nil, fmt.Errorf("unable to validate service key registration: please contact the auth service system admin to register a public key for your service - %v", err)
+func NewSignatureAuth(serviceKey *rsa.PrivateKey, authService *authservice.AuthService, serviceRegKey bool) (*SignatureAuth, error) {
+	if serviceRegKey {
+		err := authService.ValidateServiceRegistrationKey(serviceKey)
+		if err != nil {
+			return nil, fmt.Errorf("unable to validate service key registration: please contact the auth service system admin to register a public key for your service - %v", err)
+		}
 	}
 
 	return &SignatureAuth{serviceKey: serviceKey, authService: authService}, nil
@@ -256,18 +261,18 @@ func GetRequestLine(r *http.Request) string {
 	return fmt.Sprintf("%s %s %s", r.Method, r.URL.Path, r.Proto)
 }
 
-// GetRequestDigest returns the SHA256 digest of the provided request body
-func GetRequestDigest(body []byte) (string, error) {
+// GetRequestDigest returns the SHA256 digest and length of the provided request body
+func GetRequestDigest(body []byte) (string, int, error) {
 	if len(body) == 0 {
-		return "", nil
+		return "", 0, nil
 	}
 
 	hash, err := authutils.HashSha256(body)
 	if err != nil {
-		return "", fmt.Errorf("error hashing request body: %v", err)
+		return "", 0, fmt.Errorf("error hashing request body: %v", err)
 	}
 
-	return "SHA-256=" + base64.StdEncoding.EncodeToString(hash), nil
+	return "SHA-256=" + base64.StdEncoding.EncodeToString(hash), len(body), nil
 }
 
 // -------------------- SignatureAuthHeader --------------------

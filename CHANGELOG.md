@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Changed
 - Improve signature interfaces for request body [#29](https://github.com/rokwire/core-auth-library-go/issues/29)
+### Fixed
+- Content length header missing when signing request [#27](https://github.com/rokwire/core-auth-library-go/issues/27)
+### Added
+- Provide permanent claim for external ID [#24](https://github.com/rokwire/core-auth-library-go/issues/24)
+- Add session ID claim [#32](https://github.com/rokwire/core-auth-library-go/issues/32)
 
 ## [1.0.5] - 2021-12-21
 ### Added

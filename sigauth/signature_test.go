@@ -37,7 +37,7 @@ func setupTestSignatureAuth(mockLoader *mocks.AuthDataLoader) (*sigauth.Signatur
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), auth)
+	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), auth, true)
 }
 
 func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.AuthDataLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
@@ -49,7 +49,7 @@ func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.AuthDataLoader, privKey
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(privKey, auth)
+	return sigauth.NewSignatureAuth(privKey, auth, true)
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
@@ -333,24 +333,25 @@ func TestGetRequestDigest(t *testing.T) {
 		body []byte
 	}
 	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
+		name       string
+		args       args
+		wantDigest string
+		wantLength int
+		wantErr    bool
 	}{
-		{name: "success", args: args{body: data}, want: "SHA-256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantErr: false},
-		{name: "empty_body", args: args{body: make([]byte, 0)}, want: "", wantErr: false},
-		{name: "nil_body", args: args{body: nil}, want: "", wantErr: false},
+		{name: "success", args: args{body: data}, wantDigest: "SHA-256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantLength: len(data), wantErr: false},
+		{name: "empty_body", args: args{body: make([]byte, 0)}, wantDigest: "", wantLength: 0, wantErr: false},
+		{name: "nil_body", args: args{body: nil}, wantDigest: "", wantLength: 0, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sigauth.GetRequestDigest(tt.args.body)
+			gotDigest, gotLength, err := sigauth.GetRequestDigest(tt.args.body)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetRequestDigest() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("GetRequestDigest() = %v, want %v", got, tt.want)
+			if gotDigest != tt.wantDigest || gotLength != tt.wantLength {
+				t.Errorf("GetRequestDigest() = %v, %v, want %v, %v", gotDigest, gotLength, tt.wantDigest, tt.wantLength)
 			}
 		})
 	}
