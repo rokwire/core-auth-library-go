@@ -42,7 +42,6 @@ type SignatureAuth struct {
 
 // BuildAccessTokenRequest builds a signed request to get an access token from an auth service
 func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string) (*http.Request, error) {
-	//TODO: app_id, org_id, move id out of creds?
 	params := map[string]interface{}{
 		"auth_type": "signature",
 		"creds": map[string]string{

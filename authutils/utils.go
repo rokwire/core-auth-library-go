@@ -104,7 +104,6 @@ func GetDefaultAccessTokenRequest(host string, path string, token string) (*http
 		return nil, errors.New("service token is missing")
 	}
 
-	//TODO: app_id, org_id?
 	params := map[string]interface{}{
 		"auth_type": "static_token",
 		"creds": map[string]string{
