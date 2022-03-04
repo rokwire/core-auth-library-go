@@ -272,10 +272,12 @@ func NewTestAuthService(serviceID string, serviceHost string, dataLoader AuthDat
 
 // AuthDataLoader declares an interface to load data from an auth service
 type AuthDataLoader interface {
+	// GetServiceAccountParams gets all service account params
+	GetServiceAccountParams() error
 	// GetAccessToken gets an access token
-	GetAccessToken() error
+	GetAccessToken(appID *string, orgID *string) error
 	// GetDeletedAccounts loads deleted account IDs
-	GetDeletedAccounts() ([]string, error)
+	GetDeletedAccounts(appID *string, orgID *string) ([]string, error)
 	ServiceRegLoader
 }
 
@@ -283,7 +285,12 @@ type AuthDataLoader interface {
 type RemoteAuthDataLoaderImpl struct {
 	config RemoteAuthDataLoaderConfig
 
-	accessToken AccessToken
+	accessTokens     *syncmap.Map
+	accessTokensLock *sync.RWMutex
+
+	appOrgPairs []AppOrgPair
+
+	// accessTokens map[string]AccessToken
 
 	timerDone               chan bool
 	getDeletedAccountsTimer *time.Timer
@@ -296,20 +303,23 @@ type RemoteAuthDataLoaderImpl struct {
 //RemoteAuthDataLoaderConfig represents a configuration for a remote data loader
 type RemoteAuthDataLoaderConfig struct {
 	AuthServicesHost string // URL of auth services host
+	ServiceAccountID string // Implementing service's account ID on the auth service
 	ServiceToken     string // Static token issued by the auth service, used to get access tokens from the auth service
 
-	AccessTokenPath     string // Path to auth service access token endpoint
-	DeletedAccountsPath string // Path to auth service deleted accounts endpoint
-	ServiceRegPath      string // Path to auth service service registration endpoint
+	ServiceAccountParamsPath string // Path to auth service service account params endpoint
+	AccessTokenPath          string // Path to auth service access token endpoint
+	DeletedAccountsPath      string // Path to auth service deleted accounts endpoint
+	ServiceRegPath           string // Path to auth service service registration endpoint
 
 	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
 	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
 }
 
-// GetAccessToken implements AuthDataLoader interface
-func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
+// GetServiceAccountParams implements AuthDataLoader interface
+func (r *RemoteAuthDataLoaderImpl) GetServiceAccountParams() error {
 	params := map[string]interface{}{
 		"auth_type": "static_token",
+		"id":        r.config.ServiceAccountID,
 		"creds": map[string]string{
 			"token": r.config.ServiceToken,
 		},
@@ -317,6 +327,68 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
 	data, err := json.Marshal(params)
 	if err != nil {
 		return fmt.Errorf("error marshaling request body toget access token: %v", err)
+	}
+
+	client := &http.Client{}
+	req, err := http.NewRequest("POST", r.config.AuthServicesHost+r.config.ServiceAccountParamsPath+"/"+r.config.ServiceAccountID, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("error formatting request to get service account params: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error requesting service account params: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading body of service account params response: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("error getting service account params: %d - %s", resp.StatusCode, string(body))
+	}
+
+	err = json.Unmarshal(body, &r.appOrgPairs)
+	if err != nil {
+		return fmt.Errorf("error on unmarshal service account params response: %v", err)
+	}
+
+	r.accessTokensLock.Lock()
+	r.accessTokens = &syncmap.Map{}
+	r.accessTokensLock.Unlock()
+
+	return nil
+}
+
+// GetAccessToken implements AuthDataLoader interface
+func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID *string, orgID *string) error {
+	var appOrgPair *AppOrgPair
+	for _, pair := range r.appOrgPairs {
+		if pair.AppID == appID && pair.OrgID == orgID {
+			appOrgPair = &pair
+		}
+	}
+	if appOrgPair == nil {
+		return fmt.Errorf("access not granted for app_id %v, org_id %v", appID, orgID)
+	}
+
+	params := map[string]interface{}{
+		"auth_type": "static_token",
+		"id":        r.config.ServiceAccountID,
+		"app_id":    appOrgPair.AppID,
+		"org_id":    appOrgPair.OrgID,
+		"creds": map[string]string{
+			"token": r.config.ServiceToken,
+		},
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return fmt.Errorf("error marshaling request body to get access token: %v", err)
 	}
 
 	client := &http.Client{}
@@ -343,17 +415,49 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken() error {
 		return fmt.Errorf("error getting access token: %d - %s", resp.StatusCode, string(body))
 	}
 
-	err = json.Unmarshal(body, &r.accessToken)
+	var accessToken AccessToken
+	err = json.Unmarshal(body, &accessToken)
 	if err != nil {
 		return fmt.Errorf("error on unmarshal access token response: %v", err)
 	}
+
+	appKey := "nil"
+	orgKey := "nil"
+	if appID != nil {
+		appKey = *appID
+	}
+	if orgID != nil {
+		orgKey = *orgID
+	}
+	r.accessTokensLock.Lock()
+	r.accessTokens.Store(fmt.Sprintf("%s_%s", appKey, orgKey), accessToken)
+	r.accessTokensLock.Unlock()
 
 	return nil
 }
 
 // GetDeletedAccounts implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
-	accountIDs, err := r.requestDeletedAccounts()
+	ch := make(chan []string)
+	r.accessTokens.Range(func(key, item interface{}) bool {
+		// errArgs := &logutils.FieldArgs{"org_id": key}
+		if item == nil {
+			// err = errors.ErrorData(logutils.StatusInvalid, model.TypeOrganization, errArgs)
+			return false
+		}
+
+		accessToken, ok := item.(AccessToken)
+		if !ok {
+			// err = errors.ErrorAction(logutils.ActionCast, model.TypeOrganization, errArgs)
+			return false
+		}
+		go r.getDeletedAccountsAsync(accessToken, ch)
+		return true
+	})
+}
+
+func (r *RemoteAuthDataLoaderImpl) getDeletedAccountsAsync(token AccessToken, c chan<- []string) ([]string, error) {
+	r.requestDeletedAccounts(token.Token, token.TokenType)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
 			// access token may have expired, so get a new one and try once more
@@ -376,14 +480,14 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 	return accountIDs, nil
 }
 
-func (r *RemoteAuthDataLoaderImpl) requestDeletedAccounts() ([]string, error) {
+func (r *RemoteAuthDataLoaderImpl) requestDeletedAccounts(token string, tokenType string) ([]string, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", r.config.AuthServicesHost+r.config.DeletedAccountsPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("%s %s", r.accessToken.TokenType, r.accessToken.Token))
+	req.Header.Set("Authorization", fmt.Sprintf("%s %s", tokenType, token))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -450,6 +554,9 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 	if config.AuthServicesHost == "" {
 		return nil, errors.New("auth services host is missing")
 	}
+	if config.ServiceAccountID == "" {
+		return nil, errors.New("service account id is missing")
+	}
 	if config.ServiceToken == "" && config.DeletedAccountsCallback != nil {
 		return nil, errors.New("service token is missing")
 	}
@@ -470,6 +577,9 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 }
 
 func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
+	if config.ServiceAccountParamsPath == "" {
+		config.ServiceAccountParamsPath = "/bbs/service-account"
+	}
 	if config.AccessTokenPath == "" {
 		config.AccessTokenPath = "/bbs/access-token"
 	}
@@ -488,6 +598,12 @@ func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
 type AccessToken struct {
 	Token     string `json:"access_token"`
 	TokenType string `json:"token_type"`
+}
+
+// AppOrgPair represents application organization pair access granted by a remote auth service
+type AppOrgPair struct {
+	AppID *string `json:"app_id"`
+	OrgID *string `json:"org_id"`
 }
 
 // -------------------- ServiceRegLoader --------------------
