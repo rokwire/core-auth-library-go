@@ -439,6 +439,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID *string, orgID *string) 
 // GetDeletedAccounts implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 	ch := make(chan []string)
+	numTokens := 0
 	r.accessTokens.Range(func(key, item interface{}) bool {
 		// errArgs := &logutils.FieldArgs{"org_id": key}
 		if item == nil {
@@ -451,9 +452,14 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 			// err = errors.ErrorAction(logutils.ActionCast, model.TypeOrganization, errArgs)
 			return false
 		}
+		numTokens++
 		go r.getDeletedAccountsAsync(accessToken, ch)
 		return true
 	})
+
+	for i := 0; i < numTokens; i++ {
+
+	}
 }
 
 func (r *RemoteAuthDataLoaderImpl) getDeletedAccountsAsync(token AccessToken, c chan<- []string) ([]string, error) {
