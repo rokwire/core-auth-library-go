@@ -13,13 +13,13 @@ type AuthDataLoader struct {
 	*ServiceRegLoader
 }
 
-// GetAccessToken provides a mock function with given fields:
-func (_m *AuthDataLoader) GetAccessToken() error {
-	ret := _m.Called()
+// GetAccessToken provides a mock function with given fields: appID, orgID
+func (_m *AuthDataLoader) GetAccessToken(appID *string, orgID *string) error {
+	ret := _m.Called(appID, orgID)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func() error); ok {
-		r0 = rf()
+	if rf, ok := ret.Get(0).(func(*string, *string) error); ok {
+		r0 = rf(appID, orgID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -48,6 +48,20 @@ func (_m *AuthDataLoader) GetDeletedAccounts() ([]string, error) {
 	}
 
 	return r0, r1
+}
+
+// GetServiceAccountParams provides a mock function with given fields:
+func (_m *AuthDataLoader) GetServiceAccountParams() error {
+	ret := _m.Called()
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func() error); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }
 
 // LoadServices provides a mock function with given fields:

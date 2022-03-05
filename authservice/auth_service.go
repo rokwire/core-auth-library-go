@@ -277,7 +277,7 @@ type AuthDataLoader interface {
 	// GetAccessToken gets an access token
 	GetAccessToken(appID *string, orgID *string) error
 	// GetDeletedAccounts loads deleted account IDs
-	GetDeletedAccounts(appID *string, orgID *string) ([]string, error)
+	GetDeletedAccounts() ([]string, error)
 	ServiceRegLoader
 }
 
