@@ -438,52 +438,123 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID *string, orgID *string) 
 
 // GetDeletedAccounts implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
-	ch := make(chan []string)
+	idChan := make(chan []string)
+	errChan := make(chan error)
 	numTokens := 0
+	accountIDs := make([]string, 0)
+	errStr := ""
+
 	r.accessTokens.Range(func(key, item interface{}) bool {
-		// errArgs := &logutils.FieldArgs{"org_id": key}
-		if item == nil {
-			// err = errors.ErrorData(logutils.StatusInvalid, model.TypeOrganization, errArgs)
+		numTokens++
+		keyStr, ok := key.(string)
+		if !ok {
 			return false
 		}
 
-		accessToken, ok := item.(AccessToken)
-		if !ok {
-			// err = errors.ErrorAction(logutils.ActionCast, model.TypeOrganization, errArgs)
-			return false
+		if item == nil {
+			go r.getDeletedAccountsAsync(nil, keyStr, idChan, errChan)
+		} else if accessToken, ok := item.(AccessToken); !ok {
+			go r.getDeletedAccountsAsync(nil, keyStr, idChan, errChan)
+		} else {
+			go r.getDeletedAccountsAsync(&accessToken, keyStr, idChan, errChan)
 		}
-		numTokens++
-		go r.getDeletedAccountsAsync(accessToken, ch)
+
 		return true
 	})
 
 	for i := 0; i < numTokens; i++ {
-
-	}
-}
-
-func (r *RemoteAuthDataLoaderImpl) getDeletedAccountsAsync(token AccessToken, c chan<- []string) ([]string, error) {
-	r.requestDeletedAccounts(token.Token, token.TokenType)
-	if err != nil {
-		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
-			// access token may have expired, so get a new one and try once more
-			tokenErr := r.GetAccessToken()
-			if tokenErr != nil {
-				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
+		partialAccountIDs := <-idChan
+		partialErr := <-errChan
+		if partialErr != nil {
+			if len(errStr) > 0 {
+				errStr += ", " + partialErr.Error()
+			} else {
+				errStr += partialErr.Error()
 			}
-
-			accountIDs, err = r.requestDeletedAccounts()
-			if err != nil {
-				return nil, err
-			}
-
-			return accountIDs, nil
+		} else if partialAccountIDs != nil {
+			accountIDs = append(accountIDs, partialAccountIDs...)
 		}
-
-		return nil, err
 	}
 
 	return accountIDs, nil
+}
+
+func (r *RemoteAuthDataLoaderImpl) getDeletedAccountsAsync(token *AccessToken, appOrgKey string, c chan []string, e chan error) {
+	if token == nil {
+		//TODO: get access token
+		keyIDs := strings.Split(appOrgKey, "_")
+		appID := &keyIDs[0]
+		if *appID == "nil" {
+			appID = nil
+		}
+		orgID := &keyIDs[1]
+		if *orgID == "nil" {
+			orgID = nil
+		}
+		tokenErr := r.GetAccessToken(appID, orgID)
+		if tokenErr != nil {
+			c <- nil
+			e <- fmt.Errorf("error getting new access token - %v", tokenErr)
+			return
+		}
+
+		updatedToken, _ := r.accessTokens.Load(appOrgKey)
+		updatedAccessToken, ok := updatedToken.(AccessToken)
+		if !ok {
+			c <- nil
+			e <- fmt.Errorf("error reading updated access token - %s", appOrgKey)
+			return
+		}
+		token = &updatedAccessToken
+	}
+	accountIDs, err := r.requestDeletedAccounts(token.Token, token.TokenType)
+	if err != nil {
+		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
+			// access token may have expired, so get a new one and try once more
+			keyIDs := strings.Split(appOrgKey, "_")
+			appID := &keyIDs[0]
+			if *appID == "nil" {
+				appID = nil
+			}
+			orgID := &keyIDs[1]
+			if *orgID == "nil" {
+				orgID = nil
+			}
+			tokenErr := r.GetAccessToken(appID, orgID)
+			if tokenErr != nil {
+				c <- nil
+				e <- fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
+				return
+			}
+
+			updatedToken, _ := r.accessTokens.Load(appOrgKey)
+			updatedAccessToken, ok := updatedToken.(AccessToken)
+			if !ok {
+				c <- nil
+				e <- fmt.Errorf("error reading updated access token - %s", appOrgKey)
+				return
+			}
+			token = &updatedAccessToken
+
+			accountIDs, err = r.requestDeletedAccounts(token.Token, token.TokenType)
+			if err != nil {
+				c <- nil
+				e <- err
+				return
+			}
+
+			c <- accountIDs
+			e <- nil
+			return
+		}
+
+		c <- nil
+		e <- err
+		return
+	}
+
+	c <- accountIDs
+	e <- nil
 }
 
 func (r *RemoteAuthDataLoaderImpl) requestDeletedAccounts(token string, tokenType string) ([]string, error) {
