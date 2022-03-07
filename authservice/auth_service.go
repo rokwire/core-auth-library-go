@@ -311,6 +311,7 @@ type RemoteAuthDataLoaderConfig struct {
 	DeletedAccountsPath      string // Path to auth service deleted accounts endpoint
 	ServiceRegPath           string // Path to auth service service registration endpoint
 
+	AccessTokenRequestFunc   func(string, string, string, *string, *string, string) (*http.Request, error)
 	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
 	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
 }
@@ -377,28 +378,13 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID *string, orgID *string) 
 		return fmt.Errorf("access not granted for app_id %v, org_id %v", appID, orgID)
 	}
 
-	params := map[string]interface{}{
-		"auth_type": "static_token",
-		"id":        r.config.ServiceAccountID,
-		"app_id":    appOrgPair.AppID,
-		"org_id":    appOrgPair.OrgID,
-		"creds": map[string]string{
-			"token": r.config.ServiceToken,
-		},
-	}
-	data, err := json.Marshal(params)
+	req, err := r.config.AccessTokenRequestFunc(r.config.AuthServicesHost, r.config.AccessTokenPath,
+		r.config.ServiceAccountID, appOrgPair.AppID, appOrgPair.OrgID, r.config.ServiceToken)
 	if err != nil {
-		return fmt.Errorf("error marshaling request body to get access token: %v", err)
+		return fmt.Errorf("error creating access token request: %v", err)
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", r.config.AuthServicesHost+r.config.AccessTokenPath, bytes.NewReader(data))
-	if err != nil {
-		return fmt.Errorf("error formatting request to get access token: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error requesting access token: %v", err)
@@ -614,6 +600,7 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 	if config.ServiceToken == "" && config.DeletedAccountsCallback != nil {
 		return nil, errors.New("service token is missing")
 	}
+
 	constructDataLoaderConfig(&config)
 
 	serviceRegLoader := NewRemoteServiceRegLoader(subscribedServices)
@@ -645,6 +632,10 @@ func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
 	}
 	if config.ServiceRegPath == "" {
 		config.ServiceRegPath = "/bbs/service-regs"
+	}
+
+	if config.AccessTokenRequestFunc == nil {
+		config.AccessTokenRequestFunc = authutils.GetDefaultAccessTokenRequest
 	}
 	if config.GetDeletedAccountsPeriod <= 0 {
 		config.GetDeletedAccountsPeriod = 2
