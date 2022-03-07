@@ -98,6 +98,33 @@ func HashSha256(data []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
+// GetDefaultServiceAccountParamsRequest returns a HTTP request to get service account params using a static token
+func GetDefaultServiceAccountParamsRequest(host string, path string, id string, token string) (*http.Request, error) {
+	if token == "" {
+		return nil, errors.New("service token is missing")
+	}
+
+	params := map[string]interface{}{
+		"auth_type": "static_token",
+		"creds": map[string]string{
+			"token": token,
+		},
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
+	}
+
+	r, err := http.NewRequest("POST", host+path+"/"+id, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
+	}
+
+	r.Header.Set("Content-Type", "application/json")
+
+	return r, nil
+}
+
 // GetDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
 func GetDefaultAccessTokenRequest(host string, path string, id string, appID *string, orgID *string, token string) (*http.Request, error) {
 	if token == "" {

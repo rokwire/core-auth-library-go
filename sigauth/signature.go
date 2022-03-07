@@ -40,8 +40,33 @@ type SignatureAuth struct {
 	serviceKey       *rsa.PrivateKey
 }
 
-// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, id string, appID *string, orgID *string, token string) (*http.Request, error) {
+// ServiceAccountParamsRequest builds a signed request to get service account params from an auth service
+func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, id string, token string) (*http.Request, error) {
+	params := map[string]interface{}{
+		"auth_type": "signature",
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
+	}
+
+	r, err := http.NewRequest("POST", host+path+"/"+s.serviceAccountID, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
+	}
+
+	r.Header.Set("Content-Type", "application/json")
+
+	err = s.SignRequest(r, data)
+	if err != nil {
+		return nil, fmt.Errorf("error signing request for get service account params: %v", err)
+	}
+
+	return r, nil
+}
+
+// AccessTokenRequest builds a signed request to get an access token from an auth service
+func (s *SignatureAuth) AccessTokenRequest(host string, path string, id string, appID *string, orgID *string, token string) (*http.Request, error) {
 	params := map[string]interface{}{
 		"auth_type": "signature",
 		"id":        s.serviceAccountID,

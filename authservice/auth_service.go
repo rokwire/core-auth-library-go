@@ -15,7 +15,6 @@
 package authservice
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -311,33 +310,21 @@ type RemoteAuthDataLoaderConfig struct {
 	DeletedAccountsPath      string // Path to auth service deleted accounts endpoint
 	ServiceRegPath           string // Path to auth service service registration endpoint
 
-	AccessTokenRequestFunc   func(string, string, string, *string, *string, string) (*http.Request, error)
-	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
-	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
+	ServiceAccountParamsRequestFunc func(string, string, string, string) (*http.Request, error)
+	AccessTokenRequestFunc          func(string, string, string, *string, *string, string) (*http.Request, error)
+	DeletedAccountsCallback         func([]string) error // Function to call once the deleted accounts list is received from the auth service
+	GetDeletedAccountsPeriod        int64                // How often to request deleted account list from the auth service (in hours)
 }
 
 // GetServiceAccountParams implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetServiceAccountParams() error {
-	params := map[string]interface{}{
-		"auth_type": "static_token",
-		"id":        r.config.ServiceAccountID,
-		"creds": map[string]string{
-			"token": r.config.ServiceToken,
-		},
-	}
-	data, err := json.Marshal(params)
+	req, err := r.config.ServiceAccountParamsRequestFunc(r.config.AuthServicesHost, r.config.AccessTokenPath,
+		r.config.ServiceAccountID, r.config.ServiceToken)
 	if err != nil {
-		return fmt.Errorf("error marshaling request body toget access token: %v", err)
+		return fmt.Errorf("error creating service account params request: %v", err)
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", r.config.AuthServicesHost+r.config.ServiceAccountParamsPath+"/"+r.config.ServiceAccountID, bytes.NewReader(data))
-	if err != nil {
-		return fmt.Errorf("error formatting request to get service account params: %v", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error requesting service account params: %v", err)
@@ -634,6 +621,9 @@ func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
 		config.ServiceRegPath = "/bbs/service-regs"
 	}
 
+	if config.ServiceAccountParamsRequestFunc == nil {
+		config.ServiceAccountParamsRequestFunc = authutils.GetDefaultServiceAccountParamsRequest
+	}
 	if config.AccessTokenRequestFunc == nil {
 		config.AccessTokenRequestFunc = authutils.GetDefaultAccessTokenRequest
 	}
