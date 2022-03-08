@@ -147,9 +147,8 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 				}
 				if refreshed {
 					return t.retryCheckToken(token, purpose)
-				} else {
-					return nil, fmt.Errorf("token invalid: %v", tokenErr)
 				}
+				return nil, fmt.Errorf("token invalid: %v", tokenErr)
 			}
 			return nil, fmt.Errorf("token is expired %d", claims.ExpiresAt)
 		}

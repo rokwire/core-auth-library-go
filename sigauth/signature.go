@@ -41,7 +41,7 @@ type SignatureAuth struct {
 }
 
 // ServiceAccountParamsRequest builds a signed request to get service account params from an auth service
-func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, id string, token string) (*http.Request, error) {
+func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, _ string, _ string) (*http.Request, error) {
 	params := map[string]interface{}{
 		"auth_type": "signature",
 	}
@@ -66,7 +66,7 @@ func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, id
 }
 
 // AccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) AccessTokenRequest(host string, path string, id string, appID *string, orgID *string, token string) (*http.Request, error) {
+func (s *SignatureAuth) AccessTokenRequest(host string, path string, _ string, _ string, appID *string, orgID *string) (*http.Request, error) {
 	params := map[string]interface{}{
 		"auth_type": "signature",
 		"id":        s.serviceAccountID,

@@ -234,6 +234,7 @@ func NewAuthService(serviceID string, serviceHost string, dataLoader AuthDataLoa
 	return auth, nil
 }
 
+//CheckForRefresh checks if service registrations need to be reloaded
 func (a *AuthService) CheckForRefresh() (bool, error) {
 	a.servicesLock.RLock()
 	servicesUpdated := a.servicesUpdated
@@ -310,10 +311,11 @@ type RemoteAuthDataLoaderConfig struct {
 	DeletedAccountsPath      string // Path to auth service deleted accounts endpoint
 	ServiceRegPath           string // Path to auth service service registration endpoint
 
-	ServiceAccountParamsRequestFunc func(string, string, string, string) (*http.Request, error)
-	AccessTokenRequestFunc          func(string, string, string, *string, *string, string) (*http.Request, error)
-	DeletedAccountsCallback         func([]string) error // Function to call once the deleted accounts list is received from the auth service
-	GetDeletedAccountsPeriod        int64                // How often to request deleted account list from the auth service (in hours)
+	ServiceAccountParamsRequestFunc func(string, string, string, string) (*http.Request, error)                   // Function to call to construct service account params request
+	AccessTokenRequestFunc          func(string, string, string, string, *string, *string) (*http.Request, error) // Function to call to construct access token request
+
+	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
+	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
 }
 
 // GetServiceAccountParams implements AuthDataLoader interface
@@ -366,7 +368,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID *string, orgID *string) 
 	}
 
 	req, err := r.config.AccessTokenRequestFunc(r.config.AuthServicesHost, r.config.AccessTokenPath,
-		r.config.ServiceAccountID, appOrgPair.AppID, appOrgPair.OrgID, r.config.ServiceToken)
+		r.config.ServiceAccountID, r.config.ServiceToken, appOrgPair.AppID, appOrgPair.OrgID)
 	if err != nil {
 		return fmt.Errorf("error creating access token request: %v", err)
 	}

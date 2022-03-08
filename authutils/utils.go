@@ -126,7 +126,7 @@ func GetDefaultServiceAccountParamsRequest(host string, path string, id string, 
 }
 
 // GetDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
-func GetDefaultAccessTokenRequest(host string, path string, id string, appID *string, orgID *string, token string) (*http.Request, error) {
+func GetDefaultAccessTokenRequest(host string, path string, id string, token string, appID *string, orgID *string) (*http.Request, error) {
 	if token == "" {
 		return nil, errors.New("service token is missing")
 	}
