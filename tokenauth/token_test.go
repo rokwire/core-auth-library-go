@@ -33,7 +33,7 @@ import (
 	"github.com/rokwire/core-auth-library-go/tokenauth"
 )
 
-func setupTestTokenAuth(acceptRokwire bool, mockLoader *mocks.AuthDataLoader) (*tokenauth.TokenAuth, error) {
+func setupTestTokenAuth(acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) (*tokenauth.TokenAuth, error) {
 	auth, err := testutils.SetupTestAuthService(mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
@@ -146,7 +146,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockDataLoader(subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
 			tr, err := setupTestTokenAuth(tt.acceptRokwire, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
@@ -187,7 +187,7 @@ func TestTokenAuth_CheckRequestTokens(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockDataLoader(subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
 			tr, err := setupTestTokenAuth(true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
@@ -337,7 +337,7 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockDataLoader(subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
 
 			tr, err := setupTestTokenAuth(true, mockLoader)
 			if err != nil || tr == nil {
@@ -382,7 +382,7 @@ func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockDataLoader(subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
 			tr, err := setupTestTokenAuth(true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)

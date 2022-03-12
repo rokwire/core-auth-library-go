@@ -22,7 +22,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/authorization"
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/tokenauth"
-	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for token auth
@@ -98,11 +97,6 @@ func (we WebAdapter) adminTokenWrapFunc(handler http.HandlerFunc) http.HandlerFu
 	}
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 // NewWebAdapter creates new WebAdapter instance
 func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 	return WebAdapter{tokenAuth: tokenAuth}
@@ -110,21 +104,17 @@ func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 
 func main() {
 	serviceID := "sample"
-	// Instantiate a remote AuthDataLoader to load auth service registration record from auth service
-	config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost: "https://auth.rokwire.com/services",
-		ServiceToken:     "sample_token",
-
-		DeletedAccountsCallback: printDeletedAccountIDs,
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	config := authservice.RemoteServiceRegLoaderConfig{
+		AuthServicesHost: "http://localhost/core",
 	}
-	logger := logs.NewLogger("example", nil)
-	dataLoader, err := authservice.NewRemoteAuthDataLoader(config, nil, logger)
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(config, []string{})
 	if err != nil {
-		log.Fatalf("Error initializing remote data loader: %v", err)
+		log.Fatalf("Error initializing remote service reg loader: %v", err)
 	}
 
 	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", dataLoader)
+	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", serviceRegLoader, nil)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}

@@ -24,7 +24,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/sigauth"
-	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for signature auth
@@ -116,11 +115,6 @@ func (we WebAdapter) signatureAuthWrapFunction(handler http.HandlerFunc, service
 	}
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 // NewWebAdapter creates new WebAdapter instance
 func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 	return WebAdapter{signatureAuth: signatureAuth}
@@ -130,20 +124,17 @@ func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
 	services := []string{}
-	// Instantiate a remote AuthDataLoader to load service registration records from auth service
-	config := authservice.RemoteAuthDataLoaderConfig{
+	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
+	config := authservice.RemoteServiceRegLoaderConfig{
 		AuthServicesHost: "http://localhost/core",
-		// ServiceToken:     "sample_token",
-		// DeletedAccountsCallback: printDeletedAccountIDs,
 	}
-	logger := logs.NewLogger("example", nil)
-	dataLoader, err := authservice.NewRemoteAuthDataLoader(config, services, logger)
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(config, services)
 	if err != nil {
 		log.Fatalf("Error initializing remote data loader: %v", err)
 	}
 
 	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService("example", "http://localhost:8080", dataLoader)
+	authService, err := authservice.NewAuthService("example", "http://localhost:8080", serviceRegLoader, nil)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
