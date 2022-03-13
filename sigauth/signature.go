@@ -36,12 +36,11 @@ import (
 type SignatureAuth struct {
 	authService *authservice.AuthService
 
-	serviceAccountID string
-	serviceKey       *rsa.PrivateKey
+	serviceKey *rsa.PrivateKey
 }
 
 // ServiceAccountParamsRequest builds a signed request to get service account params from an auth service
-func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, _ string, _ string) (*http.Request, error) {
+func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, id string, _ string) (*http.Request, error) {
 	params := map[string]interface{}{
 		"auth_type": "signature",
 	}
@@ -50,7 +49,7 @@ func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, _ 
 		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
 	}
 
-	r, err := http.NewRequest("POST", host+path+"/"+s.serviceAccountID, bytes.NewReader(data))
+	r, err := http.NewRequest("POST", host+path+"/"+id, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
 	}
@@ -66,12 +65,12 @@ func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, _ 
 }
 
 // AccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) AccessTokenRequest(host string, path string, _ string, _ string, appID *string, orgID *string) (*http.Request, error) {
+func (s *SignatureAuth) AccessTokenRequest(host string, path string, id string, _ string, appID *string, orgID *string) (*http.Request, error) {
 	params := map[string]interface{}{
-		"auth_type": "signature",
-		"id":        s.serviceAccountID,
-		"app_id":    appID,
-		"org_id":    orgID,
+		"account_id": id,
+		"app_id":     appID,
+		"org_id":     orgID,
+		"auth_type":  "signature",
 	}
 	data, err := json.Marshal(params)
 	if err != nil {

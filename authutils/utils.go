@@ -132,10 +132,10 @@ func GetDefaultAccessTokenRequest(host string, path string, id string, token str
 	}
 
 	params := map[string]interface{}{
-		"auth_type": "static_token",
-		"id":        id,
-		"app_id":    appID,
-		"org_id":    orgID,
+		"account_id": id,
+		"app_id":     appID,
+		"org_id":     orgID,
+		"auth_type":  "static_token",
 		"creds": map[string]string{
 			"token": token,
 		},
@@ -153,4 +153,20 @@ func GetDefaultAccessTokenRequest(host string, path string, id string, token str
 	r.Header.Set("Content-Type", "application/json")
 
 	return r, nil
+}
+
+// StringOrNil returns a pointer to a non-empty string or nil if empty
+func StringOrNil(v string) *string {
+	if v != "" {
+		return &v
+	}
+	return nil
+}
+
+// StringOrEmpty returns the contents of a string pointer or the empty string if nil
+func StringOrEmpty(v *string) string {
+	if v != nil {
+		return *v
+	}
+	return ""
 }
