@@ -310,6 +310,7 @@ type RemoteAuthDataLoaderConfig struct {
 	ServiceAccountParamsRequestFunc func(string, string, string, string) (*http.Request, error)                   // Function to call to construct service account params request
 	AccessTokenRequestFunc          func(string, string, string, string, *string, *string) (*http.Request, error) // Function to call to construct access token request
 
+	AccessTokenRequest       *http.Request
 	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
 	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
 }
