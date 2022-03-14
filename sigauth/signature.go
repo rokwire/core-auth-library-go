@@ -15,10 +15,12 @@
 package sigauth
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,7 +36,36 @@ import (
 type SignatureAuth struct {
 	authService *authservice.AuthService
 
-	serviceKey *rsa.PrivateKey
+	serviceAccountID string
+	serviceKey       *rsa.PrivateKey
+}
+
+// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
+func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string) (*http.Request, error) {
+	params := map[string]interface{}{
+		"auth_type": "signature",
+		"creds": map[string]string{
+			"id": s.serviceAccountID,
+		},
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
+	}
+
+	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request for get access token: %v", err)
+	}
+
+	r.Header.Set("Content-Type", "application/json")
+
+	err = s.SignRequest(r, data)
+	if err != nil {
+		return nil, fmt.Errorf("error signing request for get access token: %v", err)
+	}
+
+	return r, nil
 }
 
 // Sign generates and returns a signature for the provided message
