@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- Add system claim [#39](https://github.com/rokwire/core-auth-library-go/issues/39)
 - Add support for signature auth to retrieve access tokens [#26](https://github.com/rokwire/core-auth-library-go/issues/26)
 
 ## [1.0.6] - 2022-03-03
