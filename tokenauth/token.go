@@ -48,6 +48,7 @@ type Claims struct {
 	Service       bool   `json:"service"`                       // Is this token for a service account?
 	FirstParty    bool   `json:"first_party"`                   // Is this token used by a first party service (eg. ROKWIRE building block)?
 	Admin         bool   `json:"admin"`                         // Is this token for an admin?
+	System        bool   `json:"system"`                        // Is this token for a system admin?
 
 	// User Data: DO NOT USE AS IDENTIFIER OR SHARE WITH THIRD-PARTY SERVICES
 	Name        string            `json:"name,omitempty"`         // User full name
