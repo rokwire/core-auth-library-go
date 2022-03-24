@@ -15,6 +15,7 @@
 package sigauth
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
