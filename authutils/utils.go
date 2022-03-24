@@ -15,7 +15,6 @@
 package authutils
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"

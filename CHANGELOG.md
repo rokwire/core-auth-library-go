@@ -25,6 +25,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Standardize fetching certain data from a remote auth service [#20](https://github.com/rokwire/core-auth-library-go/issues/20)
 - Link service accounts to service registrations [#19](https://github.com/rokwire/core-auth-library-go/issues/19)
 
+## [1.0.6] - 2022-03-03
+### Changed
+- Improve signature interfaces for request body [#29](https://github.com/rokwire/core-auth-library-go/issues/29)
+### Fixed
+- Content length header missing when signing request [#27](https://github.com/rokwire/core-auth-library-go/issues/27)
+### Added
+- Provide permanent claim for external ID [#24](https://github.com/rokwire/core-auth-library-go/issues/24)
+- Add session ID claim [#32](https://github.com/rokwire/core-auth-library-go/issues/32)
+
+## [1.0.5] - 2021-12-21
+### Added
+- Standardize fetching certain data from a remote auth service [#20](https://github.com/rokwire/core-auth-library-go/issues/20)
+- Link service accounts to service registrations [#19](https://github.com/rokwire/core-auth-library-go/issues/19)
+
 ## [1.0.5] - 2021-12-21
 ### Added
 - Standardize fetching certain data from a remote auth service [#20](https://github.com/rokwire/core-auth-library-go/issues/20)
