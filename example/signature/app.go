@@ -16,6 +16,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -57,9 +58,9 @@ func (we WebAdapter) example2TestHandler(w http.ResponseWriter, req *http.Reques
 	w.Write([]byte("Access granted: example2"))
 }
 
-func (we WebAdapter) sampleSignedRequest(url string, param string, body string) (string, error) {
+func (we WebAdapter) sampleSignedRequest(url string, param string, body []byte) (string, error) {
 	client := &http.Client{}
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(body)))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		return "", fmt.Errorf("error formatting sample request: %v", err)
 	}
@@ -133,7 +134,7 @@ func main() {
 	// Instantiate a remote AuthDataLoader to load service registration records from auth service
 	config := authservice.RemoteAuthDataLoaderConfig{
 		AuthServicesHost: "http://localhost/core",
-		// ServiceToken:     "sample_token",
+		ServiceToken:     "sample_token",
 		// DeletedAccountsCallback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
@@ -153,7 +154,7 @@ func main() {
 	// TODO: Load service private key
 
 	// Instantiate SignatureAuth instance to perform token validation
-	signatureAuth, err := sigauth.NewSignatureAuth(privKey, authService, true)
+	signatureAuth, err := sigauth.NewSignatureAuth(privKey, authService, false)
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}
@@ -164,8 +165,17 @@ func main() {
 	// Tip: You do not need to subscribe to services you are making requests to, only those
 	// 		that you are receiving requests from
 
+	req := map[string]interface{}{
+		"account_id": "0ba899ed-ac7a-11ec-b09f-00ffd2760de8",
+		"app_id":     "9766",
+		"org_id":     "0a2eff20-e2cd-11eb-af68-60f81db5ecc0",
+		"auth_type":  "signature",
+	}
+
+	reqData, _ := json.Marshal(req)
+
 	fmt.Println("adapter done")
-	response, err := adapter.sampleSignedRequest("http://localhost/core/tps/account/token", "sample", "{\"auth_type\":\"signature\",\"creds\":{\"id\":\"072da518-68ee-11ec-b78b-00ffd2760de8\"}}")
+	response, err := adapter.sampleSignedRequest("http://localhost/core/bbs/access-token", "sample", reqData)
 	if err != nil {
 		log.Printf("Error making sample signed request: %v", err)
 	} else {

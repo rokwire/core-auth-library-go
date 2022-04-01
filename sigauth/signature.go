@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/authutils"
@@ -134,6 +135,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request, body []byte) error {
 	}
 
 	r.Header.Set("Content-Length", strconv.Itoa(length))
+	r.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
@@ -269,6 +271,8 @@ func BuildSignatureString(r *http.Request, headers []string) (string, error) {
 		val := ""
 		if header == "request-line" {
 			val = GetRequestLine(r)
+		} else if header == "host" { // Go removes the "Host" header and moves it the request Host field
+			val = header + ": " + r.Host
 		} else {
 			val = header + ": " + r.Header.Get(header)
 		}
