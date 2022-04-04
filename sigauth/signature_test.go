@@ -491,8 +491,8 @@ func TestParseHTTPRequest(t *testing.T) {
 		wantErr         bool
 	}{
 		{name: "nil_request", args: args{r: nilReq}, want: nil, wantRequestBody: nil, wantErr: false},
-		{name: "success", args: args{r: testReq}, want: &sigauth.Request{Headers: headerMap, Body: data, Method: "POST", Path: "/test", Protocol: "HTTP/1.1"}, wantRequestBody: data, wantErr: false},
-		{name: "empty", args: args{r: testEmpty}, want: &sigauth.Request{Headers: make(map[string][]string), Body: nil, Method: "GET", Path: "/test", Protocol: "HTTP/1.1"}, wantRequestBody: nil, wantErr: false},
+		{name: "success", args: args{r: testReq}, want: &sigauth.Request{Headers: headerMap, Body: data, Host: "test.rokwire.com", Method: "POST", Path: "/test", Protocol: "HTTP/1.1"}, wantRequestBody: data, wantErr: false},
+		{name: "empty", args: args{r: testEmpty}, want: &sigauth.Request{Headers: make(map[string][]string), Body: nil, Host: "test.rokwire.com", Method: "GET", Path: "/test", Protocol: "HTTP/1.1"}, wantRequestBody: nil, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

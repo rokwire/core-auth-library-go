@@ -324,6 +324,7 @@ type Request struct {
 	Headers map[string][]string
 	Body    []byte
 
+	Host     string
 	Method   string
 	Path     string
 	Protocol string
@@ -351,7 +352,7 @@ func ParseHTTPRequest(r *http.Request) (*Request, error) {
 		r.Body = ioutil.NopCloser(bytes.NewReader(body))
 	}
 
-	return &Request{Headers: r.Header, Body: body, Method: r.Method, Path: r.URL.Path, Protocol: r.Proto}, nil
+	return &Request{Headers: r.Header, Body: body, Host: r.Host, Method: r.Method, Path: r.URL.Path, Protocol: r.Proto}, nil
 }
 
 // -------------------- SignatureAuthHeader --------------------
