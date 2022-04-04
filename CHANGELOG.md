@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 ### Fixed
 - Signature string is missing host and date headers [#45](https://github.com/rokwire/core-auth-library-go/issues/45)
+### Added
+- Define signature request struct to check signatures [#44](https://github.com/rokwire/core-auth-library-go/issues/44)
 
 ## [1.0.7] - 2022-03-24
 ### Added
