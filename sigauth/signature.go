@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"net/textproto"
 	"strconv"
 	"strings"
 
@@ -60,7 +62,7 @@ func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string) (*http
 
 	r.Header.Set("Content-Type", "application/json")
 
-	err = s.SignRequest(r, data)
+	err = s.SignRequest(r)
 	if err != nil {
 		return nil, fmt.Errorf("error signing request for get access token: %v", err)
 	}
@@ -120,12 +122,17 @@ func (s *SignatureAuth) CheckSignature(pubKey *rsa.PublicKey, message []byte, si
 }
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
-func (s *SignatureAuth) SignRequest(r *http.Request, body []byte) error {
+func (s *SignatureAuth) SignRequest(r *http.Request) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
 
-	digest, length, err := GetRequestDigest(body)
+	signedRequest, err := ParseHTTPRequest(r)
+	if err != nil {
+		return fmt.Errorf("error parsing http request: %v", err)
+	}
+
+	digest, length, err := GetRequestDigest(signedRequest.Body)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -139,7 +146,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request, body []byte) error {
 
 	sigAuthHeader := SignatureAuthHeader{KeyId: s.authService.GetServiceID(), Algorithm: "rsa-sha256", Headers: headers}
 
-	sigString, err := BuildSignatureString(r, headers)
+	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
 		return fmt.Errorf("error building signature string: %v", err)
 	}
@@ -165,12 +172,12 @@ func (s *SignatureAuth) SignRequest(r *http.Request, body []byte) error {
 // 	The request must be signed by one of the services in requiredServiceIDs. If nil, any valid signature
 //	from a subscribed service will be accepted
 // 	Returns the service ID of the signing service
-func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, body []byte, requiredServiceIDs []string) (string, error) {
+func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredServiceIDs []string) (string, error) {
 	if r == nil {
 		return "", errors.New("request is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.checkRequest(r, body)
+	sigString, sigAuthHeader, err := s.checkRequest(r)
 	if err != nil {
 		return "", err
 	}
@@ -189,7 +196,7 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *http.Request, body []byt
 
 // CheckRequestSignature validates the signature on the provided request
 // 	The request must be signed by the private key paired with the provided public key
-func (s *SignatureAuth) CheckRequestSignature(r *http.Request, body []byte, pubKey *rsa.PublicKey) error {
+func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey *rsa.PublicKey) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
@@ -198,7 +205,7 @@ func (s *SignatureAuth) CheckRequestSignature(r *http.Request, body []byte, pubK
 		return errors.New("public key is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.checkRequest(r, body)
+	sigString, sigAuthHeader, err := s.checkRequest(r)
 	if err != nil {
 		return err
 	}
@@ -211,15 +218,15 @@ func (s *SignatureAuth) CheckRequestSignature(r *http.Request, body []byte, pubK
 	return nil
 }
 
-func (s *SignatureAuth) checkRequest(r *http.Request, body []byte) (string, *SignatureAuthHeader, error) {
-	authHeader := r.Header.Get("Authorization")
+func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, error) {
+	authHeader := r.getHeader("Authorization")
 	if authHeader == "" {
 		return "", nil, errors.New("request missing authorization header")
 	}
 
-	digestHeader := r.Header.Get("Digest")
+	digestHeader := r.getHeader("Digest")
 
-	digest, _, err := GetRequestDigest(body)
+	digest, _, err := GetRequestDigest(r.Body)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -259,7 +266,7 @@ func NewSignatureAuth(serviceKey *rsa.PrivateKey, authService *authservice.AuthS
 
 // BuildSignatureString builds the string to be signed for the provided request
 // 	"headers" specify which headers to include in the signature string
-func BuildSignatureString(r *http.Request, headers []string) (string, error) {
+func BuildSignatureString(r *Request, headers []string) (string, error) {
 	sigString := ""
 	for _, header := range headers {
 		if sigString != "" {
@@ -270,7 +277,7 @@ func BuildSignatureString(r *http.Request, headers []string) (string, error) {
 		if header == "request-line" {
 			val = GetRequestLine(r)
 		} else {
-			val = header + ": " + r.Header.Get(header)
+			val = header + ": " + r.getHeader(header)
 		}
 
 		if val == "" {
@@ -284,12 +291,12 @@ func BuildSignatureString(r *http.Request, headers []string) (string, error) {
 }
 
 // GetRequestLine returns the request line for the provided request
-func GetRequestLine(r *http.Request) string {
+func GetRequestLine(r *Request) string {
 	if r == nil {
 		return ""
 	}
 
-	return fmt.Sprintf("%s %s %s", r.Method, r.URL.Path, r.Proto)
+	return fmt.Sprintf("%s %s %s", r.Method, r.Path, r.Protocol)
 }
 
 // GetRequestDigest returns the SHA256 digest and length of the provided request body
@@ -304,6 +311,43 @@ func GetRequestDigest(body []byte) (string, int, error) {
 	}
 
 	return "SHA-256=" + base64.StdEncoding.EncodeToString(hash), len(body), nil
+}
+
+// -------------------- Request --------------------
+
+//Request defines the components of a signed request required for signature authentication
+type Request struct {
+	Headers map[string][]string
+	Body    []byte
+
+	Method   string
+	Path     string
+	Protocol string
+}
+
+func (s Request) getHeader(key string) string {
+	return textproto.MIMEHeader(s.Headers).Get(key)
+}
+
+//ParseHTTPRequest parses a http.Request into a Request
+func ParseHTTPRequest(r *http.Request) (*Request, error) {
+	if r == nil {
+		return nil, nil
+	}
+
+	var body []byte
+	var err error
+	if r.Body != nil {
+		body, err = ioutil.ReadAll(r.Body)
+		if err != nil {
+			return nil, fmt.Errorf("error reading request body: %v", err)
+		}
+		r.Body.Close()
+
+		r.Body = ioutil.NopCloser(bytes.NewReader(body))
+	}
+
+	return &Request{Headers: r.Header, Body: body, Method: r.Method, Path: r.URL.Path, Protocol: r.Proto}, nil
 }
 
 // -------------------- SignatureAuthHeader --------------------

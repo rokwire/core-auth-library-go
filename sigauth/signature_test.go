@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -161,7 +162,6 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 
 	type args struct {
 		r                  *http.Request
-		body               []byte
 		requiredServiceIDs []string
 	}
 	tests := []struct {
@@ -170,20 +170,25 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "nil_request", args: args{r: nilReq, body: nil, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: true},
-		{name: "success", args: args{r: testReq, body: data, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
-		{name: "bad_service_id", args: args{r: testReq, body: data, requiredServiceIDs: []string{"auth"}}, want: "auth", wantErr: true},
-		{name: "empty_body", args: args{r: testEmptyBody, body: nil, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
+		{name: "nil_request", args: args{r: nilReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: true},
+		{name: "success", args: args{r: testReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
+		{name: "bad_service_id", args: args{r: testReq, requiredServiceIDs: []string{"auth"}}, want: "auth", wantErr: true},
+		{name: "empty_body", args: args{r: testEmptyBody, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = s.SignRequest(tt.args.r, tt.args.body)
+			err = s.SignRequest(tt.args.r)
 			if err != nil && !tt.wantErr {
 				t.Errorf("SignatureAuth.SignRequest() error = %v", err)
 				return
 			}
 
-			got, err := s.CheckRequestServiceSignature(tt.args.r, tt.args.body, tt.args.requiredServiceIDs)
+			signedRequest, err := sigauth.ParseHTTPRequest(tt.args.r)
+			if err != nil && !tt.wantErr {
+				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
+			}
+
+			got, err := s.CheckRequestServiceSignature(signedRequest, tt.args.requiredServiceIDs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -222,7 +227,6 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	type args struct {
 		r       *http.Request
-		body    []byte
 		privKey *rsa.PrivateKey
 		pubKey  *rsa.PublicKey
 	}
@@ -231,10 +235,10 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{name: "sample_keypair", args: args{r: testReq, body: data, privKey: privKey, pubKey: pubKey}, wantErr: false},
-		{name: "nil_pub_key", args: args{r: testReq, body: data, privKey: privKey, pubKey: nil}, wantErr: true},
-		{name: "nil_request", args: args{r: nilReq, body: nil, privKey: privKey, pubKey: pubKey}, wantErr: true},
-		{name: "empty_body", args: args{r: testEmptyBody, body: nil, privKey: privKey, pubKey: pubKey}, wantErr: false},
+		{name: "sample_keypair", args: args{r: testReq, privKey: privKey, pubKey: pubKey}, wantErr: false},
+		{name: "nil_pub_key", args: args{r: testReq, privKey: privKey, pubKey: nil}, wantErr: true},
+		{name: "nil_request", args: args{r: nilReq, privKey: privKey, pubKey: pubKey}, wantErr: true},
+		{name: "empty_body", args: args{r: testEmptyBody, privKey: privKey, pubKey: pubKey}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -243,13 +247,18 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return
 			}
-			err = s.SignRequest(tt.args.r, tt.args.body)
+			err = s.SignRequest(tt.args.r)
 			if err != nil && !tt.wantErr {
 				t.Errorf("SignatureAuth.SignRequest() error = %v", err)
 				return
 			}
 
-			err = s.CheckRequestSignature(tt.args.r, tt.args.body, tt.args.pubKey)
+			signedRequest, err := sigauth.ParseHTTPRequest(tt.args.r)
+			if err != nil && !tt.wantErr {
+				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
+			}
+
+			err = s.CheckRequestSignature(signedRequest, tt.args.pubKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -284,7 +293,12 @@ content-type: text/plain`
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := sigauth.BuildSignatureString(tt.args.r, tt.args.headers)
+			signedRequest, err := sigauth.ParseHTTPRequest(tt.args.r)
+			if err != nil && !tt.wantErr {
+				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
+			}
+
+			got, err := sigauth.BuildSignatureString(signedRequest, tt.args.headers)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("BuildSignatureString() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -303,16 +317,22 @@ func TestGetRequestLine(t *testing.T) {
 		r *http.Request
 	}
 	tests := []struct {
-		name string
-		args args
-		want string
+		name    string
+		args    args
+		want    string
+		wantErr bool
 	}{
-		{name: "get_request", args: args{r: testReq}, want: "GET /test HTTP/1.1"},
-		{name: "nil_request", args: args{r: nil}, want: ""},
+		{name: "get_request", args: args{r: testReq}, want: "GET /test HTTP/1.1", wantErr: false},
+		{name: "nil_request", args: args{r: nil}, want: "", wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := sigauth.GetRequestLine(tt.args.r); got != tt.want {
+			signedRequest, err := sigauth.ParseHTTPRequest(tt.args.r)
+			if err != nil && !tt.wantErr {
+				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
+			}
+
+			if got := sigauth.GetRequestLine(signedRequest); got != tt.want {
 				t.Errorf("GetRequestLine() = %v, want %v", got, tt.want)
 			}
 		})
@@ -437,6 +457,59 @@ func TestParseSignatureAuthHeader(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ParseSignatureAuthHeader() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseHTTPRequest(t *testing.T) {
+	var nilReq *http.Request
+
+	params := map[string]interface{}{
+		"data": "test_data",
+	}
+	data, _ := json.Marshal(params)
+
+	testReq, _ := http.NewRequest(http.MethodPost, "http://test.rokwire.com/test", bytes.NewReader(data))
+	testReq.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	testReq.Header.Set("Content-Length", strconv.Itoa(len(data)))
+	headerMap := map[string][]string{
+		"Content-Type":   {"application/json; charset=UTF-8"},
+		"Content-Length": {strconv.Itoa(len(data))},
+	}
+
+	testEmpty, _ := http.NewRequest(http.MethodGet, "http://test.rokwire.com/test", nil)
+
+	type args struct {
+		r *http.Request
+	}
+	tests := []struct {
+		name            string
+		args            args
+		want            *sigauth.Request
+		wantRequestBody []byte
+		wantErr         bool
+	}{
+		{name: "nil_request", args: args{r: nilReq}, want: nil, wantRequestBody: nil, wantErr: false},
+		{name: "success", args: args{r: testReq}, want: &sigauth.Request{Headers: headerMap, Body: data, Method: "POST", Path: "/test", Protocol: "HTTP/1.1"}, wantRequestBody: data, wantErr: false},
+		{name: "empty", args: args{r: testEmpty}, want: &sigauth.Request{Headers: make(map[string][]string), Body: nil, Method: "GET", Path: "/test", Protocol: "HTTP/1.1"}, wantRequestBody: nil, wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := sigauth.ParseHTTPRequest(tt.args.r)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseHTTPRequest() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParseHTTPRequest() = %v, want %v", got, tt.want)
+			}
+
+			if tt.args.r != nil && tt.args.r.Body != nil {
+				requestBody, _ := ioutil.ReadAll(tt.args.r.Body)
+				if !reflect.DeepEqual(requestBody, tt.wantRequestBody) {
+					t.Errorf("ParseHTTPRequest() original request body = %v, wantRequestBody %v", requestBody, tt.wantRequestBody)
+				}
 			}
 		})
 	}
