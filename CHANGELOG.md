@@ -6,10 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## [1.0.8] - 2022-04-04
+### Fixed
+- Signature string is missing host and date headers [#45](https://github.com/rokwire/core-auth-library-go/issues/45)
 ### Added
+- Define signature request struct to check signatures [#44](https://github.com/rokwire/core-auth-library-go/issues/44)
+
+## [1.0.7] - 2022-03-24
+### Added
+- Add first party claim [#40](https://github.com/rokwire/core-auth-library-go/issues/40)
+- Add system claim [#39](https://github.com/rokwire/core-auth-library-go/issues/39)
 - Add support for signature auth to retrieve access tokens [#26](https://github.com/rokwire/core-auth-library-go/issues/26)
 ### Changed
 - Handle service account access tokens [#35](https://github.com/rokwire/core-auth-library-go/issues/35)
+
+## [1.0.6] - 2022-03-03
+### Changed
+- Improve signature interfaces for request body [#29](https://github.com/rokwire/core-auth-library-go/issues/29)
+### Fixed
+- Content length header missing when signing request [#27](https://github.com/rokwire/core-auth-library-go/issues/27)
+### Added
+- Provide permanent claim for external ID [#24](https://github.com/rokwire/core-auth-library-go/issues/24)
+- Add session ID claim [#32](https://github.com/rokwire/core-auth-library-go/issues/32)
+
+## [1.0.5] - 2021-12-21
+### Added
+- Standardize fetching certain data from a remote auth service [#20](https://github.com/rokwire/core-auth-library-go/issues/20)
+- Link service accounts to service registrations [#19](https://github.com/rokwire/core-auth-library-go/issues/19)
 
 ## [1.0.6] - 2022-03-03
 ### Changed
