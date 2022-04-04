@@ -88,7 +88,7 @@ func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, id
 
 	r.Header.Set("Content-Type", "application/json")
 
-	err = s.SignRequest(r, data)
+	err = s.SignRequest(r)
 	if err != nil {
 		return nil, fmt.Errorf("error signing request for get service account params: %v", err)
 	}
@@ -116,7 +116,7 @@ func (s *SignatureAuth) AccessTokenRequest(host string, path string, id string, 
 
 	r.Header.Set("Content-Type", "application/json")
 
-	err = s.SignRequest(r, data)
+	err = s.SignRequest(r)
 	if err != nil {
 		return nil, fmt.Errorf("error signing request for get access token: %v", err)
 	}

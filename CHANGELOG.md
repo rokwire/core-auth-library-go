@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Changed
+- Handle service account access tokens [#35](https://github.com/rokwire/core-auth-library-go/issues/35)
 
 ## [1.0.8] - 2022-04-04
 ### Fixed
@@ -18,8 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add first party claim [#40](https://github.com/rokwire/core-auth-library-go/issues/40)
 - Add system claim [#39](https://github.com/rokwire/core-auth-library-go/issues/39)
 - Add support for signature auth to retrieve access tokens [#26](https://github.com/rokwire/core-auth-library-go/issues/26)
-### Changed
-- Handle service account access tokens [#35](https://github.com/rokwire/core-auth-library-go/issues/35)
 
 ## [1.0.6] - 2022-03-03
 ### Changed
