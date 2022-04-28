@@ -212,6 +212,10 @@ func (a *AuthService) setServices(services []ServiceReg) {
 
 // NewAuthService creates and configures a new AuthService instance
 func NewAuthService(serviceID string, serviceHost string, dataLoader AuthDataLoader) (*AuthService, error) {
+	if dataLoader == nil {
+		return nil, errors.New("data loader is missing")
+	}
+
 	// Subscribe to the implementing service to validate registration
 	dataLoader.SubscribeService(serviceID)
 
