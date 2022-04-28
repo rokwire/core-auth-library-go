@@ -432,9 +432,6 @@ func NewRemoteAuthDataLoader(config RemoteAuthDataLoaderConfig, subscribedServic
 	if config.AuthServicesHost == "" {
 		return nil, errors.New("auth services host is missing")
 	}
-	if config.ServiceToken == "" && config.DeletedAccountsCallback != nil {
-		return nil, errors.New("service token is missing")
-	}
 
 	err := constructDataLoaderConfig(&config)
 	if err != nil {
@@ -466,16 +463,22 @@ func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) error {
 		config.ServiceRegPath = "/bbs/service-regs"
 	}
 
-	if config.AccessTokenRequest == nil {
-		r, err := authutils.GetDefaultAccessTokenRequest(config.AuthServicesHost, config.AccessTokenPath, config.ServiceToken)
-		if err != nil {
-			return err
-		}
+	requiresAccessToken := (config.DeletedAccountsCallback != nil)
+	if requiresAccessToken {
+		if config.AccessTokenRequest == nil {
+			r, err := authutils.GetDefaultAccessTokenRequest(config.AuthServicesHost, config.AccessTokenPath, config.ServiceToken)
+			if err != nil {
+				return err
+			}
 
-		config.AccessTokenRequest = r
+			config.AccessTokenRequest = r
+		}
 	}
-	if config.GetDeletedAccountsPeriod <= 0 {
-		config.GetDeletedAccountsPeriod = 2
+
+	if config.DeletedAccountsCallback != nil {
+		if config.GetDeletedAccountsPeriod <= 0 {
+			config.GetDeletedAccountsPeriod = 2
+		}
 	}
 
 	return nil
