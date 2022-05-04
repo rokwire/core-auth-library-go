@@ -212,6 +212,10 @@ func (a *AuthService) setServices(services []ServiceReg) {
 
 // NewAuthService creates and configures a new AuthService instance
 func NewAuthService(serviceID string, serviceHost string, dataLoader AuthDataLoader) (*AuthService, error) {
+	if dataLoader == nil {
+		return nil, errors.New("data loader is missing")
+	}
+
 	// Subscribe to the implementing service to validate registration
 	dataLoader.SubscribeService(serviceID)
 
@@ -679,14 +683,20 @@ func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
 		config.ServiceRegPath = "/bbs/service-regs"
 	}
 
-	if config.ServiceAccountParamsRequestFunc == nil {
-		config.ServiceAccountParamsRequestFunc = authutils.GetDefaultServiceAccountParamsRequest
+	requiresAccessToken := (config.DeletedAccountsCallback != nil)
+	if requiresAccessToken {
+		if config.ServiceAccountParamsRequestFunc == nil {
+			config.ServiceAccountParamsRequestFunc = authutils.GetDefaultServiceAccountParamsRequest
+		}
+		if config.AccessTokenRequestFunc == nil {
+			config.AccessTokenRequestFunc = authutils.GetDefaultAccessTokenRequest
+		}
 	}
-	if config.AccessTokenRequestFunc == nil {
-		config.AccessTokenRequestFunc = authutils.GetDefaultAccessTokenRequest
-	}
-	if config.GetDeletedAccountsPeriod <= 0 {
-		config.GetDeletedAccountsPeriod = 2
+
+	if config.DeletedAccountsCallback != nil {
+		if config.GetDeletedAccountsPeriod <= 0 {
+			config.GetDeletedAccountsPeriod = 2
+		}
 	}
 }
 
