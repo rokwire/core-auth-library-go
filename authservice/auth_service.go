@@ -27,7 +27,6 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/authutils"
-	"github.com/rokwire/logging-library-go/logs"
 	"golang.org/x/sync/syncmap"
 	"gopkg.in/go-playground/validator.v9"
 )
@@ -36,8 +35,11 @@ import (
 
 // AuthService contains the configurations to interface with the auth service
 type AuthService struct {
+	// URL of auth services host
+	host string
+
 	serviceRegLoader     ServiceRegLoader
-	serviceAccountLoader ServiceAccountLoader
+	ServiceAccountLoader ServiceAccountLoader
 
 	// ID of implementing service
 	serviceID string
@@ -48,6 +50,11 @@ type AuthService struct {
 
 	minRefreshCacheFreq int
 	maxRefreshCacheFreq int
+}
+
+// GetHost returns the host of the auth service
+func (a *AuthService) GetHost() string {
+	return a.host
 }
 
 // GetServiceID returns the ID of the implementing service
@@ -110,8 +117,7 @@ func (a *AuthService) GetServiceRegWithPubKey(id string) (*ServiceReg, error) {
 // LoadServices loads the subscribed service registration records and caches them
 // 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
 func (a *AuthService) LoadServices() error {
-	err := a.checkServiceRegLoader()
-	if err != nil {
+	if err := a.checkServiceRegLoader(); err != nil {
 		return fmt.Errorf("error loading services: %v", err)
 	}
 
@@ -125,8 +131,7 @@ func (a *AuthService) LoadServices() error {
 // SubscribeServices subscribes to the provided services
 //	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
 func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error {
-	err := a.checkServiceRegLoader()
-	if err != nil {
+	if err := a.checkServiceRegLoader(); err != nil {
 		return fmt.Errorf("error subscribing to services: %v", err)
 	}
 
@@ -152,8 +157,7 @@ func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error 
 // UnsubscribeServices unsubscribes from the provided service
 func (a *AuthService) UnsubscribeServices(serviceIDs []string) {
 	for _, serviceID := range serviceIDs {
-		err := a.checkServiceRegLoader()
-		if err != nil {
+		if err := a.checkServiceRegLoader(); err != nil {
 			return
 		}
 		a.serviceRegLoader.UnsubscribeService(serviceID)
@@ -208,6 +212,22 @@ func (a *AuthService) SetMaxRefreshCacheFreq(freq int) {
 	a.servicesLock.Unlock()
 }
 
+// CheckForRefresh checks if the list of stored service registrations needs updating
+func (a *AuthService) CheckForRefresh() (bool, error) {
+	a.servicesLock.RLock()
+	servicesUpdated := a.servicesUpdated
+	minRefreshFreq := a.minRefreshCacheFreq
+	a.servicesLock.RUnlock()
+
+	var loadServicesError error
+	now := time.Now()
+	if servicesUpdated == nil || now.Sub(*servicesUpdated).Minutes() > float64(minRefreshFreq) {
+		loadServicesError = a.LoadServices()
+		return true, loadServicesError
+	}
+	return false, loadServicesError
+}
+
 func (a *AuthService) setServices(services []ServiceReg) {
 	a.servicesLock.Lock()
 
@@ -233,8 +253,9 @@ func (a *AuthService) checkServiceRegLoader() error {
 	return nil
 }
 
-func (a *AuthService) checkServiceAccountLoader() error {
-	if a.serviceAccountLoader == nil {
+// CheckServiceAccountLoader checks if the ServiceAccountLoader exists, and returns an eror if not
+func (a *AuthService) CheckServiceAccountLoader() error {
+	if a.ServiceAccountLoader == nil {
 		return errors.New("missing service account loader")
 	}
 
@@ -242,61 +263,47 @@ func (a *AuthService) checkServiceAccountLoader() error {
 }
 
 // NewAuthService creates and configures a new AuthService instance
-func NewAuthService(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
-	if serviceRegLoader == nil {
-		return nil, errors.New("service reg loader is missing")
-	}
-
-	// Subscribe to the implementing service to validate registration
-	serviceRegLoader.SubscribeService(serviceID)
-
+func NewAuthService(authServiceHost string, serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
 	lock := &sync.RWMutex{}
 	services := &syncmap.Map{}
 
-	auth := &AuthService{serviceRegLoader: serviceRegLoader, serviceAccountLoader: serviceAccountLoader, serviceID: serviceID,
+	auth := &AuthService{host: authServiceHost, serviceRegLoader: serviceRegLoader, ServiceAccountLoader: serviceAccountLoader, serviceID: serviceID,
 		services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60}
 
-	err := auth.LoadServices()
-	if err != nil {
-		return nil, fmt.Errorf("error loading services: %v", err)
-	}
+	if serviceRegLoader != nil {
+		// Subscribe to the implementing service to validate registration
+		serviceRegLoader.SubscribeService(serviceID)
 
-	err = auth.ValidateServiceRegistration(serviceHost)
-	if err != nil {
-		return nil, fmt.Errorf("unable to validate service registration: please contact the auth service system admin to register your service - %v", err)
+		err := auth.LoadServices()
+		if err != nil {
+			return nil, fmt.Errorf("error loading services: %v", err)
+		}
+
+		err = auth.ValidateServiceRegistration(serviceHost)
+		if err != nil {
+			return nil, fmt.Errorf("unable to validate service registration: please contact the auth service system admin to register your service - %v", err)
+		}
 	}
 
 	return auth, nil
 }
 
-func (a *AuthService) CheckForRefresh() (bool, error) {
-	a.servicesLock.RLock()
-	servicesUpdated := a.servicesUpdated
-	minRefreshFreq := a.minRefreshCacheFreq
-	a.servicesLock.RUnlock()
-
-	var loadServicesError error
-	now := time.Now()
-	if servicesUpdated == nil || now.Sub(*servicesUpdated).Minutes() > float64(minRefreshFreq) {
-		loadServicesError = a.LoadServices()
-		return true, loadServicesError
-	}
-	return false, loadServicesError
-}
-
 // NewTestAuthService creates and configures a new AuthService instance for testing purposes
-func NewTestAuthService(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
-	// Subscribe to the implementing service to validate registration
-	serviceRegLoader.SubscribeService(serviceID)
-
+func NewTestAuthService(authServiceHost string, serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
 	lock := &sync.RWMutex{}
 	services := &syncmap.Map{}
 
-	auth := &AuthService{serviceRegLoader: serviceRegLoader, serviceAccountLoader: serviceAccountLoader, serviceID: serviceID, services: services, servicesLock: lock,
+	auth := &AuthService{host: authServiceHost, serviceRegLoader: serviceRegLoader, ServiceAccountLoader: serviceAccountLoader, serviceID: serviceID, services: services, servicesLock: lock,
 		minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60}
-	err := auth.LoadServices()
-	if err != nil {
-		return nil, fmt.Errorf("error loading services: %v", err)
+
+	if serviceRegLoader != nil {
+		// Subscribe to the implementing service to validate registration
+		serviceRegLoader.SubscribeService(serviceID)
+
+		err := auth.LoadServices()
+		if err != nil {
+			return nil, fmt.Errorf("error loading services: %v", err)
+		}
 	}
 
 	return auth, nil
@@ -308,39 +315,39 @@ func NewTestAuthService(serviceID string, serviceHost string, serviceRegLoader S
 type ServiceAccountLoader interface {
 	// GetAccessToken gets an access token
 	GetAccessToken() error
-	// GetDeletedAccounts loads deleted account IDs
-	GetDeletedAccounts() ([]string, error)
+	// AccessTokenString returns a stored access token as a string
+	AccessTokenString() string
 }
 
 //RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
 type RemoteServiceAccountLoaderImpl struct {
-	config RemoteServiceAccountLoaderConfig
+	authService *AuthService
+	config      RemoteServiceAccountLoaderConfig
 
 	accessToken AccessToken
-
-	timerDone               chan bool
-	getDeletedAccountsTimer *time.Timer
-
-	logger *logs.Logger
 }
 
 //RemoteServiceAccountLoaderConfig represents a configuration for a remote service account loader
 type RemoteServiceAccountLoaderConfig struct {
-	AuthServicesHost string // URL of auth services host
-	ServiceToken     string // Static token issued by the auth service, used to get access tokens from the auth service
+	ServiceToken string // Static token issued by the auth service, used to get access tokens
 
-	AccessTokenPath     string // Path to auth service access token endpoint
-	DeletedAccountsPath string // Path to auth service deleted accounts endpoint
-
-	AccessTokenRequest       *http.Request
-	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
-	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
+	AccessTokenPath        string                                              // Path to auth service access token API
+	AccessTokenRequestFunc func(string, string, string) (*http.Request, error) // Function that builds access token request
 }
 
-// GetAccessToken implements AuthDataLoader interface
+// GetAccessToken implements ServiceAccountLoader interface
 func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() error {
+	if r.authService == nil {
+		return errors.New("auth service is missing")
+	}
+
+	req, err := r.config.AccessTokenRequestFunc(r.authService.GetHost(), r.config.AccessTokenPath, r.config.ServiceToken)
+	if err != nil {
+		return fmt.Errorf("error creating access token request: %v", err)
+	}
+
 	client := &http.Client{}
-	resp, err := client.Do(r.config.AccessTokenRequest)
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error requesting access token: %v", err)
 	}
@@ -364,148 +371,36 @@ func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() error {
 	return nil
 }
 
-// GetDeletedAccounts implements ServiceAccountLoader interface
-func (r *RemoteServiceAccountLoaderImpl) GetDeletedAccounts() ([]string, error) {
-	accountIDs, err := r.requestDeletedAccounts()
-	if err != nil {
-		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
-			// access token may have expired, so get a new one and try once more
-			tokenErr := r.GetAccessToken()
-			if tokenErr != nil {
-				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
-			}
-
-			accountIDs, err = r.requestDeletedAccounts()
-			if err != nil {
-				return nil, err
-			}
-
-			return accountIDs, nil
-		}
-
-		return nil, err
-	}
-
-	return accountIDs, nil
+// AccessTokenString implements ServiceAccountLoader interface
+func (r *RemoteServiceAccountLoaderImpl) AccessTokenString() string {
+	return fmt.Sprintf("%s %s", r.accessToken.TokenType, r.accessToken.Token)
 }
 
-func (r *RemoteServiceAccountLoaderImpl) requestDeletedAccounts() ([]string, error) {
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.config.AuthServicesHost+r.config.DeletedAccountsPath, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("%s %s", r.accessToken.TokenType, r.accessToken.Token))
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error requesting deleted accounts: %v", err)
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading body of deleted accounts response: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("error getting deleted accounts: %d - %s", resp.StatusCode, string(body))
-	}
-
-	var deletedAccounts []string
-	err = json.Unmarshal(body, &deletedAccounts)
-	if err != nil {
-		return nil, fmt.Errorf("error on unmarshal deleted accounts response: %v", err)
-	}
-
-	return deletedAccounts, nil
-}
-
-func (r *RemoteServiceAccountLoaderImpl) setupGetDeletedAccountsTimer() {
-	//cancel if active
-	if r.getDeletedAccountsTimer != nil {
-		r.timerDone <- true
-		r.getDeletedAccountsTimer.Stop()
-	}
-
-	r.getDeletedAccounts(r.config.DeletedAccountsCallback)
-}
-
-func (r *RemoteServiceAccountLoaderImpl) getDeletedAccounts(callback func([]string) error) {
-	accountIDs, err := r.GetDeletedAccounts()
-	if err != nil && r.logger != nil {
-		r.logger.Error(err.Error())
-	}
-
-	err = callback(accountIDs)
-	if err != nil && r.logger != nil {
-		r.logger.Errorf("Received error from callback function: %v", err)
-	}
-
-	duration := time.Hour * time.Duration(r.config.GetDeletedAccountsPeriod)
-	r.getDeletedAccountsTimer = time.NewTimer(duration)
-	select {
-	case <-r.getDeletedAccountsTimer.C:
-		// timer expired
-		r.getDeletedAccountsTimer = nil
-
-		r.getDeletedAccounts(callback)
-	case <-r.timerDone:
-		// timer aborted
-		r.getDeletedAccountsTimer = nil
-	}
+// SetAuthService sets the authService member of the remote loader
+func (r *RemoteServiceAccountLoaderImpl) SetAuthService(as *AuthService) {
+	r.authService = as
 }
 
 // NewRemoteServiceAccountLoader creates and configures a new RemoteServiceAccountLoaderImpl instance for the provided auth services url
-func NewRemoteServiceAccountLoader(config RemoteServiceAccountLoaderConfig, logger *logs.Logger) (*RemoteServiceAccountLoaderImpl, error) {
-	if config.AuthServicesHost == "" {
-		return nil, errors.New("auth services host is missing")
-	}
+func NewRemoteServiceAccountLoader(config RemoteServiceAccountLoaderConfig, firstParty bool) (*RemoteServiceAccountLoaderImpl, error) {
+	checkServiceAccountLoaderConfig(&config, firstParty)
 
-	err := constructServiceAccountLoaderConfig(&config)
-	if err != nil {
-		return nil, fmt.Errorf("error constructing data loader config: %v", err)
-	}
-
-	timerDone := make(chan bool)
-
-	dataLoader := RemoteServiceAccountLoaderImpl{config: config, timerDone: timerDone, logger: logger}
-
-	if config.DeletedAccountsCallback != nil {
-		dataLoader.setupGetDeletedAccountsTimer()
-	}
-
+	dataLoader := RemoteServiceAccountLoaderImpl{config: config}
 	return &dataLoader, nil
 }
 
-func constructServiceAccountLoaderConfig(config *RemoteServiceAccountLoaderConfig) error {
+func checkServiceAccountLoaderConfig(config *RemoteServiceAccountLoaderConfig, firstParty bool) {
 	if config.AccessTokenPath == "" {
-		config.AccessTokenPath = "/bbs/access-token"
-	}
-	if config.DeletedAccountsPath == "" {
-		config.DeletedAccountsPath = "/bbs/deleted-accounts"
-	}
-	requiresAccessToken := (config.DeletedAccountsCallback != nil)
-	if requiresAccessToken {
-		if config.AccessTokenRequest == nil {
-			r, err := authutils.GetDefaultAccessTokenRequest(config.AuthServicesHost, config.AccessTokenPath, config.ServiceToken)
-			if err != nil {
-				return err
-			}
-
-			config.AccessTokenRequest = r
+		if firstParty {
+			config.AccessTokenPath = "/bbs/access-token"
+		} else {
+			config.AccessTokenPath = "/tps/access-token"
 		}
 	}
 
-	if config.DeletedAccountsCallback != nil {
-		if config.GetDeletedAccountsPeriod <= 0 {
-			config.GetDeletedAccountsPeriod = 2
-		}
+	if config.AccessTokenRequestFunc == nil && config.ServiceToken != "" {
+		config.AccessTokenRequestFunc = authutils.BuildDefaultAccessTokenRequest
 	}
-
-	return nil
 }
 
 // AccessToken represents an access token granted by a remote auth service
@@ -532,25 +427,24 @@ type ServiceRegLoader interface {
 
 //RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
-	config RemoteServiceRegLoaderConfig
+	authService *AuthService
+	path        string // Path to service registration API
 
 	*ServiceRegSubscriptions
 }
 
-//RemoteServiceRegLoaderConfig represents a configuration for a remote service reg loader
-type RemoteServiceRegLoaderConfig struct {
-	AuthServicesHost string // URL of auth services host
-	ServiceRegPath   string // Path to service registration endpoint
-}
-
 // LoadServices implements ServiceRegLoader interface
 func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
+	if r.authService == nil {
+		return nil, errors.New("auth service is missing")
+	}
+
 	if len(r.GetSubscribedServices()) == 0 {
 		return nil, nil
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.config.AuthServicesHost+r.config.ServiceRegPath, nil)
+	req, err := http.NewRequest("GET", r.authService.GetHost()+r.path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to load services: %v", err)
 	}
@@ -595,16 +489,23 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	return services, nil
 }
 
+// SetAuthService sets the authService member of the remote loader
+func (r *RemoteServiceRegLoaderImpl) SetAuthService(as *AuthService) {
+	r.authService = as
+}
+
 // NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance for the provided auth services host
-func NewRemoteServiceRegLoader(config RemoteServiceRegLoaderConfig, subscribedServices []string) (*RemoteServiceRegLoaderImpl, error) {
-	if config.AuthServicesHost == "" {
-		return nil, errors.New("auth services host is missing")
+func NewRemoteServiceRegLoader(path string, subscribedServices []string, firstParty bool) (*RemoteServiceRegLoaderImpl, error) {
+	if path == "" {
+		if firstParty {
+			path = "bbs/service-regs"
+		} else {
+			path = "tps/service-regs"
+		}
 	}
-	if config.ServiceRegPath == "" {
-		config.ServiceRegPath = "bbs/service-regs"
-	}
+
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
-	return &RemoteServiceRegLoaderImpl{config: config, ServiceRegSubscriptions: subscriptions}, nil
+	return &RemoteServiceRegLoaderImpl{path: path, ServiceRegSubscriptions: subscriptions}, nil
 }
 
 // -------------------- ServiceRegSubscriptions --------------------

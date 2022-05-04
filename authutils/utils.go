@@ -98,8 +98,14 @@ func HashSha256(data []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
-// GetDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
-func GetDefaultAccessTokenRequest(host string, path string, token string) (*http.Request, error) {
+// BuildDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
+func BuildDefaultAccessTokenRequest(host string, path string, token string) (*http.Request, error) {
+	if host == "" {
+		return nil, errors.New("host is missing")
+	}
+	if path == "" {
+		return nil, errors.New("path is missing")
+	}
 	if token == "" {
 		return nil, errors.New("service token is missing")
 	}

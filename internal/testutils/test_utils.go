@@ -86,14 +86,13 @@ func GetSamplePrivKey() *rsa.PrivateKey {
 }
 
 func SetupMockServiceRegLoader(subscribed []string, result []authservice.ServiceReg, err error) *mocks.ServiceRegLoader {
-	config := authservice.RemoteServiceRegLoaderConfig{AuthServicesHost: "https://auth.rokwire.com"}
-	mockLoader := mocks.NewServiceRegLoader(config, subscribed)
+	mockLoader := mocks.NewServiceRegLoader(subscribed)
 	mockLoader.On("LoadServices").Return(result, err)
 	return mockLoader
 }
 
 func SetupTestAuthService(mockLoader *mocks.ServiceRegLoader) (*authservice.AuthService, error) {
-	return authservice.NewTestAuthService("test", "https://test.rokwire.com", mockLoader, nil)
+	return authservice.NewTestAuthService("https://auth.rokwire.com", "test", "https://test.rokwire.com", mockLoader, nil)
 }
 
 func SetupExampleMockLoader() *mocks.ServiceRegLoader {
@@ -101,8 +100,7 @@ func SetupExampleMockLoader() *mocks.ServiceRegLoader {
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 
-	config := authservice.RemoteServiceRegLoaderConfig{AuthServicesHost: "https://auth.rokwire.com"}
-	mockLoader := mocks.NewServiceRegLoader(config, nil)
+	mockLoader := mocks.NewServiceRegLoader(nil)
 	mockLoader.On("LoadServices").Return(serviceRegsValid, nil)
 
 	return mockLoader
