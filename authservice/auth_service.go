@@ -213,6 +213,10 @@ func (a *AuthService) setServices(services []ServiceReg) {
 
 // NewAuthService creates and configures a new AuthService instance
 func NewAuthService(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
+	if serviceRegLoader == nil {
+		return nil, errors.New("service reg loader is missing")
+	}
+
 	// Subscribe to the implementing service to validate registration
 	serviceRegLoader.SubscribeService(serviceID)
 
@@ -429,9 +433,6 @@ func NewRemoteServiceAccountLoader(config RemoteServiceAccountLoaderConfig, logg
 	if config.AuthServicesHost == "" {
 		return nil, errors.New("auth services host is missing")
 	}
-	if config.ServiceToken == "" && config.DeletedAccountsCallback != nil {
-		return nil, errors.New("service token is missing")
-	}
 
 	err := constructServiceAccountLoaderConfig(&config)
 	if err != nil {
@@ -456,16 +457,22 @@ func constructServiceAccountLoaderConfig(config *RemoteServiceAccountLoaderConfi
 	if config.DeletedAccountsPath == "" {
 		config.DeletedAccountsPath = "/bbs/deleted-accounts"
 	}
-	if config.AccessTokenRequest == nil {
-		r, err := authutils.GetDefaultAccessTokenRequest(config.AuthServicesHost, config.AccessTokenPath, config.ServiceToken)
-		if err != nil {
-			return err
-		}
+	requiresAccessToken := (config.DeletedAccountsCallback != nil)
+	if requiresAccessToken {
+		if config.AccessTokenRequest == nil {
+			r, err := authutils.GetDefaultAccessTokenRequest(config.AuthServicesHost, config.AccessTokenPath, config.ServiceToken)
+			if err != nil {
+				return err
+			}
 
-		config.AccessTokenRequest = r
+			config.AccessTokenRequest = r
+		}
 	}
-	if config.GetDeletedAccountsPeriod <= 0 {
-		config.GetDeletedAccountsPeriod = 2
+
+	if config.DeletedAccountsCallback != nil {
+		if config.GetDeletedAccountsPeriod <= 0 {
+			config.GetDeletedAccountsPeriod = 2
+		}
 	}
 
 	return nil
