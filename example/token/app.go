@@ -108,13 +108,13 @@ func main() {
 	config := authservice.RemoteServiceRegLoaderConfig{
 		AuthServicesHost: "http://localhost/core",
 	}
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(config, []string{})
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(config, []string{"auth"})
 	if err != nil {
 		log.Fatalf("Error initializing remote service reg loader: %v", err)
 	}
 
 	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", serviceRegLoader, nil)
+	authService, err := authservice.NewAuthService(serviceID, "http://localhost:8080", serviceRegLoader, nil)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}

@@ -110,6 +110,11 @@ func (a *AuthService) GetServiceRegWithPubKey(id string) (*ServiceReg, error) {
 // LoadServices loads the subscribed service registration records and caches them
 // 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
 func (a *AuthService) LoadServices() error {
+	err := a.checkServiceRegLoader()
+	if err != nil {
+		return fmt.Errorf("error loading services: %v", err)
+	}
+
 	services, loadServicesError := a.serviceRegLoader.LoadServices()
 	if services != nil {
 		a.setServices(services)
@@ -120,6 +125,11 @@ func (a *AuthService) LoadServices() error {
 // SubscribeServices subscribes to the provided services
 //	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
 func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error {
+	err := a.checkServiceRegLoader()
+	if err != nil {
+		return fmt.Errorf("error subscribing to services: %v", err)
+	}
+
 	newSub := false
 
 	for _, serviceID := range serviceIDs {
@@ -142,6 +152,10 @@ func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error 
 // UnsubscribeServices unsubscribes from the provided service
 func (a *AuthService) UnsubscribeServices(serviceIDs []string) {
 	for _, serviceID := range serviceIDs {
+		err := a.checkServiceRegLoader()
+		if err != nil {
+			return
+		}
 		a.serviceRegLoader.UnsubscribeService(serviceID)
 	}
 }
@@ -209,6 +223,22 @@ func (a *AuthService) setServices(services []ServiceReg) {
 	a.servicesUpdated = &time
 
 	a.servicesLock.Unlock()
+}
+
+func (a *AuthService) checkServiceRegLoader() error {
+	if a.serviceRegLoader == nil {
+		return errors.New("missing service reg loader")
+	}
+
+	return nil
+}
+
+func (a *AuthService) checkServiceAccountLoader() error {
+	if a.serviceAccountLoader == nil {
+		return errors.New("missing service account loader")
+	}
+
+	return nil
 }
 
 // NewAuthService creates and configures a new AuthService instance

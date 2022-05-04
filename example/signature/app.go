@@ -123,7 +123,7 @@ func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
-	services := []string{}
+	services := []string{"auth"}
 	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
 	config := authservice.RemoteServiceRegLoaderConfig{
 		AuthServicesHost: "http://localhost/core",

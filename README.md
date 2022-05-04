@@ -21,32 +21,62 @@ import (
   ...
 
   "github.com/rokwire/core-auth-library-go/authservice"
+  "github.com/rokwire/logging-library-go/logs"
 )
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 func main() {
-    config := authservice.RemoteAuthDataLoaderConfig{
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	serviceRegLoaderConfig := authservice.RemoteServiceRegLoaderConfig{
 		AuthServicesHost: "https://rokwire.illinois.edu/auth",
-		ServiceToken:     "example_token",
-
-		DeletedAccountsCallback: printDeletedAccountIDs,
 	}
-	dataLoader := authservice.NewRemoteAuthDataLoader(config, nil)
-	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", dataLoader)
+	err := constructServiceRegLoaderConfig(serviceRegLoaderConfig)
+	if err != nil {
+		log.Fatalf("Error constructing remote service reg loader config: %v", err)
+	}
+
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(serviceRegLoaderConfig, []string{"auth"})
+	if err != nil {
+		log.Fatalf("Error initializing remote service reg loader: %v", err)
+	}
+
+    serviceAccountLoaderConfig := authservice.RemoteServiceAccountLoaderConfig{
+		AuthServicesHost: "https://rokwire.illinois.edu/auth",
+		ServiceToken:     "sample_token",
+
+		DeletedAccountsCallback: printDeletedAccounts,
+	}
+	err := constructServiceAccountLoaderConfig(serviceAccountLoaderConfig)
+	if err != nil {
+		log.Fatalf("Error constructing remote service account loader config: %v", err)
+	}
+
+	logger := logs.NewLogger("example", nil)
+	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(serviceAccountLoaderConfig, logger)
+	if err != nil {
+		log.Fatalf("Error initializing remote service account loader: %v", err)
+	}
+
+	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", serviceRegLoader, serviceAccountLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
 
     ...
 }
+
+func printDeletedAccountIDs(accountIDs []string) error {
+	log.Printf("Deleted account IDs: %v\n", accountIDs)
+	return nil
+}
 ```
 
+## Upgrading
 ### Staying up to date
 To update core-auth-library-go to the latest version, use `go get -u github.com/rokwire/core-auth-library-go`.
+
+### Migration steps
+#### Unreleased
+The `AuthDataLoader` interface has been removed. To create an `AuthService`, create a `ServiceRegLoader` and `ServiceAccountLoader`.
 
 ## ROKWIRE Auth Service
 The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block). 
