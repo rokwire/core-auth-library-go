@@ -329,10 +329,11 @@ type RemoteServiceAccountLoaderImpl struct {
 
 //RemoteServiceAccountLoaderConfig represents a configuration for a remote service account loader
 type RemoteServiceAccountLoaderConfig struct {
-	ServiceToken string // Static token issued by the auth service, used to get access tokens
+	Token     string // Static token issued by the auth service
+	AccountID string // Service account ID on the auth service
 
-	AccessTokenPath        string                                              // Path to auth service access token API
-	AccessTokenRequestFunc func(string, string, string) (*http.Request, error) // Function that builds access token request
+	AccessTokenPath        string                                                      // Path to auth service access token API
+	AccessTokenRequestFunc func(string, string, string, string) (*http.Request, error) // Function that builds access token request
 }
 
 // GetAccessToken implements ServiceAccountLoader interface
@@ -340,8 +341,11 @@ func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() error {
 	if r.authService == nil {
 		return errors.New("auth service is missing")
 	}
+	if r.config.AccessTokenRequestFunc == nil {
+		return errors.New("access token request function is missing")
+	}
 
-	req, err := r.config.AccessTokenRequestFunc(r.authService.GetHost(), r.config.AccessTokenPath, r.config.ServiceToken)
+	req, err := r.config.AccessTokenRequestFunc(r.authService.GetHost(), r.config.AccessTokenPath, r.config.AccountID, r.config.Token)
 	if err != nil {
 		return fmt.Errorf("error creating access token request: %v", err)
 	}
@@ -398,7 +402,7 @@ func checkServiceAccountLoaderConfig(config *RemoteServiceAccountLoaderConfig, f
 		}
 	}
 
-	if config.AccessTokenRequestFunc == nil && config.ServiceToken != "" {
+	if config.AccessTokenRequestFunc == nil && config.AccountID != "" && config.Token != "" {
 		config.AccessTokenRequestFunc = authutils.BuildDefaultAccessTokenRequest
 	}
 }

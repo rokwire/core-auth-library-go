@@ -99,19 +99,23 @@ func HashSha256(data []byte) ([]byte, error) {
 }
 
 // BuildDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
-func BuildDefaultAccessTokenRequest(host string, path string, token string) (*http.Request, error) {
+func BuildDefaultAccessTokenRequest(host string, path string, accountID string, token string) (*http.Request, error) {
 	if host == "" {
 		return nil, errors.New("host is missing")
 	}
 	if path == "" {
 		return nil, errors.New("path is missing")
 	}
+	if accountID == "" {
+		return nil, errors.New("account ID is missing")
+	}
 	if token == "" {
-		return nil, errors.New("service token is missing")
+		return nil, errors.New("token is missing")
 	}
 
 	params := map[string]interface{}{
-		"auth_type": "static_token",
+		"account_id": accountID,
+		"auth_type":  "static_token",
 		"creds": map[string]string{
 			"token": token,
 		},

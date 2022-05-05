@@ -226,7 +226,7 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 }
 
 // BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, accountID string) (*http.Request, error) {
+func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, accountID string, _ string) (*http.Request, error) {
 	if host == "" {
 		return nil, errors.New("host is missing")
 	}
@@ -238,10 +238,8 @@ func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, accoun
 	}
 
 	params := map[string]interface{}{
-		"auth_type": "signature",
-		"creds": map[string]string{
-			"id": accountID,
-		},
+		"account_id": accountID,
+		"auth_type":  "signature",
 	}
 	data, err := json.Marshal(params)
 	if err != nil {

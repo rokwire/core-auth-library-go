@@ -25,7 +25,7 @@ import (
 func main() {
 	// Instantiate a remote ServiceAccountLoader to load auth service account-related data from auth service
 	serviceAccountLoaderConfig := authservice.RemoteServiceAccountLoaderConfig{
-		ServiceToken: "sample_token",
+		Token: "sample_token",
 	}
 	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(serviceAccountLoaderConfig, true)
 	if err != nil {
