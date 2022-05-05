@@ -290,7 +290,6 @@ type RemoteAuthDataLoaderImpl struct {
 	config *RemoteAuthDataLoaderConfig
 
 	accessTokens *syncmap.Map
-	appOrgPairs  []AppOrgPair
 
 	timerDone               chan bool
 	getDeletedAccountsTimer *time.Timer
@@ -323,10 +322,6 @@ type RemoteAuthDataLoaderConfig struct {
 type AppOrgPair struct {
 	AppID string
 	OrgID string
-}
-
-func (ao AppOrgPair) toKey() string {
-	return fmt.Sprintf("%s_%s", ao.AppID, ao.OrgID)
 }
 
 type appOrgPairResponse struct {
@@ -365,19 +360,27 @@ func (r *RemoteAuthDataLoaderImpl) GetServiceAccountParams() error {
 		return fmt.Errorf("error on unmarshal service account params response: %v", err)
 	}
 
-	r.appOrgPairs = make([]AppOrgPair, len(paramsResponse))
-	for i, pair := range paramsResponse {
-		r.appOrgPairs[i] = AppOrgPair{AppID: authutils.StringOrEmpty(pair.AppID), OrgID: authutils.StringOrEmpty(pair.OrgID)}
+	for _, pair := range paramsResponse {
+		r.accessTokens.LoadOrStore(AppOrgPair{AppID: authutils.StringOrEmpty(pair.AppID), OrgID: authutils.StringOrEmpty(pair.OrgID)}, AccessToken{})
 	}
-
-	r.accessTokens = &syncmap.Map{}
 
 	return nil
 }
 
-//GetAppOrgPairs returns the data loader's list of app org pairs
-func (r *RemoteAuthDataLoaderImpl) GetAppOrgPairs() []AppOrgPair {
-	return r.appOrgPairs
+//AppOrgPairs returns the data loader's list of app org pairs
+func (r *RemoteAuthDataLoaderImpl) AppOrgPairs() []AppOrgPair {
+	pairs := make([]AppOrgPair, 0)
+	r.accessTokens.Range(func(key, item interface{}) bool {
+		keyPair, ok := key.(AppOrgPair)
+		if !ok {
+			return false
+		}
+
+		pairs = append(pairs, keyPair)
+		return true
+	})
+
+	return pairs
 }
 
 // AccessToken represents an access token granted by a remote auth service
@@ -425,28 +428,28 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID string, orgID string) er
 		return fmt.Errorf("error on unmarshal access token response: %v", err)
 	}
 
-	r.accessTokens.Store(fmt.Sprintf("%s_%s", appID, orgID), accessToken)
+	r.accessTokens.Store(AppOrgPair{AppID: appID, OrgID: orgID}, accessToken)
 
 	return nil
 }
 
-func (r *RemoteAuthDataLoaderImpl) isAppOrgAccessGranted(appID string, orgID string) bool {
-	granted := false
-	for _, pair := range r.appOrgPairs {
-		if pair.AppID == appID && pair.OrgID == orgID {
-			granted = true
-			break
-		}
-	}
+type accessTokensResponse struct {
+	AppOrgPair  appOrgPairResponse
+	AccessToken AccessToken
+}
 
-	return granted
+func (r *RemoteAuthDataLoaderImpl) isAppOrgAccessGranted(appID string, orgID string) bool {
+	pair := AppOrgPair{AppID: appID, OrgID: orgID}
+
+	_, ok := r.accessTokens.Load(pair)
+	return ok
 }
 
 //GetAccessTokens returns a map containing all cached access tokens
-func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() map[string]string {
-	tokens := make(map[string]string)
+func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() map[AppOrgPair]AccessToken {
+	tokens := make(map[AppOrgPair]AccessToken)
 	r.accessTokens.Range(func(key, item interface{}) bool {
-		keyStr, ok := key.(string)
+		keyPair, ok := key.(AppOrgPair)
 		if !ok {
 			return false
 		}
@@ -456,7 +459,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() map[string]string {
 		} else if accessToken, ok := item.(AccessToken); !ok {
 			return false
 		} else {
-			tokens[keyStr] = accessToken.String()
+			tokens[keyPair] = accessToken
 			return true
 		}
 	})
@@ -471,8 +474,9 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 	accountIDs := make([]string, 0)
 	errStr := ""
 
-	for _, pair := range r.appOrgPairs {
-		item, _ := r.accessTokens.Load(pair.toKey())
+	appOrgPairs := r.AppOrgPairs()
+	for _, pair := range appOrgPairs {
+		item, _ := r.accessTokens.Load(pair)
 		if item == nil {
 			go r.getDeletedAccountsAsync(nil, pair, idChan, errChan)
 		} else if accessToken, ok := item.(AccessToken); !ok {
@@ -482,7 +486,7 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 		}
 	}
 
-	for i := 0; i < len(r.appOrgPairs); i++ {
+	for i := 0; i < len(appOrgPairs); i++ {
 		partialAccountIDs := <-idChan
 		partialErr := <-errChan
 		if partialErr != nil {
@@ -503,7 +507,7 @@ func (r *RemoteAuthDataLoaderImpl) GetDeletedAccounts() ([]string, error) {
 }
 
 func (r *RemoteAuthDataLoaderImpl) getDeletedAccountsAsync(token *AccessToken, appOrgPair AppOrgPair, c chan []string, e chan error) {
-	data, err := r.makeRequest(r.requestDeletedAccounts, token, appOrgPair, "error getting deleted accounts: 401", true)
+	data, err := r.MakeRequest(r.requestDeletedAccounts, token, appOrgPair, "error getting deleted accounts: 401", true)
 
 	accountIDs, _ := data.([]string)
 
@@ -549,7 +553,8 @@ func (r *RemoteAuthDataLoaderImpl) requestDeletedAccounts(token *AccessToken) (i
 	return deletedAccounts, nil
 }
 
-func (r *RemoteAuthDataLoaderImpl) makeRequest(requestFunc func(*AccessToken) (interface{}, error), token *AccessToken, appOrgPair AppOrgPair, retryString string, updateTokenIfNeeded bool) (interface{}, error) {
+// MakeRequest sends a HTTP request using a provided request function and token, and retries with an updated token if desired
+func (r *RemoteAuthDataLoaderImpl) MakeRequest(requestFunc func(*AccessToken) (interface{}, error), token *AccessToken, appOrgPair AppOrgPair, retryString string, updateTokenIfNeeded bool) (interface{}, error) {
 	var updateErr error
 	if updateTokenIfNeeded && token == nil {
 		token, updateErr = r.updateAccessToken(appOrgPair)
@@ -586,10 +591,10 @@ func (r *RemoteAuthDataLoaderImpl) updateAccessToken(appOrgPair AppOrgPair) (*Ac
 		return nil, fmt.Errorf("error getting new access token - %v", tokenErr)
 	}
 
-	updatedEntry, _ := r.accessTokens.Load(appOrgPair.toKey())
+	updatedEntry, _ := r.accessTokens.Load(appOrgPair)
 	updatedToken, ok := updatedEntry.(AccessToken)
 	if !ok {
-		return nil, fmt.Errorf("error reading updated access token - %s", appOrgPair.toKey())
+		return nil, fmt.Errorf("error reading updated access token - %s", appOrgPair)
 	}
 
 	return &updatedToken, nil
@@ -606,7 +611,7 @@ func (r *RemoteAuthDataLoaderImpl) StartGetDeletedAccountsTimer() error {
 			r.getDeletedAccountsTimer.Stop()
 		}
 
-		if len(r.appOrgPairs) == 0 {
+		if len(r.AppOrgPairs()) == 0 {
 			err := r.GetServiceAccountParams()
 			if err != nil {
 				return fmt.Errorf("error starting get deleted accounts timer: %v", err)
@@ -644,7 +649,7 @@ func (r *RemoteAuthDataLoaderImpl) getDeletedAccounts(callback func([]string) er
 }
 
 // NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
-func NewRemoteAuthDataLoader(config *RemoteAuthDataLoaderConfig, subscribedServices []string, logger *logs.Logger) (*RemoteAuthDataLoaderImpl, error) {
+func NewRemoteAuthDataLoader(config *RemoteAuthDataLoaderConfig, subscribedServices []string, firstParty bool, logger *logs.Logger) (*RemoteAuthDataLoaderImpl, error) {
 	if config == nil {
 		return nil, errors.New("data loader config is missing")
 	}
@@ -655,7 +660,7 @@ func NewRemoteAuthDataLoader(config *RemoteAuthDataLoaderConfig, subscribedServi
 		return nil, errors.New("service account id is missing")
 	}
 
-	constructDataLoaderConfig(config)
+	constructDataLoaderConfig(config, firstParty)
 
 	serviceRegLoader := NewRemoteServiceRegLoader(subscribedServices)
 
@@ -669,18 +674,22 @@ func NewRemoteAuthDataLoader(config *RemoteAuthDataLoaderConfig, subscribedServi
 	return &dataLoader, nil
 }
 
-func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig) {
+func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig, firstParty bool) {
+	pathPrefix := "/bbs"
+	if !firstParty {
+		pathPrefix = "/tps"
+	}
 	if config.ServiceAccountParamsPath == "" {
-		config.ServiceAccountParamsPath = "/bbs/service-account"
+		config.ServiceAccountParamsPath = pathPrefix + "/service-account"
 	}
 	if config.AccessTokenPath == "" {
-		config.AccessTokenPath = "/bbs/access-token"
+		config.AccessTokenPath = pathPrefix + "/access-token"
 	}
 	if config.DeletedAccountsPath == "" {
-		config.DeletedAccountsPath = "/bbs/deleted-accounts"
+		config.DeletedAccountsPath = pathPrefix + "/deleted-accounts"
 	}
 	if config.ServiceRegPath == "" {
-		config.ServiceRegPath = "/bbs/service-regs"
+		config.ServiceRegPath = pathPrefix + "/service-regs"
 	}
 
 	requiresAccessToken := (config.DeletedAccountsCallback != nil)

@@ -137,7 +137,7 @@ func main() {
 		// DeletedAccountsCallback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
-	dataLoader, err := authservice.NewRemoteAuthDataLoader(&config, services, logger)
+	dataLoader, err := authservice.NewRemoteAuthDataLoader(&config, services, true, logger)
 	if err != nil {
 		log.Fatalf("Error initializing remote data loader: %v", err)
 	}
