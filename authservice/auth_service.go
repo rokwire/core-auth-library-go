@@ -280,6 +280,8 @@ type AuthDataLoader interface {
 	GetServiceAccountParams() error
 	// GetAccessToken gets an access token
 	GetAccessToken(appID string, orgID string) error
+	// GetAccessTokens get an access token for each app org pair a service account has access to
+	GetAccessTokens() error
 	// GetDeletedAccounts loads deleted account IDs
 	GetDeletedAccounts() ([]string, error)
 	ServiceRegLoader
@@ -307,11 +309,13 @@ type RemoteAuthDataLoaderConfig struct {
 
 	ServiceAccountParamsPath string // Path to auth service service account params endpoint
 	AccessTokenPath          string // Path to auth service access token endpoint
+	AccessTokensPath         string // Path to auth service access token endpoint
 	DeletedAccountsPath      string // Path to auth service deleted accounts endpoint
 	ServiceRegPath           string // Path to auth service service registration endpoint
 
 	ServiceAccountParamsRequestFunc func(string, string, string, string) (*http.Request, error)                   // Function to call to construct service account params request
 	AccessTokenRequestFunc          func(string, string, string, string, *string, *string) (*http.Request, error) // Function to call to construct access token request
+	AccessTokensRequestFunc         func(string, string, string, string) (*http.Request, error)                   // Function to call to construct access tokens request
 
 	AccessTokenRequest       *http.Request
 	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
@@ -327,6 +331,10 @@ type AppOrgPair struct {
 type appOrgPairResponse struct {
 	AppID *string `json:"app_id"`
 	OrgID *string `json:"org_id"`
+}
+
+func appOrgPairFromResponse(res appOrgPairResponse) AppOrgPair {
+	return AppOrgPair{AppID: authutils.StringOrEmpty(res.AppID), OrgID: authutils.StringOrEmpty(res.OrgID)}
 }
 
 // GetServiceAccountParams implements AuthDataLoader interface
@@ -433,6 +441,44 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID string, orgID string) er
 	return nil
 }
 
+// GetAccessToken implements AuthDataLoader interface
+func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() error {
+	req, err := r.config.AccessTokensRequestFunc(r.config.AuthServicesHost, r.config.AccessTokenPath,
+		r.config.ServiceAccountID, r.config.ServiceToken)
+	if err != nil {
+		return fmt.Errorf("error creating access tokens request: %v", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error requesting access tokens: %v", err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading body of access tokens response: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("error getting access tokens: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var accessTokens []accessTokensResponse
+	err = json.Unmarshal(body, &accessTokens)
+	if err != nil {
+		return fmt.Errorf("error on unmarshal access tokens response: %v", err)
+	}
+
+	for _, token := range accessTokens {
+		r.accessTokens.Store(appOrgPairFromResponse(token.AppOrgPair), token.AccessToken)
+	}
+
+	return nil
+}
+
 type accessTokensResponse struct {
 	AppOrgPair  appOrgPairResponse
 	AccessToken AccessToken
@@ -445,8 +491,8 @@ func (r *RemoteAuthDataLoaderImpl) isAppOrgAccessGranted(appID string, orgID str
 	return ok
 }
 
-//GetAccessTokens returns a map containing all cached access tokens
-func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() map[AppOrgPair]AccessToken {
+//AccessTokens returns a map containing all cached access tokens
+func (r *RemoteAuthDataLoaderImpl) AccessTokens() map[AppOrgPair]AccessToken {
 	tokens := make(map[AppOrgPair]AccessToken)
 	r.accessTokens.Range(func(key, item interface{}) bool {
 		keyPair, ok := key.(AppOrgPair)

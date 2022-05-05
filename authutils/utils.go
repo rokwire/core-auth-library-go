@@ -142,12 +142,49 @@ func GetDefaultAccessTokenRequest(host string, path string, id string, token str
 	}
 	data, err := json.Marshal(params)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling request body toget access token: %v", err)
+		return nil, fmt.Errorf("error marshaling request body to get access token: %v", err)
 	}
 
 	r, err := http.NewRequest("POST", host+path, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get access token: %v", err)
+	}
+
+	r.Header.Set("Content-Type", "application/json")
+
+	return r, nil
+}
+
+// GetDefaultAccessTokensRequest returns a HTTP request to get all allowed access tokens using a static token
+func GetDefaultAccessTokensRequest(host string, path string, id string, token string) (*http.Request, error) {
+	if host == "" {
+		return nil, errors.New("host is missing")
+	}
+	if path == "" {
+		return nil, errors.New("path is missing")
+	}
+	if id == "" {
+		return nil, errors.New("service account ID is missing")
+	}
+	if token == "" {
+		return nil, errors.New("service token is missing")
+	}
+
+	params := map[string]interface{}{
+		"account_id": id,
+		"auth_type":  "static_token",
+		"creds": map[string]string{
+			"token": token,
+		},
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request body to get access tokens: %v", err)
+	}
+
+	r, err := http.NewRequest("POST", host+path, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get access tokens: %v", err)
 	}
 
 	r.Header.Set("Content-Type", "application/json")
