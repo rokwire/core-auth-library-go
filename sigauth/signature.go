@@ -226,8 +226,8 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 	return sigString, sigAuthHeader, nil
 }
 
-// ServiceAccountParamsRequest builds a signed request to get service account params from an auth service
-func (s *SignatureAuth) ServiceAccountParamsRequest(host string, path string, _ string, _ string) (*http.Request, error) {
+// BuildServiceAccountParamsRequest builds a signed request to get service account params from an auth service
+func (s *SignatureAuth) BuildServiceAccountParamsRequest(host string, path string, _ string, _ string) (*http.Request, error) {
 	if host == "" {
 		return nil, errors.New("host is missing")
 	}
