@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -637,10 +636,8 @@ func (r *RemoteAuthDataLoaderImpl) requestDeletedAccounts(pair AppOrgPair, token
 		return nil, errors.New("access token is missing")
 	}
 
-	query := url.Values{"app_id": []string{pair.AppID}, "org_id": []string{pair.OrgID}}
-
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.config.AuthServicesHost+r.config.DeletedAccountsPath+"?"+query.Encode(), nil)
+	req, err := http.NewRequest("GET", r.config.AuthServicesHost+r.config.DeletedAccountsPath, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
