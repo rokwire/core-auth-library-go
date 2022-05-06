@@ -39,8 +39,7 @@ import (
 type SignatureAuth struct {
 	authService *authservice.AuthService
 
-	serviceAccountID string
-	serviceKey       *rsa.PrivateKey
+	serviceKey *rsa.PrivateKey
 }
 
 // Sign generates and returns a signature for the provided message
@@ -227,12 +226,15 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 }
 
 // BuildServiceAccountParamsRequest builds a signed request to get service account params from an auth service
-func (s *SignatureAuth) BuildServiceAccountParamsRequest(host string, path string, _ string, _ string) (*http.Request, error) {
+func (s *SignatureAuth) BuildServiceAccountParamsRequest(host string, path string, id string, _ string) (*http.Request, error) {
 	if host == "" {
 		return nil, errors.New("host is missing")
 	}
 	if path == "" {
 		return nil, errors.New("path is missing")
+	}
+	if id == "" {
+		return nil, errors.New("service account ID is missing")
 	}
 
 	params := map[string]interface{}{
@@ -243,7 +245,7 @@ func (s *SignatureAuth) BuildServiceAccountParamsRequest(host string, path strin
 		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
 	}
 
-	r, err := http.NewRequest("POST", host+path+"/"+s.serviceAccountID, bytes.NewReader(data))
+	r, err := http.NewRequest("POST", host+path+"/"+id, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
 	}
@@ -259,16 +261,19 @@ func (s *SignatureAuth) BuildServiceAccountParamsRequest(host string, path strin
 }
 
 // BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, _ string, _ string, appID *string, orgID *string) (*http.Request, error) {
+func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, id string, _ string, appID *string, orgID *string) (*http.Request, error) {
 	if host == "" {
 		return nil, errors.New("host is missing")
 	}
 	if path == "" {
 		return nil, errors.New("path is missing")
 	}
+	if id == "" {
+		return nil, errors.New("service account ID is missing")
+	}
 
 	params := map[string]interface{}{
-		"account_id": s.serviceAccountID,
+		"account_id": id,
 		"app_id":     appID,
 		"org_id":     orgID,
 		"auth_type":  "signature",
@@ -294,16 +299,19 @@ func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, _ stri
 }
 
 // BuildAccessTokensRequest builds a signed request to get all allowed access tokens
-func (s *SignatureAuth) BuildAccessTokensRequest(host string, path string, _ string, _ string) (*http.Request, error) {
+func (s *SignatureAuth) BuildAccessTokensRequest(host string, path string, id string, _ string) (*http.Request, error) {
 	if host == "" {
 		return nil, errors.New("host is missing")
 	}
 	if path == "" {
 		return nil, errors.New("path is missing")
 	}
+	if id == "" {
+		return nil, errors.New("service account ID is missing")
+	}
 
 	params := map[string]interface{}{
-		"account_id": s.serviceAccountID,
+		"account_id": id,
 		"auth_type":  "signature",
 	}
 	data, err := json.Marshal(params)
