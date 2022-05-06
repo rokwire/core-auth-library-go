@@ -352,7 +352,7 @@ type appOrgPairResponse struct {
 }
 
 func appOrgPairFromResponse(res appOrgPairResponse) AppOrgPair {
-	return AppOrgPair{AppID: authutils.StringOrEmpty(res.AppID), OrgID: authutils.StringOrEmpty(res.OrgID)}
+	return AppOrgPair{AppID: authutils.StringOrDefault(res.AppID, "all"), OrgID: authutils.StringOrDefault(res.OrgID, "all")}
 }
 
 type accessTokensResponse struct {
@@ -399,7 +399,7 @@ func (r *RemoteAuthDataLoaderImpl) GetServiceAccountParams() error {
 // GetAccessToken implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID string, orgID string) error {
 	req, err := r.config.AccessTokenRequestFunc(r.config.AuthServicesHost, r.config.AccessTokenPath,
-		r.config.ServiceAccountID, r.config.ServiceToken, authutils.StringOrNil(appID), authutils.StringOrNil(orgID))
+		r.config.ServiceAccountID, r.config.ServiceToken, authutils.StringOrNil(appID, "all"), authutils.StringOrNil(orgID, "all"))
 	if err != nil {
 		return fmt.Errorf("error creating access token request: %v", err)
 	}
@@ -558,7 +558,7 @@ func (r *RemoteAuthDataLoaderImpl) updateCachedPairs(res []appOrgPairResponse) {
 	for i, exists := range pairExists {
 		newPairs[i] = appOrgPairFromResponse(res[i])
 		if !exists {
-			r.accessTokens.Store(appOrgPairFromResponse(res[i]), AccessToken{})
+			r.accessTokens.Store(newPairs[i], AccessToken{})
 		}
 	}
 	r.appOrgPairs = newPairs
