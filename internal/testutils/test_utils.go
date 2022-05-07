@@ -92,7 +92,7 @@ func SetupMockServiceRegLoader(subscribed []string, result []authservice.Service
 }
 
 func SetupTestAuthService(mockLoader *mocks.ServiceRegLoader) (*authservice.AuthService, error) {
-	return authservice.NewTestAuthService("https://auth.rokwire.com", "test", "https://test.rokwire.com", mockLoader, nil)
+	return authservice.NewTestAuthService("test", "https://test.rokwire.com", mockLoader, nil)
 }
 
 func SetupExampleMockLoader() *mocks.ServiceRegLoader {

@@ -27,7 +27,7 @@ import (
 
 func main() {
 	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("", []string{"auth"}, true)
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("https://rokwire.illinois.edu/auth", "", []string{"auth"}, true)
 	if err != nil {
 		log.Fatalf("Error initializing remote service reg loader: %v", err)
 	}
@@ -36,13 +36,12 @@ func main() {
     serviceAccountLoaderConfig := authservice.RemoteServiceAccountLoaderConfig{
 		ServiceToken:     "sample_token",
 	}
-	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(serviceAccountLoaderConfig, true)
+	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader("https://rokwire.illinois.edu/auth", serviceAccountLoaderConfig, true)
 	if err != nil {
 		log.Fatalf("Error initializing remote service account loader: %v", err)
 	}
 
-	authService, err := authservice.NewAuthService("https://rokwire.illinois.edu/auth", "example", 
-		"https://rokwire.illinois.edu/example", serviceRegLoader, serviceAccountLoader)
+	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", serviceRegLoader, serviceAccountLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}

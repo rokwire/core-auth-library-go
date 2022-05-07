@@ -29,7 +29,7 @@ import (
 
 // CoreService contains configurations and helper functions required to utilize certain core services
 type CoreService struct {
-	authService *authservice.AuthService
+	serviceAccountLoader authservice.ServiceAccountLoader
 
 	deletedAccountsConfig *DeletedAccountsConfig
 
@@ -37,15 +37,11 @@ type CoreService struct {
 }
 
 func (c *CoreService) getDeletedAccountsWithRetry() ([]string, error) {
-	if err := c.authService.CheckServiceAccountLoader(); err != nil {
-		return nil, fmt.Errorf("error getting deleted accounts: %v", err)
-	}
-
 	accountIDs, err := c.requestDeletedAccounts()
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
 			// access token may have expired, so get a new one and try once more
-			tokenErr := c.authService.ServiceAccountLoader.GetAccessToken()
+			tokenErr := c.serviceAccountLoader.GetAccessToken()
 			if tokenErr != nil {
 				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
 			}
@@ -65,17 +61,13 @@ func (c *CoreService) getDeletedAccountsWithRetry() ([]string, error) {
 }
 
 func (c *CoreService) requestDeletedAccounts() ([]string, error) {
-	if err := c.authService.CheckServiceAccountLoader(); err != nil {
-		return nil, fmt.Errorf("error requesting deleted accounts: %v", err)
-	}
-
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", c.authService.GetHost()+c.deletedAccountsConfig.Path, nil)
+	req, err := http.NewRequest("GET", c.deletedAccountsConfig.Host+c.deletedAccountsConfig.Path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
 
-	req.Header.Set("Authorization", c.authService.ServiceAccountLoader.AccessTokenString())
+	req.Header.Set("Authorization", c.serviceAccountLoader.AccessTokenString())
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -139,16 +131,19 @@ func (c *CoreService) getDeletedAccounts(callback func([]string) error) {
 }
 
 // NewCoreService creates and configures a new RemoteServiceAccountLoaderImpl instance for the provided auth services url
-func NewCoreService(authService *authservice.AuthService, deletedAccountsConfig *DeletedAccountsConfig, firstParty bool, logger *logs.Logger) (*CoreService, error) {
-	if authService == nil {
-		return nil, errors.New("auth service is missing")
+func NewCoreService(serviceAccountLoader authservice.ServiceAccountLoader, deletedAccountsConfig *DeletedAccountsConfig, firstParty bool, logger *logs.Logger) (*CoreService, error) {
+	if serviceAccountLoader == nil {
+		return nil, errors.New("service account loader is missing")
 	}
 
 	if deletedAccountsConfig != nil {
+		if deletedAccountsConfig.Host == "" {
+			return nil, errors.New("deleted accounts host is missing")
+		}
 		checkDeletedAccountsConfig(deletedAccountsConfig, firstParty)
 	}
 
-	core := CoreService{authService: authService, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
+	core := CoreService{serviceAccountLoader: serviceAccountLoader, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
 
 	return &core, nil
 }
@@ -172,7 +167,8 @@ func checkDeletedAccountsConfig(config *DeletedAccountsConfig, firstParty bool) 
 
 //DeletedAccountsConfig represents a configuration for getting deleted accounts from a remote host
 type DeletedAccountsConfig struct {
-	Path     string               // Path to auth service deleted accounts API
+	Host     string               //URL of accounts host
+	Path     string               // Path to deleted accounts API
 	Callback func([]string) error // Function to call once the deleted accounts are received
 	Period   uint                 // How often to request deleted account list (in hours)
 

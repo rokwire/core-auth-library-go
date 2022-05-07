@@ -27,24 +27,22 @@ func main() {
 	serviceAccountLoaderConfig := authservice.RemoteServiceAccountLoaderConfig{
 		Token: "sample_token",
 	}
-	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(serviceAccountLoaderConfig, true)
+	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader("http://localhost/core", serviceAccountLoaderConfig, true)
 	if err != nil {
 		log.Fatalf("Error initializing remote service account loader: %v", err)
 	}
 
-	authService, err := authservice.NewAuthService("http://localhost/core", "sample", "http://localhost:5000", nil, serviceAccountLoader)
+	_, err = authservice.NewAuthService("sample", "http://localhost:5000", nil, serviceAccountLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
-
-	serviceAccountLoader.SetAuthService(authService)
 
 	// Instantiate a CoreService to utilize certain core services, such as reading deleted account IDs
 	deletedAccountsConfig := coreservice.DeletedAccountsConfig{
 		Callback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
-	coreService, err := coreservice.NewCoreService(authService, &deletedAccountsConfig, true, logger)
+	coreService, err := coreservice.NewCoreService(serviceAccountLoader, &deletedAccountsConfig, true, logger)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}

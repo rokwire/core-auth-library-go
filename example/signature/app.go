@@ -125,18 +125,16 @@ func main() {
 	// 	that this service will receive signed requests from.
 	services := []string{"auth"}
 	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("", services, true)
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("http://localhost/core", "", services, true)
 	if err != nil {
 		log.Fatalf("Error initializing remote data loader: %v", err)
 	}
 
 	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService("http://localhost/core", "example", "http://localhost:5000", serviceRegLoader, nil)
+	authService, err := authservice.NewAuthService("example", "http://localhost:5000", serviceRegLoader, nil)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
-
-	serviceRegLoader.SetAuthService(authService)
 
 	privKey := testutils.GetSamplePrivKey()
 
