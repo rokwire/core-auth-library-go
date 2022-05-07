@@ -46,9 +46,6 @@ func main() {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
 
-	serviceRegLoader.SetAuthService(authService)
-	serviceAccountLoader.SetAuthService(authService)
-
     ...
 }
 ```
