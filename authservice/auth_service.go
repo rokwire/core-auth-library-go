@@ -47,6 +47,8 @@ type AuthService struct {
 
 	minRefreshCacheFreq int
 	maxRefreshCacheFreq int
+
+	accessToken AccessToken
 }
 
 // GetServiceID returns the ID of the implementing service
@@ -253,6 +255,23 @@ func (a *AuthService) checkServiceAccountLoader() error {
 	return nil
 }
 
+// GetAccessToken implements ServiceAccountLoader interface
+func (a *AuthService) GetAccessToken() (*AccessToken, error) {
+	accessToken, err := a.ServiceAccountLoader.GetAccessToken()
+	if err != nil {
+		return nil, fmt.Errorf("error getting access token: %v", err)
+	}
+
+	a.accessToken = *accessToken
+
+	return accessToken, nil
+}
+
+// AccessTokenString returns the stored access token as a string
+func (a *AuthService) AccessTokenString() string {
+	return fmt.Sprintf("%s %s", a.accessToken.TokenType, a.accessToken.Token)
+}
+
 // NewAuthService creates and configures a new AuthService instance
 func NewAuthService(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
 	lock := &sync.RWMutex{}
@@ -305,9 +324,7 @@ func NewTestAuthService(serviceID string, serviceHost string, serviceRegLoader S
 // ServiceAccountLoader declares an interface to load service account data from an auth service
 type ServiceAccountLoader interface {
 	// GetAccessToken gets an access token
-	GetAccessToken() error
-	// AccessTokenString returns a stored access token as a string
-	AccessTokenString() string
+	GetAccessToken() (*AccessToken, error)
 }
 
 //RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
@@ -315,8 +332,6 @@ type RemoteServiceAccountLoaderImpl struct {
 	host string // URL of service account host
 
 	config RemoteServiceAccountLoaderConfig
-
-	accessToken AccessToken
 }
 
 //RemoteServiceAccountLoaderConfig represents a configuration for a remote service account loader
@@ -329,44 +344,40 @@ type RemoteServiceAccountLoaderConfig struct {
 }
 
 // GetAccessToken implements ServiceAccountLoader interface
-func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() error {
+func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() (*AccessToken, error) {
 	if r.config.AccessTokenRequestFunc == nil {
-		return errors.New("access token request function is missing")
+		return nil, errors.New("access token request function is missing")
 	}
 
 	req, err := r.config.AccessTokenRequestFunc(r.host, r.config.AccessTokenPath, r.config.AccountID, r.config.Token)
 	if err != nil {
-		return fmt.Errorf("error creating access token request: %v", err)
+		return nil, fmt.Errorf("error creating access token request: %v", err)
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error requesting access token: %v", err)
+		return nil, fmt.Errorf("error requesting access token: %v", err)
 	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("error reading body of access token response: %v", err)
+		return nil, fmt.Errorf("error reading body of access token response: %v", err)
 	}
 
 	if resp.StatusCode != 200 {
-		return fmt.Errorf("error getting access token: %d - %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("error getting access token: %d - %s", resp.StatusCode, string(body))
 	}
 
-	err = json.Unmarshal(body, &r.accessToken)
+	var token AccessToken
+	err = json.Unmarshal(body, &token)
 	if err != nil {
-		return fmt.Errorf("error on unmarshal access token response: %v", err)
+		return nil, fmt.Errorf("error on unmarshal access token response: %v", err)
 	}
 
-	return nil
-}
-
-// AccessTokenString implements ServiceAccountLoader interface
-func (r *RemoteServiceAccountLoaderImpl) AccessTokenString() string {
-	return fmt.Sprintf("%s %s", r.accessToken.TokenType, r.accessToken.Token)
+	return &token, nil
 }
 
 // NewRemoteServiceAccountLoader creates and configures a new RemoteServiceAccountLoaderImpl instance for the provided auth services url

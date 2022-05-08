@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("Error initializing remote service account loader: %v", err)
 	}
 
-	_, err = authservice.NewAuthService("sample", "http://localhost:5000", nil, serviceAccountLoader)
+	authService, err := authservice.NewAuthService("sample", "http://localhost:5000", nil, serviceAccountLoader)
 	if err != nil {
 		log.Fatalf("Error initializing auth service: %v", err)
 	}
@@ -42,7 +42,7 @@ func main() {
 		Callback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
-	coreService, err := coreservice.NewCoreService(serviceAccountLoader, &deletedAccountsConfig, true, logger)
+	coreService, err := coreservice.NewCoreService(authService, &deletedAccountsConfig, true, logger)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}

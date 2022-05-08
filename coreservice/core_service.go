@@ -29,7 +29,7 @@ import (
 
 // CoreService contains configurations and helper functions required to utilize certain core services
 type CoreService struct {
-	serviceAccountLoader authservice.ServiceAccountLoader
+	authService *authservice.AuthService
 
 	deletedAccountsConfig *DeletedAccountsConfig
 
@@ -41,7 +41,7 @@ func (c *CoreService) getDeletedAccountsWithRetry() ([]string, error) {
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
 			// access token may have expired, so get a new one and try once more
-			tokenErr := c.serviceAccountLoader.GetAccessToken()
+			_, tokenErr := c.authService.GetAccessToken()
 			if tokenErr != nil {
 				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
 			}
@@ -67,7 +67,7 @@ func (c *CoreService) requestDeletedAccounts() ([]string, error) {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
 
-	req.Header.Set("Authorization", c.serviceAccountLoader.AccessTokenString())
+	req.Header.Set("Authorization", c.authService.AccessTokenString())
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -131,9 +131,9 @@ func (c *CoreService) getDeletedAccounts(callback func([]string) error) {
 }
 
 // NewCoreService creates and configures a new RemoteServiceAccountLoaderImpl instance for the provided auth services url
-func NewCoreService(serviceAccountLoader authservice.ServiceAccountLoader, deletedAccountsConfig *DeletedAccountsConfig, firstParty bool, logger *logs.Logger) (*CoreService, error) {
-	if serviceAccountLoader == nil {
-		return nil, errors.New("service account loader is missing")
+func NewCoreService(authService *authservice.AuthService, deletedAccountsConfig *DeletedAccountsConfig, firstParty bool, logger *logs.Logger) (*CoreService, error) {
+	if authService == nil {
+		return nil, errors.New("auth service is missing")
 	}
 
 	if deletedAccountsConfig != nil {
@@ -143,7 +143,7 @@ func NewCoreService(serviceAccountLoader authservice.ServiceAccountLoader, delet
 		checkDeletedAccountsConfig(deletedAccountsConfig, firstParty)
 	}
 
-	core := CoreService{serviceAccountLoader: serviceAccountLoader, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
+	core := CoreService{authService: authService, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
 
 	return &core, nil
 }
