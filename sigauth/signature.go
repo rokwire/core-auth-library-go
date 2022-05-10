@@ -227,17 +227,17 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 // Implement ServiceAuthRequests interface
 
 // BuildRequestAuthBody returns a map containing the auth fields for static token auth request bodies
-func (s SignatureAuth) BuildRequestAuthBody() map[string]interface{} {
+func (s *SignatureAuth) BuildRequestAuthBody() map[string]interface{} {
 	return map[string]interface{}{
 		"auth_type": "signature",
 	}
 }
 
 // ModifyRequest signs the passed request to perform signature auth
-func (s SignatureAuth) ModifyRequest(req *http.Request) error {
+func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
 	err := s.SignRequest(req)
 	if err != nil {
-		return fmt.Errorf("error signing request for get service account params: %v", err)
+		return fmt.Errorf("error signing request: %v", err)
 	}
 	return nil
 }

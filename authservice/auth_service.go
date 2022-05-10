@@ -403,7 +403,7 @@ func (r RemoteAuthDataLoaderConfig) BuildAccessTokensRequest() (*http.Request, e
 	if r.AuthServicesHost == "" {
 		return nil, errors.New("host is missing")
 	}
-	if r.AccessTokenPath == "" {
+	if r.AccessTokensPath == "" {
 		return nil, errors.New("path is missing")
 	}
 	if r.ServiceAccountID == "" {
@@ -436,11 +436,13 @@ func (r RemoteAuthDataLoaderConfig) BuildAccessTokensRequest() (*http.Request, e
 	return req, nil
 }
 
+// ServiceAuthRequests declares an interface for setting up HTTP requests to APIs requiring certain types of authentication
 type ServiceAuthRequests interface {
 	BuildRequestAuthBody() map[string]interface{} // Construct auth fields for service account request bodies
 	ModifyRequest(req *http.Request) error        // Performs any auth type specific modifications to the request and returns any errors that occur
 }
 
+// StaticTokenServiceAuth provides a ServiceAuthRequests implementation for static token-based auth
 type StaticTokenServiceAuth struct {
 	ServiceToken string // Static token issued by the auth service, used to get access tokens from the auth service
 }
