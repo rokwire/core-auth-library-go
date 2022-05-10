@@ -31,325 +31,40 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 )
 
-// -------------------- AuthService --------------------
+// -------------------- ServiceAccountManager --------------------
 
-// AuthService contains the configurations to interface with the auth service
-type AuthService struct {
-	serviceRegLoader     ServiceRegLoader
-	ServiceAccountLoader ServiceAccountLoader
-
-	// ID of implementing service
-	serviceID string
-
-	services        *syncmap.Map
-	servicesUpdated *time.Time
-	servicesLock    *sync.RWMutex
-
-	minRefreshCacheFreq int
-	maxRefreshCacheFreq int
-
-	accessToken AccessToken
-}
-
-// GetServiceID returns the ID of the implementing service
-func (a *AuthService) GetServiceID() string {
-	return a.serviceID
-}
-
-// GetServiceReg returns the service registration record for the given ID if found
-func (a *AuthService) GetServiceReg(id string) (*ServiceReg, error) {
-	a.servicesLock.RLock()
-	servicesUpdated := a.servicesUpdated
-	maxRefreshFreq := a.maxRefreshCacheFreq
-	a.servicesLock.RUnlock()
-
-	var loadServicesError error
-	now := time.Now()
-	if servicesUpdated == nil || now.Sub(*servicesUpdated).Minutes() > float64(maxRefreshFreq) {
-		loadServicesError = a.LoadServices()
-	}
-
-	var service ServiceReg
-
-	if a.services == nil {
-		return nil, fmt.Errorf("services could not be loaded: %v", loadServicesError)
-	}
-	itemValue, ok := a.services.Load(id)
-	if !ok {
-		return nil, fmt.Errorf("service could not be found for id: %s - %v", id, loadServicesError)
-	}
-
-	service, ok = itemValue.(ServiceReg)
-	if !ok {
-		return nil, fmt.Errorf("service could not be parsed for id: %s - %v", id, loadServicesError)
-	}
-
-	return &service, loadServicesError
-}
-
-// GetServiceRegWithPubKey returns the service registration record for the given ID if found and validates the PubKey
-func (a *AuthService) GetServiceRegWithPubKey(id string) (*ServiceReg, error) {
-	serviceReg, err := a.GetServiceReg(id)
-	if err != nil || serviceReg == nil {
-		return nil, fmt.Errorf("failed to retrieve service reg: %v", err)
-	}
-
-	if serviceReg.PubKey == nil {
-		return nil, fmt.Errorf("service pub key is nil for id %s", id)
-	}
-
-	if serviceReg.PubKey.Key == nil {
-		err = serviceReg.PubKey.LoadKeyFromPem()
-		if err != nil || serviceReg.PubKey.Key == nil {
-			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", id, err)
-		}
-	}
-
-	return serviceReg, nil
-}
-
-// LoadServices loads the subscribed service registration records and caches them
-// 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
-func (a *AuthService) LoadServices() error {
-	if err := a.checkServiceRegLoader(); err != nil {
-		return fmt.Errorf("error loading services: %v", err)
-	}
-
-	services, loadServicesError := a.serviceRegLoader.LoadServices()
-	if services != nil {
-		a.setServices(services)
-	}
-	return loadServicesError
-}
-
-// SubscribeServices subscribes to the provided services
-//	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
-func (a *AuthService) SubscribeServices(serviceIDs []string, reload bool) error {
-	if err := a.checkServiceRegLoader(); err != nil {
-		return fmt.Errorf("error subscribing to services: %v", err)
-	}
-
-	newSub := false
-
-	for _, serviceID := range serviceIDs {
-		subscribed := a.serviceRegLoader.SubscribeService(serviceID)
-		if subscribed {
-			newSub = true
-		}
-	}
-
-	if reload && newSub {
-		err := a.LoadServices()
-		if err != nil {
-			return fmt.Errorf("error loading service registrations: %v", err)
-		}
-	}
-
-	return nil
-}
-
-// UnsubscribeServices unsubscribes from the provided service
-func (a *AuthService) UnsubscribeServices(serviceIDs []string) {
-	for _, serviceID := range serviceIDs {
-		if err := a.checkServiceRegLoader(); err != nil {
-			return
-		}
-		a.serviceRegLoader.UnsubscribeService(serviceID)
-	}
-}
-
-// ValidateServiceRegistration validates that the implementing service has a valid registration for the provided service ID and hostname
-func (a *AuthService) ValidateServiceRegistration(serviceHost string) error {
-	service, err := a.GetServiceReg(a.serviceID)
-	if err != nil || service == nil {
-		return fmt.Errorf("no service registration found with id %s: %v", a.serviceID, err)
-	}
-
-	if serviceHost != service.Host {
-		return fmt.Errorf("service host (%s) does not match expected value (%s) for id %s", service.Host, serviceHost, a.serviceID)
-	}
-
-	return nil
-}
-
-// ValidateServiceRegistrationKey validates that the implementing service has a valid registration for the provided keypair
-func (a *AuthService) ValidateServiceRegistrationKey(privKey *rsa.PrivateKey) error {
-	if privKey == nil {
-		return errors.New("provided priv key is nil")
-	}
-
-	service, err := a.GetServiceRegWithPubKey(a.serviceID)
-	if err != nil {
-		return fmt.Errorf("failed to retrieve service pub key: %v", err)
-	}
-
-	if service.PubKey.Key.Equal(privKey.PublicKey) {
-		return fmt.Errorf("service pub key does not match for id %s", a.serviceID)
-	}
-
-	return nil
-}
-
-// SetMinRefreshCacheFreq sets the minimum frequency at which cached service registration records are refreshed in minutes
-// 	The default value is 1
-func (a *AuthService) SetMinRefreshCacheFreq(freq int) {
-	a.servicesLock.Lock()
-	a.minRefreshCacheFreq = freq
-	a.servicesLock.Unlock()
-}
-
-// SetMaxRefreshCacheFreq sets the minimum frequency at which cached service registration records are refreshed in minutes
-// 	The default value is 60
-func (a *AuthService) SetMaxRefreshCacheFreq(freq int) {
-	a.servicesLock.Lock()
-	a.maxRefreshCacheFreq = freq
-	a.servicesLock.Unlock()
-}
-
-// CheckForRefresh checks if the list of stored service registrations needs updating
-func (a *AuthService) CheckForRefresh() (bool, error) {
-	a.servicesLock.RLock()
-	servicesUpdated := a.servicesUpdated
-	minRefreshFreq := a.minRefreshCacheFreq
-	a.servicesLock.RUnlock()
-
-	var loadServicesError error
-	now := time.Now()
-	if servicesUpdated == nil || now.Sub(*servicesUpdated).Minutes() > float64(minRefreshFreq) {
-		loadServicesError = a.LoadServices()
-		return true, loadServicesError
-	}
-	return false, loadServicesError
-}
-
-func (a *AuthService) setServices(services []ServiceReg) {
-	a.servicesLock.Lock()
-
-	a.services = &syncmap.Map{}
-	if len(services) > 0 {
-		for _, service := range services {
-			a.services.Store(service.ServiceID, service)
-			a.services.Store(service.ServiceAccountID, service)
-		}
-	}
-
-	time := time.Now()
-	a.servicesUpdated = &time
-
-	a.servicesLock.Unlock()
-}
-
-func (a *AuthService) checkServiceRegLoader() error {
-	if a.serviceRegLoader == nil {
-		return errors.New("missing service reg loader")
-	}
-
-	return nil
-}
-
-func (a *AuthService) checkServiceAccountLoader() error {
-	if a.ServiceAccountLoader == nil {
-		return errors.New("missing service account loader")
-	}
-
-	return nil
-}
-
-// GetAccessToken implements ServiceAccountLoader interface
-func (a *AuthService) GetAccessToken() (*AccessToken, error) {
-	accessToken, err := a.ServiceAccountLoader.GetAccessToken()
-	if err != nil {
-		return nil, fmt.Errorf("error getting access token: %v", err)
-	}
-
-	a.accessToken = *accessToken
-
-	return accessToken, nil
-}
-
-// AccessTokenString returns the stored access token as a string
-func (a *AuthService) AccessTokenString() string {
-	return fmt.Sprintf("%s %s", a.accessToken.TokenType, a.accessToken.Token)
-}
-
-// NewAuthService creates and configures a new AuthService instance
-func NewAuthService(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
-	lock := &sync.RWMutex{}
-	services := &syncmap.Map{}
-
-	auth := &AuthService{serviceRegLoader: serviceRegLoader, ServiceAccountLoader: serviceAccountLoader, serviceID: serviceID,
-		services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60}
-
-	if serviceRegLoader != nil {
-		// Subscribe to the implementing service to validate registration
-		serviceRegLoader.SubscribeService(serviceID)
-
-		err := auth.LoadServices()
-		if err != nil {
-			return nil, fmt.Errorf("error loading services: %v", err)
-		}
-
-		err = auth.ValidateServiceRegistration(serviceHost)
-		if err != nil {
-			return nil, fmt.Errorf("unable to validate service registration: please contact the auth service system admin to register your service - %v", err)
-		}
-	}
-
-	return auth, nil
-}
-
-// NewTestAuthService creates and configures a new AuthService instance for testing purposes
-func NewTestAuthService(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader, serviceAccountLoader ServiceAccountLoader) (*AuthService, error) {
-	lock := &sync.RWMutex{}
-	services := &syncmap.Map{}
-
-	auth := &AuthService{serviceRegLoader: serviceRegLoader, ServiceAccountLoader: serviceAccountLoader, serviceID: serviceID, services: services, servicesLock: lock,
-		minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60}
-
-	if serviceRegLoader != nil {
-		// Subscribe to the implementing service to validate registration
-		serviceRegLoader.SubscribeService(serviceID)
-
-		err := auth.LoadServices()
-		if err != nil {
-			return nil, fmt.Errorf("error loading services: %v", err)
-		}
-	}
-
-	return auth, nil
-}
-
-// -------------------- ServiceAccountLoader --------------------
-
-// ServiceAccountLoader declares an interface to load service account data from an auth service
-type ServiceAccountLoader interface {
+// ServiceAccountManager declares an interface to manage data retrieved from a service account host
+type ServiceAccountManager interface {
 	// GetAccessToken gets an access token
 	GetAccessToken() (*AccessToken, error)
+	// CachedAccessToken returns a cached token
+	CachedAccessToken() AccessToken
 }
 
-//RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
-type RemoteServiceAccountLoaderImpl struct {
-	host string // URL of service account host
+//RemoteServiceAccountManagerImpl provides a ServiceAccountManager implementation for a remote service account host
+type RemoteServiceAccountManagerImpl struct {
+	accessToken AccessToken
 
-	config RemoteServiceAccountLoaderConfig
+	config RemoteServiceAccountManagerConfig
 }
 
-//RemoteServiceAccountLoaderConfig represents a configuration for a remote service account loader
-type RemoteServiceAccountLoaderConfig struct {
-	Token     string // Static token issued by the auth service
-	AccountID string // Service account ID on the auth service
+//RemoteServiceAccountManagerConfig represents a configuration for a remote service account manager
+type RemoteServiceAccountManagerConfig struct {
+	ServiceAccountHost string // URL of service account host
+	AccountID          string // Service account ID on the service account host
+	Token              string // Static token issued by the service account host
 
-	AccessTokenPath        string                                                      // Path to auth service access token API
+	AccessTokenPath        string                                                      // Path to service account access token API
 	AccessTokenRequestFunc func(string, string, string, string) (*http.Request, error) // Function that builds access token request
 }
 
-// GetAccessToken implements ServiceAccountLoader interface
-func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() (*AccessToken, error) {
+// GetAccessToken implements ServiceAccountManager interface
+func (r *RemoteServiceAccountManagerImpl) GetAccessToken() (*AccessToken, error) {
 	if r.config.AccessTokenRequestFunc == nil {
 		return nil, errors.New("access token request function is missing")
 	}
 
-	req, err := r.config.AccessTokenRequestFunc(r.host, r.config.AccessTokenPath, r.config.AccountID, r.config.Token)
+	req, err := r.config.AccessTokenRequestFunc(r.config.ServiceAccountHost, r.config.AccessTokenPath, r.config.AccountID, r.config.Token)
 	if err != nil {
 		return nil, fmt.Errorf("error creating access token request: %v", err)
 	}
@@ -377,18 +92,32 @@ func (r *RemoteServiceAccountLoaderImpl) GetAccessToken() (*AccessToken, error) 
 		return nil, fmt.Errorf("error on unmarshal access token response: %v", err)
 	}
 
+	r.accessToken = token
+
 	return &token, nil
 }
 
-// NewRemoteServiceAccountLoader creates and configures a new RemoteServiceAccountLoaderImpl instance for the provided auth services url
-func NewRemoteServiceAccountLoader(host string, config RemoteServiceAccountLoaderConfig, firstParty bool) (*RemoteServiceAccountLoaderImpl, error) {
-	checkServiceAccountLoaderConfig(&config, firstParty)
-
-	dataLoader := RemoteServiceAccountLoaderImpl{host: host, config: config}
-	return &dataLoader, nil
+// CachedAccessToken returns the cached access token
+func (r *RemoteServiceAccountManagerImpl) CachedAccessToken() AccessToken {
+	return r.accessToken
 }
 
-func checkServiceAccountLoaderConfig(config *RemoteServiceAccountLoaderConfig, firstParty bool) {
+// NewRemoteServiceAccountManager creates and configures a new RemoteServiceAccountManagerImpl instance for the provided config
+func NewRemoteServiceAccountManager(config RemoteServiceAccountManagerConfig, firstParty bool) (*RemoteServiceAccountManagerImpl, error) {
+	err := checkServiceAccountManagerConfig(&config, firstParty)
+	if err != nil {
+		return nil, fmt.Errorf("error checking service account manager config: %v", err)
+	}
+
+	dataManager := RemoteServiceAccountManagerImpl{config: config}
+	return &dataManager, nil
+}
+
+func checkServiceAccountManagerConfig(config *RemoteServiceAccountManagerConfig, firstParty bool) error {
+	if config.ServiceAccountHost == "" {
+		return errors.New("service account host is missing")
+	}
+
 	if config.AccessTokenPath == "" {
 		if firstParty {
 			config.AccessTokenPath = "/bbs/access-token"
@@ -400,46 +129,57 @@ func checkServiceAccountLoaderConfig(config *RemoteServiceAccountLoaderConfig, f
 	if config.AccessTokenRequestFunc == nil && config.AccountID != "" && config.Token != "" {
 		config.AccessTokenRequestFunc = authutils.BuildDefaultAccessTokenRequest
 	}
+
+	return nil
 }
 
-// AccessToken represents an access token granted by a remote auth service
-type AccessToken struct {
-	Token     string `json:"access_token"`
-	TokenType string `json:"token_type"`
-}
+// -------------------- ServiceRegManager --------------------
 
-// -------------------- ServiceRegLoader --------------------
-
-// ServiceRegLoader declares an interface to load the service registrations for specified services
-type ServiceRegLoader interface {
+// ServiceRegManager declares an interface to load the service registrations for specified services
+type ServiceRegManager interface {
 	// LoadServices loads the service registration records for all subscribed services
 	LoadServices() ([]ServiceReg, error)
 	//GetSubscribedServices returns the list of currently subscribed services
 	GetSubscribedServices() []string
-	// SubscribeService subscribes the loader to the given service
+	// SubscribeService subscribes the manager to the given service
 	// 	Returns true if the specified service was added or false if it was already found
 	SubscribeService(serviceID string) bool
-	// UnsubscribeService unsubscribes the loader from the given service
+	// UnsubscribeService unsubscribes the manager from the given service
 	// 	Returns true if the specified service was removed or false if it was not found
 	UnsubscribeService(serviceID string) bool
 }
 
-//RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
-type RemoteServiceRegLoaderImpl struct {
-	host string // URL of service registration host
-	path string // Path to service registration API
+//RemoteServiceRegManagerImpl provides a ServiceRegManager implementation for a remote service registration host
+type RemoteServiceRegManagerImpl struct {
+	services        *syncmap.Map
+	servicesUpdated *time.Time
+	servicesLock    *sync.RWMutex
+
+	config RemoteServiceRegManagerConfig
 
 	*ServiceRegSubscriptions
 }
 
-// LoadServices implements ServiceRegLoader interface
-func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
+//RemoteServiceRegManagerConfig represents a configuration for a remote service registration manager
+type RemoteServiceRegManagerConfig struct {
+	ServiceRegHost string // URL of service registration host
+	ServiceID      string // ID of implementing service
+
+	Path string // Path to service registration API
+
+	MinRefreshCacheFreq uint // Minimum frequency at which cached service registration records are refreshed (minutes)
+	MaxRefreshCacheFreq uint // Maximum frequency at which cached service registration records are refreshed (minutes)
+}
+
+// LoadServices implements ServiceRegManager interface
+// 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
+func (r *RemoteServiceRegManagerImpl) LoadServices() ([]ServiceReg, error) {
 	if len(r.GetSubscribedServices()) == 0 {
 		return nil, nil
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.host+r.path, nil)
+	req, err := http.NewRequest("GET", r.config.ServiceRegHost+r.config.Path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to load services: %v", err)
 	}
@@ -481,27 +221,256 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 		service.PubKey.LoadKeyFromPem()
 	}
 
+	r.setServices(services)
+
 	return services, nil
 }
 
-// NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance for the provided auth services host
-func NewRemoteServiceRegLoader(host string, path string, subscribedServices []string, firstParty bool) (*RemoteServiceRegLoaderImpl, error) {
-	if path == "" {
-		if firstParty {
-			path = "bbs/service-regs"
-		} else {
-			path = "tps/service-regs"
+// GetServiceReg returns the service registration record for the given ID if found
+func (r *RemoteServiceRegManagerImpl) GetServiceReg(id string) (*ServiceReg, error) {
+	r.servicesLock.RLock()
+	servicesUpdated := r.servicesUpdated
+	maxRefreshFreq := r.config.MaxRefreshCacheFreq
+	r.servicesLock.RUnlock()
+
+	var loadServicesError error
+	now := time.Now()
+	if servicesUpdated == nil || now.Sub(*servicesUpdated).Minutes() > float64(maxRefreshFreq) {
+		_, loadServicesError = r.LoadServices()
+	}
+
+	var service ServiceReg
+
+	if r.services == nil {
+		return nil, fmt.Errorf("services could not be loaded: %v", loadServicesError)
+	}
+	itemValue, ok := r.services.Load(id)
+	if !ok {
+		return nil, fmt.Errorf("service could not be found for id: %s - %v", id, loadServicesError)
+	}
+
+	service, ok = itemValue.(ServiceReg)
+	if !ok {
+		return nil, fmt.Errorf("service could not be parsed for id: %s - %v", id, loadServicesError)
+	}
+
+	return &service, loadServicesError
+}
+
+// GetServiceRegWithPubKey returns the service registration record for the given ID if found and validates the PubKey
+func (r *RemoteServiceRegManagerImpl) GetServiceRegWithPubKey(id string) (*ServiceReg, error) {
+	serviceReg, err := r.GetServiceReg(id)
+	if err != nil || serviceReg == nil {
+		return nil, fmt.Errorf("failed to retrieve service reg: %v", err)
+	}
+
+	if serviceReg.PubKey == nil {
+		return nil, fmt.Errorf("service pub key is nil for id %s", id)
+	}
+
+	if serviceReg.PubKey.Key == nil {
+		err = serviceReg.PubKey.LoadKeyFromPem()
+		if err != nil || serviceReg.PubKey.Key == nil {
+			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", id, err)
 		}
 	}
 
+	return serviceReg, nil
+}
+
+// SubscribeServices subscribes to the provided services
+//	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
+func (r *RemoteServiceRegManagerImpl) SubscribeServices(serviceIDs []string, reload bool) error {
+	newSub := false
+
+	for _, serviceID := range serviceIDs {
+		subscribed := r.SubscribeService(serviceID)
+		if subscribed {
+			newSub = true
+		}
+	}
+
+	if reload && newSub {
+		_, err := r.LoadServices()
+		if err != nil {
+			return fmt.Errorf("error loading service registrations: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// UnsubscribeServices unsubscribes from the provided service
+func (r *RemoteServiceRegManagerImpl) UnsubscribeServices(serviceIDs []string) {
+	for _, serviceID := range serviceIDs {
+		r.UnsubscribeService(serviceID)
+	}
+}
+
+// ValidateServiceRegistration validates that the implementing service has a valid registration for the provided service ID and hostname
+func (r *RemoteServiceRegManagerImpl) ValidateServiceRegistration(serviceHost string) error {
+	service, err := r.GetServiceReg(r.config.ServiceID)
+	if err != nil || service == nil {
+		return fmt.Errorf("no service registration found with id %s: %v", r.config.ServiceID, err)
+	}
+
+	if serviceHost != service.Host {
+		return fmt.Errorf("service host (%s) does not match expected value (%s) for id %s", service.Host, serviceHost, r.config.ServiceID)
+	}
+
+	return nil
+}
+
+// ValidateServiceRegistrationKey validates that the implementing service has a valid registration for the provided keypair
+func (r *RemoteServiceRegManagerImpl) ValidateServiceRegistrationKey(privKey *rsa.PrivateKey) error {
+	if privKey == nil {
+		return errors.New("provided priv key is nil")
+	}
+
+	service, err := r.GetServiceRegWithPubKey(r.config.ServiceID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve service pub key: %v", err)
+	}
+
+	if service.PubKey.Key.Equal(privKey.PublicKey) {
+		return fmt.Errorf("service pub key does not match for id %s", r.config.ServiceID)
+	}
+
+	return nil
+}
+
+// SetMinRefreshCacheFreq sets the minimum frequency at which cached service registration records are refreshed in minutes
+// 	The default value is 1
+func (r *RemoteServiceRegManagerImpl) SetMinRefreshCacheFreq(freq uint) {
+	r.servicesLock.Lock()
+	r.config.MinRefreshCacheFreq = freq
+	r.servicesLock.Unlock()
+}
+
+// SetMaxRefreshCacheFreq sets the maximum frequency at which cached service registration records are refreshed in minutes
+// 	The default value is 60
+func (r *RemoteServiceRegManagerImpl) SetMaxRefreshCacheFreq(freq uint) {
+	r.servicesLock.Lock()
+	r.config.MaxRefreshCacheFreq = freq
+	r.servicesLock.Unlock()
+}
+
+// CheckForRefresh checks if the list of stored service registrations needs updating
+func (r *RemoteServiceRegManagerImpl) CheckForRefresh() (bool, error) {
+	r.servicesLock.RLock()
+	servicesUpdated := r.servicesUpdated
+	minRefreshFreq := r.config.MinRefreshCacheFreq
+	r.servicesLock.RUnlock()
+
+	var loadServicesError error
+	now := time.Now()
+	if servicesUpdated == nil || now.Sub(*servicesUpdated).Minutes() > float64(minRefreshFreq) {
+		_, loadServicesError = r.LoadServices()
+		return true, loadServicesError
+	}
+	return false, loadServicesError
+}
+
+func (r *RemoteServiceRegManagerImpl) setServices(services []ServiceReg) {
+	r.servicesLock.Lock()
+
+	r.services = &syncmap.Map{}
+	if len(services) > 0 {
+		for _, service := range services {
+			r.services.Store(service.ServiceID, service)
+			r.services.Store(service.ServiceAccountID, service)
+		}
+	}
+
+	time := time.Now()
+	r.servicesUpdated = &time
+
+	r.servicesLock.Unlock()
+}
+
+// NewRemoteServiceRegManager creates and configures a new RemoteServiceRegManagerImpl instance for the provided config
+func NewRemoteServiceRegManager(config RemoteServiceRegManagerConfig, serviceHost string, subscribedServices []string, firstParty bool) (*RemoteServiceRegManagerImpl, error) {
+	err := checkServiceRegManagerConfig(&config, firstParty)
+	if err != nil {
+		return nil, fmt.Errorf("error checking service registration manager config: %v", err)
+	}
+
+	lock := &sync.RWMutex{}
+	services := &syncmap.Map{}
+
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
-	return &RemoteServiceRegLoaderImpl{host: host, path: path, ServiceRegSubscriptions: subscriptions}, nil
+	dataManager := &RemoteServiceRegManagerImpl{services: services, servicesLock: lock, config: config, ServiceRegSubscriptions: subscriptions}
+
+	// Subscribe to the implementing service to validate registration
+	dataManager.SubscribeService(config.ServiceID)
+
+	_, err = dataManager.LoadServices()
+	if err != nil {
+		return nil, fmt.Errorf("error loading services: %v", err)
+	}
+
+	err = dataManager.ValidateServiceRegistration(serviceHost)
+	if err != nil {
+		return nil, fmt.Errorf("unable to validate service registration: please contact the service registration system admin to register your service - %v", err)
+	}
+
+	return dataManager, nil
+}
+
+// NewTestServiceRegManager creates and configures a test RemoteServiceRegManagerImpl instance
+func NewTestServiceRegManager(config RemoteServiceRegManagerConfig, subscribedServices []string, firstParty bool) (*RemoteServiceRegManagerImpl, error) {
+	err := checkServiceRegManagerConfig(&config, firstParty)
+	if err != nil {
+		return nil, fmt.Errorf("error checking service registration manager config: %v", err)
+	}
+
+	lock := &sync.RWMutex{}
+	services := &syncmap.Map{}
+
+	subscriptions := NewServiceRegSubscriptions(subscribedServices)
+	dataManager := &RemoteServiceRegManagerImpl{services: services, servicesLock: lock, config: config, ServiceRegSubscriptions: subscriptions}
+
+	// Subscribe to the implementing service to validate registration
+	dataManager.SubscribeService(config.ServiceID)
+
+	_, err = dataManager.LoadServices()
+	if err != nil {
+		return nil, fmt.Errorf("error loading services: %v", err)
+	}
+
+	return dataManager, nil
+}
+
+func checkServiceRegManagerConfig(config *RemoteServiceRegManagerConfig, firstParty bool) error {
+	if config.ServiceRegHost == "" {
+		return errors.New("service registration host is missing")
+	}
+	if config.ServiceID == "" {
+		return errors.New("service ID is missing")
+	}
+
+	if config.Path == "" {
+		if firstParty {
+			config.Path = "bbs/service-regs"
+		} else {
+			config.Path = "tps/service-regs"
+		}
+	}
+
+	if config.MinRefreshCacheFreq == 0 {
+		config.MinRefreshCacheFreq = 1
+	}
+	if config.MaxRefreshCacheFreq == 0 || config.MaxRefreshCacheFreq < config.MinRefreshCacheFreq {
+		config.MaxRefreshCacheFreq = 60
+	}
+
+	return nil
 }
 
 // -------------------- ServiceRegSubscriptions --------------------
 
 // ServiceRegSubscriptions defined a struct to hold service registration subscriptions
-// 	This struct implements the subcription part of the ServiceRegLoader interface
+// 	This struct implements the subcription part of the ServiceRegManager interface
 //	If you subscribe to the reserved "all" service ID, all registered services
 //	will be loaded
 type ServiceRegSubscriptions struct {
@@ -547,6 +516,19 @@ func (r *ServiceRegSubscriptions) UnsubscribeService(serviceID string) bool {
 func NewServiceRegSubscriptions(subscribedServices []string) *ServiceRegSubscriptions {
 	lock := &sync.RWMutex{}
 	return &ServiceRegSubscriptions{subscribedServices: subscribedServices, servicesLock: lock}
+}
+
+// -------------------- AccessToken --------------------
+
+// AccessToken represents an access token granted by a remote service account host
+type AccessToken struct {
+	Token     string `json:"access_token"`
+	TokenType string `json:"token_type"`
+}
+
+// String returns the stored access token as a string
+func (t AccessToken) String() string {
+	return fmt.Sprintf("%s %s", t.TokenType, t.Token)
 }
 
 // -------------------- ServiceReg --------------------

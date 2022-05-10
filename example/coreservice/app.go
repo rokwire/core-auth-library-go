@@ -23,18 +23,15 @@ import (
 )
 
 func main() {
-	// Instantiate a remote ServiceAccountLoader to load auth service account-related data from auth service
-	serviceAccountLoaderConfig := authservice.RemoteServiceAccountLoaderConfig{
-		Token: "sample_token",
+	// Instantiate a remote ServiceAccountManager to load service account-related data
+	serviceAccountManagerConfig := authservice.RemoteServiceAccountManagerConfig{
+		ServiceAccountHost: "http://localhost/core",
+		AccountID:          "sampleAccountID",
+		Token:              "sampleToken",
 	}
-	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader("http://localhost/core", serviceAccountLoaderConfig, true)
+	serviceAccountManager, err := authservice.NewRemoteServiceAccountManager(serviceAccountManagerConfig, true)
 	if err != nil {
 		log.Fatalf("Error initializing remote service account loader: %v", err)
-	}
-
-	authService, err := authservice.NewAuthService("sample", "http://localhost:5000", nil, serviceAccountLoader)
-	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
 	}
 
 	// Instantiate a CoreService to utilize certain core services, such as reading deleted account IDs
@@ -42,7 +39,7 @@ func main() {
 		Callback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
-	coreService, err := coreservice.NewCoreService(authService, &deletedAccountsConfig, true, logger)
+	coreService, err := coreservice.NewCoreService(serviceAccountManager, &deletedAccountsConfig, true, logger)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}

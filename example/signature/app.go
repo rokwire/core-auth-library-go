@@ -124,16 +124,14 @@ func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
 	services := []string{"auth"}
-	// Instantiate a remote ServiceRegLoader to load service registration records from auth service
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("http://localhost/core", "", services, true)
-	if err != nil {
-		log.Fatalf("Error initializing remote data loader: %v", err)
+	// Instantiate a remote ServiceRegManager to load service registration records from auth service
+	config := authservice.RemoteServiceRegManagerConfig{
+		ServiceRegHost: "http://localhost/core",
+		ServiceID:      "example",
 	}
-
-	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService("example", "http://localhost:5000", serviceRegLoader, nil)
+	serviceRegManager, err := authservice.NewRemoteServiceRegManager(config, "http://localhost:5000", services, true)
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing remote service registration manager: %v", err)
 	}
 
 	privKey := testutils.GetSamplePrivKey()
@@ -141,7 +139,7 @@ func main() {
 	// TODO: Load service private key
 
 	// Instantiate SignatureAuth instance to perform token validation
-	signatureAuth, err := sigauth.NewSignatureAuth(privKey, authService, false)
+	signatureAuth, err := sigauth.NewSignatureAuth(privKey, serviceRegManager, false)
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}

@@ -29,7 +29,7 @@ import (
 
 // CoreService contains configurations and helper functions required to utilize certain core services
 type CoreService struct {
-	authService *authservice.AuthService
+	serviceAccountManager authservice.ServiceAccountManager
 
 	deletedAccountsConfig *DeletedAccountsConfig
 
@@ -41,7 +41,7 @@ func (c *CoreService) getDeletedAccountsWithRetry() ([]string, error) {
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "error getting deleted accounts: 401") {
 			// access token may have expired, so get a new one and try once more
-			_, tokenErr := c.authService.GetAccessToken()
+			_, tokenErr := c.serviceAccountManager.GetAccessToken()
 			if tokenErr != nil {
 				return nil, fmt.Errorf("error getting new access token - %v - after %v", tokenErr, err)
 			}
@@ -67,7 +67,7 @@ func (c *CoreService) requestDeletedAccounts() ([]string, error) {
 		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
 	}
 
-	req.Header.Set("Authorization", c.authService.AccessTokenString())
+	req.Header.Set("Authorization", c.serviceAccountManager.CachedAccessToken().String())
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -130,10 +130,10 @@ func (c *CoreService) getDeletedAccounts(callback func([]string) error) {
 	}
 }
 
-// NewCoreService creates and configures a new RemoteServiceAccountLoaderImpl instance for the provided auth services url
-func NewCoreService(authService *authservice.AuthService, deletedAccountsConfig *DeletedAccountsConfig, firstParty bool, logger *logs.Logger) (*CoreService, error) {
-	if authService == nil {
-		return nil, errors.New("auth service is missing")
+// NewCoreService creates and configures a new CoreService instance
+func NewCoreService(serviceAccountManager authservice.ServiceAccountManager, deletedAccountsConfig *DeletedAccountsConfig, firstParty bool, logger *logs.Logger) (*CoreService, error) {
+	if serviceAccountManager == nil {
+		return nil, errors.New("service account manager is missing")
 	}
 
 	if deletedAccountsConfig != nil {
@@ -143,7 +143,7 @@ func NewCoreService(authService *authservice.AuthService, deletedAccountsConfig 
 		checkDeletedAccountsConfig(deletedAccountsConfig, firstParty)
 	}
 
-	core := CoreService{authService: authService, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
+	core := CoreService{serviceAccountManager: serviceAccountManager, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
 
 	return &core, nil
 }
