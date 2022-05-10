@@ -15,6 +15,7 @@
 package authservice
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -308,7 +309,6 @@ type RemoteAuthDataLoaderImpl struct {
 type RemoteAuthDataLoaderConfig struct {
 	AuthServicesHost string // URL of auth services host
 	ServiceAccountID string // Implementing service's account ID on the auth service
-	ServiceToken     string // Static token issued by the auth service, used to get access tokens from the auth service
 
 	ServiceAccountParamsPath string // Path to auth service service account params endpoint
 	AccessTokenPath          string // Path to auth service access token endpoint
@@ -316,13 +316,156 @@ type RemoteAuthDataLoaderConfig struct {
 	DeletedAccountsPath      string // Path to auth service deleted accounts endpoint
 	ServiceRegPath           string // Path to auth service service registration endpoint
 
-	ServiceAccountParamsRequestFunc func(string, string, string, string) (*http.Request, error)                   // Function to call to construct service account params request
-	AccessTokenRequestFunc          func(string, string, string, string, *string, *string) (*http.Request, error) // Function to call to construct access token request
-	AccessTokensRequestFunc         func(string, string, string, string) (*http.Request, error)                   // Function to call to construct access tokens request
+	ServiceAuthRequests ServiceAuthRequests
 
-	AccessTokenRequest       *http.Request
 	DeletedAccountsCallback  func([]string) error // Function to call once the deleted accounts list is received from the auth service
 	GetDeletedAccountsPeriod int64                // How often to request deleted account list from the auth service (in hours)
+}
+
+// BuildServiceAccountParamsRequest returns a HTTP request to get service account params using a static token
+func (r RemoteAuthDataLoaderConfig) BuildServiceAccountParamsRequest() (*http.Request, error) {
+	if r.AuthServicesHost == "" {
+		return nil, errors.New("host is missing")
+	}
+	if r.AccessTokenPath == "" {
+		return nil, errors.New("path is missing")
+	}
+	if r.ServiceAccountID == "" {
+		return nil, errors.New("service account ID is missing")
+	}
+	if r.ServiceAuthRequests == nil {
+		return nil, errors.New("service auth requests interface is not defined")
+	}
+
+	body := r.ServiceAuthRequests.BuildRequestAuthBody()
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", r.AuthServicesHost+r.ServiceAccountParamsPath+"/"+r.ServiceAccountID, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	err = r.ServiceAuthRequests.ModifyRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("error modifying request to get access token: %v", err)
+	}
+
+	return req, nil
+}
+
+// BuildAccessTokenRequest returns a HTTP request to get an access token using a static token
+func (r RemoteAuthDataLoaderConfig) BuildAccessTokenRequest(appID *string, orgID *string) (*http.Request, error) {
+	if r.AuthServicesHost == "" {
+		return nil, errors.New("host is missing")
+	}
+	if r.AccessTokenPath == "" {
+		return nil, errors.New("path is missing")
+	}
+	if r.ServiceAccountID == "" {
+		return nil, errors.New("service account ID is missing")
+	}
+	if r.ServiceAuthRequests == nil {
+		return nil, errors.New("service auth requests interface is not defined")
+	}
+
+	body := r.ServiceAuthRequests.BuildRequestAuthBody()
+	body["account_id"] = r.ServiceAccountID
+	body["app_id"] = appID
+	body["org_id"] = orgID
+
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request body to get access token: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", r.AuthServicesHost+r.AccessTokenPath, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get access token: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	err = r.ServiceAuthRequests.ModifyRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("error modifying request to get access token: %v", err)
+	}
+
+	return req, nil
+}
+
+// BuildAccessTokensRequest returns a HTTP request to get all allowed access tokens using a static token
+func (r RemoteAuthDataLoaderConfig) BuildAccessTokensRequest() (*http.Request, error) {
+	if r.AuthServicesHost == "" {
+		return nil, errors.New("host is missing")
+	}
+	if r.AccessTokenPath == "" {
+		return nil, errors.New("path is missing")
+	}
+	if r.ServiceAccountID == "" {
+		return nil, errors.New("service account ID is missing")
+	}
+	if r.ServiceAuthRequests == nil {
+		return nil, errors.New("service auth requests interface is not defined")
+	}
+
+	body := r.ServiceAuthRequests.BuildRequestAuthBody()
+	body["account_id"] = r.ServiceAccountID
+
+	data, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling request body to get access tokens: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", r.AuthServicesHost+r.AccessTokensPath, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error formatting request to get access tokens: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	err = r.ServiceAuthRequests.ModifyRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("error modifying request to get access token: %v", err)
+	}
+
+	return req, nil
+}
+
+type ServiceAuthRequests interface {
+	BuildRequestAuthBody() map[string]interface{} // Construct auth fields for service account request bodies
+	ModifyRequest(req *http.Request) error        // Performs any auth type specific modifications to the request and returns any errors that occur
+}
+
+type StaticTokenServiceAuth struct {
+	ServiceToken string // Static token issued by the auth service, used to get access tokens from the auth service
+}
+
+// BuildRequestAuthBody returns a map containing the auth fields for static token auth request bodies
+func (s StaticTokenServiceAuth) BuildRequestAuthBody() map[string]interface{} {
+	return map[string]interface{}{
+		"auth_type": "static_token",
+		"creds": map[string]string{
+			"token": s.ServiceToken,
+		},
+	}
+}
+
+// ModifyRequest leaves the passed request unmodified for static token auth
+func (s StaticTokenServiceAuth) ModifyRequest(req *http.Request) error {
+	return nil
+}
+
+// NewStaticTokenServiceAuth creates a new StaticTokenServiceAuth instance
+func NewStaticTokenServiceAuth(serviceToken string) (*StaticTokenServiceAuth, error) {
+	if serviceToken == "" {
+		return nil, fmt.Errorf("missing service token")
+	}
+	return &StaticTokenServiceAuth{ServiceToken: serviceToken}, nil
 }
 
 // AppOrgPair represents application organization pair access granted by a remote auth service
@@ -363,7 +506,10 @@ type accessTokensResponse struct {
 
 // GetServiceAccountParams implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetServiceAccountParams() error {
-	req, err := r.config.ServiceAccountParamsRequestFunc(r.config.AuthServicesHost, r.config.ServiceAccountParamsPath, r.config.ServiceAccountID, r.config.ServiceToken)
+	if r.config == nil {
+		return fmt.Errorf("auth data loader is not configured")
+	}
+	req, err := r.config.BuildServiceAccountParamsRequest()
 	if err != nil {
 		return fmt.Errorf("error creating service account params request: %v", err)
 	}
@@ -398,8 +544,10 @@ func (r *RemoteAuthDataLoaderImpl) GetServiceAccountParams() error {
 
 // GetAccessToken implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID string, orgID string) error {
-	req, err := r.config.AccessTokenRequestFunc(r.config.AuthServicesHost, r.config.AccessTokenPath,
-		r.config.ServiceAccountID, r.config.ServiceToken, authutils.StringOrNil(appID, "all"), authutils.StringOrNil(orgID, "all"))
+	if r.config == nil {
+		return fmt.Errorf("auth data loader is not configured")
+	}
+	req, err := r.config.BuildAccessTokenRequest(authutils.StringOrNil(appID, "all"), authutils.StringOrNil(orgID, "all"))
 	if err != nil {
 		return fmt.Errorf("error creating access token request: %v", err)
 	}
@@ -434,7 +582,10 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID string, orgID string) er
 
 // GetAccessTokens implements AuthDataLoader interface
 func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() error {
-	req, err := r.config.AccessTokensRequestFunc(r.config.AuthServicesHost, r.config.AccessTokensPath, r.config.ServiceAccountID, r.config.ServiceToken)
+	if r.config == nil {
+		return fmt.Errorf("auth data loader is not configured")
+	}
+	req, err := r.config.BuildAccessTokensRequest()
 	if err != nil {
 		return fmt.Errorf("error creating access tokens request: %v", err)
 	}
@@ -771,19 +922,6 @@ func constructDataLoaderConfig(config *RemoteAuthDataLoaderConfig, firstParty bo
 	}
 	if config.ServiceRegPath == "" {
 		config.ServiceRegPath = pathPrefix + "/service-regs"
-	}
-
-	requiresAccessToken := (config.DeletedAccountsCallback != nil)
-	if requiresAccessToken {
-		if config.ServiceAccountParamsRequestFunc == nil {
-			config.ServiceAccountParamsRequestFunc = authutils.BuildDefaultServiceAccountParamsRequest
-		}
-		if config.AccessTokenRequestFunc == nil {
-			config.AccessTokenRequestFunc = authutils.BuildDefaultAccessTokenRequest
-		}
-		if config.AccessTokensRequestFunc == nil {
-			config.AccessTokensRequestFunc = authutils.BuildDefaultAccessTokensRequest
-		}
 	}
 
 	if config.DeletedAccountsCallback != nil {

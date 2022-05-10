@@ -15,16 +15,13 @@
 package authutils
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"net/http"
 )
 
 // ContainsString returns true if the provided value is in the provided slice
@@ -96,100 +93,6 @@ func HashSha256(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("error writing data: %v", err)
 	}
 	return hasher.Sum(nil), nil
-}
-
-// BuildDefaultServiceAccountParamsRequest returns a HTTP request to get service account params using a static token
-func BuildDefaultServiceAccountParamsRequest(host string, path string, id string, token string) (*http.Request, error) {
-	if token == "" {
-		return nil, errors.New("service token is missing")
-	}
-
-	params := map[string]interface{}{
-		"auth_type": "static_token",
-		"creds": map[string]string{
-			"token": token,
-		},
-	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
-	}
-
-	r, err := http.NewRequest("POST", host+path+"/"+id, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	return r, nil
-}
-
-// BuildDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
-func BuildDefaultAccessTokenRequest(host string, path string, id string, token string, appID *string, orgID *string) (*http.Request, error) {
-	if token == "" {
-		return nil, errors.New("service token is missing")
-	}
-
-	params := map[string]interface{}{
-		"account_id": id,
-		"app_id":     appID,
-		"org_id":     orgID,
-		"auth_type":  "static_token",
-		"creds": map[string]string{
-			"token": token,
-		},
-	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling request body to get access token: %v", err)
-	}
-
-	r, err := http.NewRequest("POST", host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get access token: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	return r, nil
-}
-
-// BuildDefaultAccessTokensRequest returns a HTTP request to get all allowed access tokens using a static token
-func BuildDefaultAccessTokensRequest(host string, path string, id string, token string) (*http.Request, error) {
-	if host == "" {
-		return nil, errors.New("host is missing")
-	}
-	if path == "" {
-		return nil, errors.New("path is missing")
-	}
-	if id == "" {
-		return nil, errors.New("service account ID is missing")
-	}
-	if token == "" {
-		return nil, errors.New("service token is missing")
-	}
-
-	params := map[string]interface{}{
-		"account_id": id,
-		"auth_type":  "static_token",
-		"creds": map[string]string{
-			"token": token,
-		},
-	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling request body to get access tokens: %v", err)
-	}
-
-	r, err := http.NewRequest("POST", host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get access tokens: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	return r, nil
 }
 
 // StringOrNil returns a pointer to a non-empty string or nil if it matches nilCase

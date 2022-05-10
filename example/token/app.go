@@ -110,12 +110,17 @@ func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 
 func main() {
 	serviceID := "sample"
+
+	staticTokenAuth, err := authservice.NewStaticTokenServiceAuth("sample_token")
+	if err != nil {
+		log.Fatalf("Error initializing static token auth: %v", err)
+	}
+
 	// Instantiate a remote AuthDataLoader to load auth service registration record from auth service
 	config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost: "https://auth.rokwire.com/services",
-		ServiceToken:     "sample_token",
-
+		AuthServicesHost:        "https://auth.rokwire.com/services",
 		DeletedAccountsCallback: printDeletedAccountIDs,
+		ServiceAuthRequests:     staticTokenAuth,
 	}
 	logger := logs.NewLogger("example", nil)
 	dataLoader, err := authservice.NewRemoteAuthDataLoader(&config, nil, true, logger)

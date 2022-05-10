@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -225,113 +224,22 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 	return sigString, sigAuthHeader, nil
 }
 
-// BuildServiceAccountParamsRequest builds a signed request to get service account params from an auth service
-func (s *SignatureAuth) BuildServiceAccountParamsRequest(host string, path string, id string, _ string) (*http.Request, error) {
-	if host == "" {
-		return nil, errors.New("host is missing")
-	}
-	if path == "" {
-		return nil, errors.New("path is missing")
-	}
-	if id == "" {
-		return nil, errors.New("service account ID is missing")
-	}
+// Implement ServiceAuthRequests interface
 
-	params := map[string]interface{}{
+// BuildRequestAuthBody returns a map containing the auth fields for static token auth request bodies
+func (s SignatureAuth) BuildRequestAuthBody() map[string]interface{} {
+	return map[string]interface{}{
 		"auth_type": "signature",
 	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling request body to get service account params: %v", err)
-	}
-
-	r, err := http.NewRequest("POST", host+path+"/"+id, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get service account params: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	err = s.SignRequest(r)
-	if err != nil {
-		return nil, fmt.Errorf("error signing request for get service account params: %v", err)
-	}
-
-	return r, nil
 }
 
-// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, id string, _ string, appID *string, orgID *string) (*http.Request, error) {
-	if host == "" {
-		return nil, errors.New("host is missing")
-	}
-	if path == "" {
-		return nil, errors.New("path is missing")
-	}
-	if id == "" {
-		return nil, errors.New("service account ID is missing")
-	}
-
-	params := map[string]interface{}{
-		"account_id": id,
-		"app_id":     appID,
-		"org_id":     orgID,
-		"auth_type":  "signature",
-	}
-	data, err := json.Marshal(params)
+// ModifyRequest signs the passed request to perform signature auth
+func (s SignatureAuth) ModifyRequest(req *http.Request) error {
+	err := s.SignRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
+		return fmt.Errorf("error signing request for get service account params: %v", err)
 	}
-
-	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request for get access token: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	err = s.SignRequest(r)
-	if err != nil {
-		return nil, fmt.Errorf("error signing request for get access token: %v", err)
-	}
-
-	return r, nil
-}
-
-// BuildAccessTokensRequest builds a signed request to get all allowed access tokens
-func (s *SignatureAuth) BuildAccessTokensRequest(host string, path string, id string, _ string) (*http.Request, error) {
-	if host == "" {
-		return nil, errors.New("host is missing")
-	}
-	if path == "" {
-		return nil, errors.New("path is missing")
-	}
-	if id == "" {
-		return nil, errors.New("service account ID is missing")
-	}
-
-	params := map[string]interface{}{
-		"account_id": id,
-		"auth_type":  "signature",
-	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
-	}
-
-	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request for get access token: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	err = s.SignRequest(r)
-	if err != nil {
-		return nil, fmt.Errorf("error signing request for get access token: %v", err)
-	}
-
-	return r, nil
+	return nil
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance

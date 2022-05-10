@@ -130,11 +130,11 @@ func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
 	services := []string{}
+
 	// Instantiate a remote AuthDataLoader to load service registration records from auth service
 	config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost: "http://localhost/core",
-		ServiceToken:     "sample_token",
-		// DeletedAccountsCallback: printDeletedAccountIDs,
+		AuthServicesHost:        "http://localhost/core",
+		DeletedAccountsCallback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger("example", nil)
 	dataLoader, err := authservice.NewRemoteAuthDataLoader(&config, services, true, logger)
@@ -157,6 +157,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}
+	config.ServiceAuthRequests = signatureAuth
 
 	// Instantiate and start a new WebAdapter
 	adapter := NewWebAdapter(signatureAuth)
