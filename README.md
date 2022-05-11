@@ -26,24 +26,30 @@ import (
 )
 
 func main() {
-	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("https://rokwire.illinois.edu/auth", "", []string{"auth"}, true)
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from service registration host
+	salConfig := authservice.RemoteServiceRegLoaderConfig{
+		ServiceRegHost: "https://rokwire.illinois.edu/auth",
+	}
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(salConfig, []string{"auth"}, true)
 	if err != nil {
 		log.Fatalf("Error initializing remote service reg loader: %v", err)
 	}
 
-	// Instantiate a remote ServiceAccountLoader to load auth service account-related data from auth service
-    serviceAccountLoaderConfig := authservice.RemoteServiceAccountLoaderConfig{
-		ServiceToken:     "sample_token",
-	}
-	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader("https://rokwire.illinois.edu/auth", serviceAccountLoaderConfig, true)
+	// Instantiate a ServiceRegManager to manage the service registration data loaded by serviceRegLoader
+	serviceRegManager, err := authservice.NewServiceRegManager("sample", "https://rokwire.illinois.edu/sample", serviceRegLoader)
 	if err != nil {
-		log.Fatalf("Error initializing remote service account loader: %v", err)
+		log.Fatalf("Error initializing service reg manager: %v", err)
 	}
 
-	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", serviceRegLoader, serviceAccountLoader)
+	// Instantiate a remote ServiceAccountManager to load auth service account-related data from service account host
+    samConfig := authservice.RemoteServiceAccountManagerConfig{
+		ServiceAccountHost: "https://rokwire.illinois.edu/auth",
+		AccountID:          "accountID",
+		Token:              "sampleToken",
+	}
+	serviceAccountManager, err := authservice.NewRemoteServiceAccountManager(serviceAccountLoaderConfig, true)
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing remote service account manager: %v", err)
 	}
 
     ...
@@ -56,10 +62,14 @@ To update core-auth-library-go to the latest version, use `go get -u github.com/
 
 ### Migration steps
 #### Unreleased
-The `AuthDataLoader` interface has been removed. To create an `AuthService`, a `ServiceRegLoader` or a `ServiceAccountLoader` must be created. The `ServiceRegLoader` is used to manage service registration records retrieved from an auth service, and the `ServiceAccountLoader` is used to retrieve access tokens from an auth service where the implementing service holds an account. It is not required to implement both of these interfaces to create an `AuthService`. See above for an example of how to use the new interfaces to create an `AuthService`.
+The `AuthDataLoader` interface has been removed and the `AuthService` struct has been refactored to the `ServiceRegManager`. To create a `ServiceRegManager`, a `ServiceRegLoader` must be created. The `ServiceRegLoader` is used to load service registration records retrieved from a service registration host, which are managed by the `ServiceRegManager`.
+
+The `ServiceAccountManager` has been added. It is used to retrieve access tokens from a service account host, where the implementing service holds an account.
+
+See above for an example of how to instantiate structs which implement these interfaces by interacting with remote hosts.
 
 ## ROKWIRE Auth Service
-The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block). 
+The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block).
 
 ## Packages
 This library contains several packages:

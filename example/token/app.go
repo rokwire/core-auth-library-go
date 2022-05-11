@@ -104,14 +104,20 @@ func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 
 func main() {
 	serviceID := ""
-	// Instantiate a remote ServiceRegManager to load auth service registration record from auth service
-	config := authservice.RemoteServiceRegManagerConfig{
+
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	config := authservice.RemoteServiceRegLoaderConfig{
 		ServiceRegHost: "http://localhost/core",
-		ServiceID:      serviceID,
 	}
-	serviceRegManager, err := authservice.NewRemoteServiceRegManager(config, "http://localhost:5000", []string{"auth"}, false)
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(config, []string{"auth"}, true)
 	if err != nil {
-		log.Fatalf("Error initializing remote service registration manager: %v", err)
+		log.Fatalf("Error initializing remote service registration loader: %v", err)
+	}
+
+	// Instantiate a ServiceRegManager to manage service registration records
+	serviceRegManager, err := authservice.NewServiceRegManager(serviceID, "http://localhost:5000", serviceRegLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
 
 	permissionAuth := authorization.NewCasbinStringAuthorization("./permissions_authorization_policy.csv")

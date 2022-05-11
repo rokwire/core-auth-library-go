@@ -62,7 +62,7 @@ type Claims struct {
 
 // TokenAuth contains configurations and helper functions required to validate tokens
 type TokenAuth struct {
-	serviceRegManager   authservice.ServiceRegManager
+	serviceRegManager   *authservice.ServiceRegManager
 	acceptRokwireTokens bool
 
 	permissionAuth authorization.Authorization
@@ -315,7 +315,11 @@ func (t *TokenAuth) SetBlacklistSize(size int) {
 
 // NewTokenAuth creates and configures a new TokenAuth instance
 // authorization maybe nil if performing manual authorization
-func NewTokenAuth(acceptRokwireTokens bool, serviceRegManager authservice.ServiceRegManager, permissionAuth authorization.Authorization, scopeAuth authorization.Authorization) (*TokenAuth, error) {
+func NewTokenAuth(acceptRokwireTokens bool, serviceRegManager *authservice.ServiceRegManager, permissionAuth authorization.Authorization, scopeAuth authorization.Authorization) (*TokenAuth, error) {
+	if serviceRegManager == nil {
+		return nil, errors.New("service registration manager is missing")
+	}
+
 	serviceRegManager.SubscribeServices([]string{"auth"}, true)
 
 	blLock := &sync.RWMutex{}

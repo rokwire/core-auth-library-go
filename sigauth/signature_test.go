@@ -34,11 +34,11 @@ import (
 )
 
 func setupTestSignatureAuth(mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+	manager, err := testutils.SetupTestServiceRegManager(mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), auth, true)
+	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), manager, true)
 }
 
 func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.ServiceRegLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
@@ -46,11 +46,11 @@ func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.ServiceRegLoader, privK
 		return nil, errors.New("private key is nil")
 	}
 
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+	manager, err := testutils.SetupTestServiceRegManager(mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(privKey, auth, true)
+	return sigauth.NewSignatureAuth(privKey, manager, true)
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {

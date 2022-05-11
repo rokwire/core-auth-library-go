@@ -55,12 +55,12 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := testutils.SetupTestAuthService(testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil))
-			if err != nil || a == nil {
+			m, err := testutils.SetupTestServiceRegManager(testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil))
+			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			got, err := a.GetServiceReg(tt.args.id)
+			got, err := m.GetServiceReg(tt.args.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.GetServiceReg() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -96,12 +96,12 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := testutils.SetupTestAuthService(testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil))
-			if err != nil || a == nil {
+			m, err := testutils.SetupTestServiceRegManager(testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil))
+			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			got, err := a.GetServiceRegWithPubKey(tt.args.id)
+			got, err := m.GetServiceRegWithPubKey(tt.args.id)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.GetServiceRegWithPubKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -135,12 +135,12 @@ func TestAuthService_SubscribeServices(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil)
-			a, err := testutils.SetupTestAuthService(mockLoader)
-			if err != nil || a == nil {
+			m, err := testutils.SetupTestServiceRegManager(mockLoader)
+			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			a.SubscribeServices(tt.args.serviceIDs, tt.args.reload)
+			m.SubscribeServices(tt.args.serviceIDs, tt.args.reload)
 			subscriptions := mockLoader.GetSubscribedServices()
 			for _, val := range tt.args.serviceIDs {
 				if !authutils.ContainsString(subscriptions, val) {
@@ -180,12 +180,12 @@ func TestAuthService_ValidateServiceRegistration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, tt.loadServicesResp, nil)
-			a, err := testutils.SetupTestAuthService(mockLoader)
-			if err != nil || a == nil {
+			m, err := testutils.SetupTestServiceRegManager(mockLoader)
+			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			if err := a.ValidateServiceRegistration(tt.args.serviceHost); (err != nil) != tt.wantErr {
+			if err := m.ValidateServiceRegistration(tt.args.serviceHost); (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.ValidateServiceRegistration() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -240,12 +240,12 @@ LrSVbitnfQD1AgMBAAE=
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, tt.loadServicesResp, nil)
-			a, err := testutils.SetupTestAuthService(mockLoader)
-			if err != nil || a == nil {
+			m, err := testutils.SetupTestServiceRegManager(mockLoader)
+			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			if err := a.ValidateServiceRegistrationKey(tt.args.privKey); (err != nil) != tt.wantErr {
+			if err := m.ValidateServiceRegistrationKey(tt.args.privKey); (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.ValidateServiceRegistrationKey() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

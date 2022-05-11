@@ -34,13 +34,13 @@ import (
 )
 
 func setupTestTokenAuth(acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) (*tokenauth.TokenAuth, error) {
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+	manager, err := testutils.SetupTestServiceRegManager(mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
 	permissionAuth := authorization.NewCasbinStringAuthorization("./test_permissions_authorization_policy.csv")
 	scopeAuth := authorization.NewCasbinScopeAuthorization("./test_scope_authorization_policy.csv", "sample")
-	return tokenauth.NewTokenAuth(acceptRokwire, auth, permissionAuth, scopeAuth)
+	return tokenauth.NewTokenAuth(acceptRokwire, manager, permissionAuth, scopeAuth)
 }
 
 func generateTestToken(claims *tokenauth.Claims, key *rsa.PrivateKey) (string, error) {

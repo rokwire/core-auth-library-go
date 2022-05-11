@@ -37,7 +37,7 @@ import (
 
 // SignatureAuth contains configurations and helper functions required to validate signatures
 type SignatureAuth struct {
-	serviceRegManager authservice.ServiceRegManager
+	serviceRegManager *authservice.ServiceRegManager
 
 	serviceKey *rsa.PrivateKey
 }
@@ -262,7 +262,7 @@ func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, accoun
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey *rsa.PrivateKey, serviceRegManager authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey *rsa.PrivateKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
 	if serviceRegManager == nil {
 		return nil, errors.New("service registration manager is missing")
 	}
