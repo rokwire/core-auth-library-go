@@ -36,6 +36,20 @@ func (_m *ServiceRegManager) LoadServices() ([]authservice.ServiceReg, error) {
 	return r0, r1
 }
 
+// ServiceID provides a mock function with given fields:
+func (_m *ServiceRegManager) ServiceID() string {
+	ret := _m.Called()
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func() string); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 func NewServiceRegManager(subscribedServices []string) *ServiceRegManager {
 	subscriptions := authservice.NewServiceRegSubscriptions(subscribedServices)
 	return &ServiceRegManager{ServiceRegSubscriptions: subscriptions}

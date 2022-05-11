@@ -147,6 +147,9 @@ type ServiceRegManager interface {
 	// UnsubscribeService unsubscribes the manager from the given service
 	// 	Returns true if the specified service was removed or false if it was not found
 	UnsubscribeService(serviceID string) bool
+
+	// ServiceID returns the ID of the service using the manager
+	ServiceID() string
 }
 
 //RemoteServiceRegManagerImpl provides a ServiceRegManager implementation for a remote service registration host
@@ -169,6 +172,11 @@ type RemoteServiceRegManagerConfig struct {
 
 	MinRefreshCacheFreq uint // Minimum frequency at which cached service registration records are refreshed (minutes)
 	MaxRefreshCacheFreq uint // Maximum frequency at which cached service registration records are refreshed (minutes)
+}
+
+// ServiceID implements ServiceRegManager interface
+func (r *RemoteServiceRegManagerImpl) ServiceID() string {
+	return r.config.ServiceID
 }
 
 // LoadServices implements ServiceRegManager interface

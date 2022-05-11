@@ -103,23 +103,21 @@ func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 }
 
 func main() {
-	serviceID := "sample"
-	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader("http://localhost/core", "", []string{"auth"}, false)
-	if err != nil {
-		log.Fatalf("Error initializing remote service reg loader: %v", err)
+	serviceID := ""
+	// Instantiate a remote ServiceRegManager to load auth service registration record from auth service
+	config := authservice.RemoteServiceRegManagerConfig{
+		ServiceRegHost: "http://localhost/core",
+		ServiceID:      serviceID,
 	}
-
-	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService(serviceID, "http://localhost:5000", serviceRegLoader, nil)
+	serviceRegManager, err := authservice.NewRemoteServiceRegManager(config, "http://localhost:5000", []string{"auth"}, false)
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing remote service registration manager: %v", err)
 	}
 
 	permissionAuth := authorization.NewCasbinStringAuthorization("./permissions_authorization_policy.csv")
 	scopeAuth := authorization.NewCasbinScopeAuthorization("./scope_authorization_policy.csv", serviceID)
 	// Instantiate TokenAuth instance to perform token validation
-	tokenAuth, err := tokenauth.NewTokenAuth(true, authService, permissionAuth, scopeAuth)
+	tokenAuth, err := tokenauth.NewTokenAuth(true, serviceRegManager, permissionAuth, scopeAuth)
 	if err != nil {
 		log.Fatalf("Error intitializing token auth: %v", err)
 	}
