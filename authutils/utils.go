@@ -94,19 +94,3 @@ func HashSha256(data []byte) ([]byte, error) {
 	}
 	return hasher.Sum(nil), nil
 }
-
-// StringOrNil returns a pointer to a non-empty string or nil if it matches nilCase
-func StringOrNil(v string, nilCase string) *string {
-	if v != nilCase {
-		return &v
-	}
-	return nil
-}
-
-// StringOrDefault returns the contents of a string pointer or defaultVal if nil
-func StringOrDefault(v *string, defaultVal string) string {
-	if v != nil {
-		return *v
-	}
-	return defaultVal
-}

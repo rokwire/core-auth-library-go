@@ -3,7 +3,10 @@
 package mocks
 
 import (
+	http "net/http"
+
 	authservice "github.com/rokwire/core-auth-library-go/authservice"
+
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -41,20 +44,6 @@ func (_m *AuthDataLoader) GetAccessTokens() error {
 	return r0
 }
 
-// GetServiceAccountParams provides a mock function with given fields:
-func (_m *AuthDataLoader) GetServiceAccountParams() error {
-	ret := _m.Called()
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func() error); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // LoadServices provides a mock function with given fields:
 func (_m *AuthDataLoader) LoadServices() ([]authservice.ServiceReg, error) {
 	ret := _m.Called()
@@ -78,22 +67,22 @@ func (_m *AuthDataLoader) LoadServices() ([]authservice.ServiceReg, error) {
 	return r0, r1
 }
 
-// MakeRequest provides a mock function with given fields: requestFunc, appOrgPair, retryString, updateTokenIfNeeded
-func (_m *AuthDataLoader) MakeRequest(requestFunc func(authservice.AppOrgPair, authservice.AccessToken) (interface{}, error), appOrgPair authservice.AppOrgPair, retryString string, updateTokenIfNeeded bool) (interface{}, error) {
-	ret := _m.Called(requestFunc, appOrgPair, retryString, updateTokenIfNeeded)
+// MakeRequest provides a mock function with given fields: req, appID, orgID
+func (_m *AuthDataLoader) MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error) {
+	ret := _m.Called(req, appID, orgID)
 
-	var r0 interface{}
-	if rf, ok := ret.Get(0).(func(func(authservice.AppOrgPair, authservice.AccessToken) (interface{}, error), authservice.AppOrgPair, string, bool) interface{}); ok {
-		r0 = rf(requestFunc, appOrgPair, retryString, updateTokenIfNeeded)
+	var r0 *http.Response
+	if rf, ok := ret.Get(0).(func(*http.Request, string, string) *http.Response); ok {
+		r0 = rf(req, appID, orgID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(interface{})
+			r0 = ret.Get(0).(*http.Response)
 		}
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(func(authservice.AppOrgPair, authservice.AccessToken) (interface{}, error), authservice.AppOrgPair, string, bool) error); ok {
-		r1 = rf(requestFunc, appOrgPair, retryString, updateTokenIfNeeded)
+	if rf, ok := ret.Get(1).(func(*http.Request, string, string) error); ok {
+		r1 = rf(req, appID, orgID)
 	} else {
 		r1 = ret.Error(1)
 	}
