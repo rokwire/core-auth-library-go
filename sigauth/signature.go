@@ -117,7 +117,11 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	sigAuthHeader := SignatureAuthHeader{KeyId: s.serviceRegManager.AuthService.ServiceID, Algorithm: "rsa-sha256", Headers: headers}
+	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
+	if err != nil {
+		return fmt.Errorf("error getting service key fingerprint: %v", err)
+	}
+	sigAuthHeader := SignatureAuthHeader{KeyId: serviceKeyFingerprint, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -155,6 +159,7 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", err
 	}
 
+	//TODO: KeyIDs should not be serviceIDs
 	if requiredServiceIDs != nil && !authutils.ContainsString(requiredServiceIDs, sigAuthHeader.KeyId) {
 		return "", fmt.Errorf("request signer (%s) is not one of the required services %v", sigAuthHeader.KeyId, requiredServiceIDs)
 	}
