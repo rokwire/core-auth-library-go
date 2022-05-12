@@ -125,17 +125,22 @@ func main() {
 	// 	that this service will receive signed requests from.
 	services := []string{"auth"}
 
-	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
-	config := authservice.RemoteServiceRegLoaderConfig{
-		ServiceRegHost: "http://localhost/core",
+	// Instantiate an AuthService to maintain basic auth data
+	authService := authservice.AuthService{
+		ServiceID:   "example",
+		ServiceHost: "http://localhost:5000",
+		FirstParty:  true,
+		AuthBaseURL: "http://localhost/core",
 	}
-	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(config, services, true)
+
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(&authService, services)
 	if err != nil {
 		log.Fatalf("Error initializing remote service registration loader: %v", err)
 	}
 
 	// Instantiate a ServiceRegManager to manage service registration records
-	serviceRegManager, err := authservice.NewServiceRegManager("example", "http://localhost:5000", serviceRegLoader)
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
 	if err != nil {
 		log.Fatalf("Error initializing service registration manager: %v", err)
 	}

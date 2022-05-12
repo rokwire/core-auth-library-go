@@ -33,8 +33,8 @@ import (
 	"github.com/rokwire/core-auth-library-go/tokenauth"
 )
 
-func setupTestTokenAuth(acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) (*tokenauth.TokenAuth, error) {
-	manager, err := testutils.SetupTestServiceRegManager(mockLoader)
+func setupTestTokenAuth(authService *authservice.AuthService, acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) (*tokenauth.TokenAuth, error) {
+	manager, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
@@ -78,7 +78,8 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
@@ -146,8 +147,8 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
-			tr, err := setupTestTokenAuth(tt.acceptRokwire, mockLoader)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			tr, err := setupTestTokenAuth(authService, tt.acceptRokwire, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
@@ -169,7 +170,8 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 }
 
 func TestTokenAuth_CheckRequestTokens(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: nil}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
@@ -187,8 +189,8 @@ func TestTokenAuth_CheckRequestTokens(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
-			tr, err := setupTestTokenAuth(true, mockLoader)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			tr, err := setupTestTokenAuth(authService, true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
@@ -206,6 +208,8 @@ func TestTokenAuth_CheckRequestTokens(t *testing.T) {
 }
 
 func TestTokenAuth_ValidateCsrfTokenClaims(t *testing.T) {
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+
 	type args struct {
 		accessClaims *tokenauth.Claims
 		csrfClaims   *tokenauth.Claims
@@ -219,7 +223,7 @@ func TestTokenAuth_ValidateCsrfTokenClaims(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tr, err := setupTestTokenAuth(true, nil)
+			tr, err := setupTestTokenAuth(authService, true, nil)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
@@ -232,6 +236,8 @@ func TestTokenAuth_ValidateCsrfTokenClaims(t *testing.T) {
 }
 
 func TestTokenAuth_ValidatePermissionsClaim(t *testing.T) {
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+
 	type args struct {
 		claims              *tokenauth.Claims
 		requiredPermissions []string
@@ -245,7 +251,7 @@ func TestTokenAuth_ValidatePermissionsClaim(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tr, err := setupTestTokenAuth(true, nil)
+			tr, err := setupTestTokenAuth(authService, true, nil)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
@@ -258,6 +264,8 @@ func TestTokenAuth_ValidatePermissionsClaim(t *testing.T) {
 }
 
 func TestTokenAuth_ValidateScopeClaim(t *testing.T) {
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+
 	type args struct {
 		claims        *tokenauth.Claims
 		requiredScope string
@@ -271,7 +279,7 @@ func TestTokenAuth_ValidateScopeClaim(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tr, err := setupTestTokenAuth(true, nil)
+			tr, err := setupTestTokenAuth(authService, true, nil)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
@@ -314,7 +322,8 @@ func TestGetRequestTokens(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
@@ -337,9 +346,9 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
 
-			tr, err := setupTestTokenAuth(true, mockLoader)
+			tr, err := setupTestTokenAuth(authService, true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
@@ -353,7 +362,8 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
@@ -382,8 +392,8 @@ func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegsValid, nil)
-			tr, err := setupTestTokenAuth(true, mockLoader)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			tr, err := setupTestTokenAuth(authService, true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return

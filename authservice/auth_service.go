@@ -31,25 +31,49 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 )
 
+// -------------------- AuthService --------------------
+
+// AuthService contains the configurations needed to interface with the auth service
+type AuthService struct {
+	ServiceID   string // ID of implementing service
+	ServiceHost string // Host of the implementing service
+	FirstParty  bool   // Whether the implementing service is a first party member of the ROKWIRE platform
+	AuthBaseURL string // Base URL where auth service resources are located
+}
+
+func checkAuthService(as *AuthService, requireBaseURL bool) error {
+	if as == nil {
+		return errors.New("auth service is missing")
+	}
+
+	if as.ServiceID == "" {
+		return errors.New("service ID is missing")
+	}
+	if as.ServiceHost == "" {
+		return errors.New("service host is missing")
+	}
+
+	if requireBaseURL && as.AuthBaseURL == "" {
+		return errors.New("auth base URL is missing")
+	}
+
+	return nil
+}
+
 // -------------------- ServiceRegManager --------------------
 
-// ServiceRegManager declares an interface to manage service registrations
+// ServiceRegManager declares an object to manage service registrations
 type ServiceRegManager struct {
-	serviceID string // ID of implementing service
+	AuthService *AuthService
 
 	services        *syncmap.Map
-	servicesUpdated *time.Time
+	servicesUpdated *time.Time // Most recent time the services cache was updated
 	servicesLock    *sync.RWMutex
 
 	minRefreshCacheFreq uint // Minimum refresh frequency for cached service registration records (minutes)
 	maxRefreshCacheFreq uint // Maximum refresh frequency for cached service registration records (minutes)
 
 	loader ServiceRegLoader
-}
-
-// ServiceID returns the ID of the service using the manager
-func (s *ServiceRegManager) ServiceID() string {
-	return s.serviceID
 }
 
 // GetServiceReg returns the service registration record for the given ID if found
@@ -144,14 +168,14 @@ func (s *ServiceRegManager) UnsubscribeServices(serviceIDs []string) {
 }
 
 // ValidateServiceRegistration validates that the implementing service has a valid registration for the provided hostname
-func (s *ServiceRegManager) ValidateServiceRegistration(serviceHost string) error {
-	service, err := s.GetServiceReg(s.serviceID)
+func (s *ServiceRegManager) ValidateServiceRegistration() error {
+	service, err := s.GetServiceReg(s.AuthService.ServiceID)
 	if err != nil || service == nil {
-		return fmt.Errorf("no service registration found with id %s: %v", s.serviceID, err)
+		return fmt.Errorf("no service registration found with id %s: %v", s.AuthService.ServiceID, err)
 	}
 
-	if serviceHost != service.Host {
-		return fmt.Errorf("service host (%s) does not match expected value (%s) for id %s", service.Host, serviceHost, s.serviceID)
+	if s.AuthService.ServiceHost != service.Host {
+		return fmt.Errorf("service host (%s) does not match expected value (%s) for id %s", service.Host, s.AuthService.ServiceHost, s.AuthService.ServiceID)
 	}
 
 	return nil
@@ -163,13 +187,13 @@ func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *rsa.PrivateK
 		return errors.New("provided priv key is nil")
 	}
 
-	service, err := s.GetServiceRegWithPubKey(s.serviceID)
+	service, err := s.GetServiceRegWithPubKey(s.AuthService.ServiceID)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
 	if service.PubKey.Key.Equal(privKey.PublicKey) {
-		return fmt.Errorf("service pub key does not match for id %s", s.serviceID)
+		return fmt.Errorf("service pub key does not match for id %s", s.AuthService.ServiceID)
 	}
 
 	return nil
@@ -225,10 +249,12 @@ func (s *ServiceRegManager) setServices(services []ServiceReg) {
 }
 
 // NewServiceRegManager creates and configures a new ServiceRegManager instance
-func NewServiceRegManager(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
-	if serviceID == "" {
-		return nil, errors.New("service ID is missing")
+func NewServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
+	err := checkAuthService(authService, false)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
 	}
+
 	if serviceRegLoader == nil {
 		return nil, errors.New("service registration loader is missing")
 	}
@@ -236,18 +262,18 @@ func NewServiceRegManager(serviceID string, serviceHost string, serviceRegLoader
 	lock := &sync.RWMutex{}
 	services := &syncmap.Map{}
 
-	manager := &ServiceRegManager{serviceID: serviceID, services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60,
+	manager := &ServiceRegManager{AuthService: authService, services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60,
 		loader: serviceRegLoader}
 
 	// Subscribe to the implementing service to validate registration
-	serviceRegLoader.SubscribeService(serviceID)
+	serviceRegLoader.SubscribeService(authService.ServiceID)
 
-	err := manager.LoadServices()
+	err = manager.LoadServices()
 	if err != nil {
 		return nil, fmt.Errorf("error loading services: %v", err)
 	}
 
-	err = manager.ValidateServiceRegistration(serviceHost)
+	err = manager.ValidateServiceRegistration()
 	if err != nil {
 		return nil, fmt.Errorf("unable to validate service registration: please contact the service registration system admin to register your service - %v", err)
 	}
@@ -256,10 +282,12 @@ func NewServiceRegManager(serviceID string, serviceHost string, serviceRegLoader
 }
 
 // NewTestServiceRegManager creates and configures a test ServiceRegManager instance
-func NewTestServiceRegManager(serviceID string, serviceHost string, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
-	if serviceID == "" {
-		return nil, errors.New("service ID is missing")
+func NewTestServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
+	err := checkAuthService(authService, false)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
 	}
+
 	if serviceRegLoader == nil {
 		return nil, errors.New("service registration loader is missing")
 	}
@@ -267,13 +295,13 @@ func NewTestServiceRegManager(serviceID string, serviceHost string, serviceRegLo
 	lock := &sync.RWMutex{}
 	services := &syncmap.Map{}
 
-	manager := &ServiceRegManager{serviceID: serviceID, services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60,
+	manager := &ServiceRegManager{AuthService: authService, services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60,
 		loader: serviceRegLoader}
 
 	// Subscribe to the implementing service to validate registration
-	serviceRegLoader.SubscribeService(serviceID)
+	serviceRegLoader.SubscribeService(authService.ServiceID)
 
-	err := manager.LoadServices()
+	err = manager.LoadServices()
 	if err != nil {
 		return nil, fmt.Errorf("error loading services: %v", err)
 	}
@@ -297,17 +325,13 @@ type ServiceRegLoader interface {
 	UnsubscribeService(serviceID string) bool
 }
 
-//RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote service registration host
+//RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
-	config RemoteServiceRegLoaderConfig
+	authService *AuthService
+
+	path string // Path to service registrations resource on the auth service
 
 	*ServiceRegSubscriptions
-}
-
-//RemoteServiceRegLoaderConfig represents a configuration for a remote service registration loader
-type RemoteServiceRegLoaderConfig struct {
-	ServiceRegHost string // URL of service registration host
-	Path           string // Path to service registration API
 }
 
 // LoadServices implements ServiceRegLoader interface
@@ -317,7 +341,7 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest("GET", r.config.ServiceRegHost+r.config.Path, nil)
+	req, err := http.NewRequest("GET", r.authService.AuthBaseURL+r.path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to load services: %v", err)
 	}
@@ -362,22 +386,20 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	return services, nil
 }
 
-// NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance for the provided config
-func NewRemoteServiceRegLoader(config RemoteServiceRegLoaderConfig, subscribedServices []string, firstParty bool) (*RemoteServiceRegLoaderImpl, error) {
-	if config.ServiceRegHost == "" {
-		return nil, errors.New("service registration host is missing")
+// NewRemoteServiceRegLoader creates and configures a new RemoteServiceRegLoaderImpl instance
+func NewRemoteServiceRegLoader(authService *AuthService, subscribedServices []string) (*RemoteServiceRegLoaderImpl, error) {
+	err := checkAuthService(authService, true)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
 	}
 
-	if config.Path == "" {
-		if firstParty {
-			config.Path = "bbs/service-regs"
-		} else {
-			config.Path = "tps/service-regs"
-		}
+	path := "tps/service-regs"
+	if authService.FirstParty {
+		path = "bbs/service-regs"
 	}
 
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
-	return &RemoteServiceRegLoaderImpl{config: config, ServiceRegSubscriptions: subscriptions}, nil
+	return &RemoteServiceRegLoaderImpl{authService: authService, path: path, ServiceRegSubscriptions: subscriptions}, nil
 }
 
 // -------------------- ServiceRegSubscriptions --------------------
@@ -433,7 +455,7 @@ func NewServiceRegSubscriptions(subscribedServices []string) *ServiceRegSubscrip
 
 // -------------------- ServiceAccountManager --------------------
 
-// ServiceAccountManager declares an interface to manage data retrieved from a service account host
+// ServiceAccountManager declares an interface to manage data retrieved from an auth service
 type ServiceAccountManager interface {
 	// GetAccessToken gets an access token
 	GetAccessToken() (*AccessToken, error)
@@ -441,20 +463,22 @@ type ServiceAccountManager interface {
 	CachedAccessToken() AccessToken
 }
 
-//RemoteServiceAccountManagerImpl provides a ServiceAccountManager implementation for a remote service account host
+//RemoteServiceAccountManagerImpl provides a ServiceAccountManager implementation for a remote auth service
 type RemoteServiceAccountManagerImpl struct {
+	AuthService *AuthService
+
 	accessToken AccessToken
+
+	accessTokenPath string // Path to service account access token API
 
 	config RemoteServiceAccountManagerConfig
 }
 
 //RemoteServiceAccountManagerConfig represents a configuration for a remote service account manager
 type RemoteServiceAccountManagerConfig struct {
-	ServiceAccountHost string // URL of service account host
-	AccountID          string // Service account ID on the service account host
-	Token              string // Static token issued by the service account host
+	AccountID string // Service account ID on the auth service
+	Token     string // Static token issued by the auth service
 
-	AccessTokenPath        string                                                      // Path to service account access token API
 	AccessTokenRequestFunc func(string, string, string, string) (*http.Request, error) // Function that builds access token request
 }
 
@@ -464,7 +488,7 @@ func (r *RemoteServiceAccountManagerImpl) GetAccessToken() (*AccessToken, error)
 		return nil, errors.New("access token request function is missing")
 	}
 
-	req, err := r.config.AccessTokenRequestFunc(r.config.ServiceAccountHost, r.config.AccessTokenPath, r.config.AccountID, r.config.Token)
+	req, err := r.config.AccessTokenRequestFunc(r.AuthService.AuthBaseURL, r.accessTokenPath, r.config.AccountID, r.config.Token)
 	if err != nil {
 		return nil, fmt.Errorf("error creating access token request: %v", err)
 	}
@@ -503,30 +527,29 @@ func (r *RemoteServiceAccountManagerImpl) CachedAccessToken() AccessToken {
 }
 
 // NewRemoteServiceAccountManager creates and configures a new RemoteServiceAccountManagerImpl instance for the provided config
-func NewRemoteServiceAccountManager(config RemoteServiceAccountManagerConfig, firstParty bool) (*RemoteServiceAccountManagerImpl, error) {
-	err := checkServiceAccountManagerConfig(&config, firstParty)
+func NewRemoteServiceAccountManager(authService *AuthService, config RemoteServiceAccountManagerConfig) (*RemoteServiceAccountManagerImpl, error) {
+	err := checkAuthService(authService, true)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
+	}
+
+	err = checkServiceAccountManagerConfig(&config)
 	if err != nil {
 		return nil, fmt.Errorf("error checking service account manager config: %v", err)
 	}
 
-	dataManager := RemoteServiceAccountManagerImpl{config: config}
+	accessTokenPath := "tps/access-token"
+	if authService.FirstParty {
+		accessTokenPath = "bbs/access-token"
+	}
+
+	dataManager := RemoteServiceAccountManagerImpl{AuthService: authService, accessTokenPath: accessTokenPath, config: config}
 	return &dataManager, nil
 }
 
-func checkServiceAccountManagerConfig(config *RemoteServiceAccountManagerConfig, firstParty bool) error {
-	if config.ServiceAccountHost == "" {
-		return errors.New("service account host is missing")
-	}
+func checkServiceAccountManagerConfig(config *RemoteServiceAccountManagerConfig) error {
 	if config.AccountID == "" {
 		return errors.New("service account ID is missing")
-	}
-
-	if config.AccessTokenPath == "" {
-		if firstParty {
-			config.AccessTokenPath = "/bbs/access-token"
-		} else {
-			config.AccessTokenPath = "/tps/access-token"
-		}
 	}
 
 	if config.AccessTokenRequestFunc == nil && config.Token != "" {
@@ -538,7 +561,7 @@ func checkServiceAccountManagerConfig(config *RemoteServiceAccountManagerConfig,
 
 // -------------------- AccessToken --------------------
 
-// AccessToken represents an access token granted by a remote service account host
+// AccessToken represents an access token granted by a remote auth service
 type AccessToken struct {
 	Token     string `json:"access_token"`
 	TokenType string `json:"token_type"`

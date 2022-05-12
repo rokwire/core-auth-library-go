@@ -121,8 +121,8 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	}
 
 	aud := strings.Split(claims.Audience, ",")
-	if !(authutils.ContainsString(aud, t.serviceRegManager.ServiceID()) || (t.acceptRokwireTokens && authutils.ContainsString(aud, AudRokwire))) {
-		acceptAuds := t.serviceRegManager.ServiceID()
+	if !(authutils.ContainsString(aud, t.serviceRegManager.AuthService.ServiceID) || (t.acceptRokwireTokens && authutils.ContainsString(aud, AudRokwire))) {
+		acceptAuds := t.serviceRegManager.AuthService.ServiceID
 		if t.acceptRokwireTokens {
 			acceptAuds += " or " + AudRokwire
 		}
@@ -268,7 +268,7 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 	}
 
 	scopes := strings.Split(claims.Scope, " ")
-	if authorization.CheckScopesGlobals(scopes, t.serviceRegManager.ServiceID()) {
+	if authorization.CheckScopesGlobals(scopes, t.serviceRegManager.AuthService.ServiceID) {
 		return nil
 	}
 

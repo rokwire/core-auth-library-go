@@ -34,7 +34,8 @@ func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {
 
 func TestAuthService_GetServiceReg(t *testing.T) {
 	authPubKey := testutils.GetSamplePubKey()
-	testServiceReg := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
 	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", authPubKey}
 
 	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
@@ -55,7 +56,7 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m, err := testutils.SetupTestServiceRegManager(testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil))
+			m, err := testutils.SetupTestServiceRegManager(authService, testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegs, nil))
 			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
@@ -74,7 +75,8 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 
 func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 	authPubKey := testutils.GetSamplePubKey()
-	testServiceReg := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
 	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", authPubKey}
 
 	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
@@ -96,7 +98,7 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m, err := testutils.SetupTestServiceRegManager(testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil))
+			m, err := testutils.SetupTestServiceRegManager(authService, testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegs, nil))
 			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
@@ -114,8 +116,9 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 }
 
 func TestAuthService_SubscribeServices(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", ServiceAccountID: "dec8d277-b775-47a2-b7b0-ce8482871b67", Host: "https://test.rokwire.com", PubKey: nil}
-	authServiceReg := authservice.ServiceReg{ServiceID: "auth", ServiceAccountID: "6050ec62-d552-4fed-b11f-15a01bb1afc1", Host: "https://auth.rokwire.com", PubKey: nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
+	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", nil}
 	serviceRegs := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
@@ -134,8 +137,8 @@ func TestAuthService_SubscribeServices(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, serviceRegs, nil)
-			m, err := testutils.SetupTestServiceRegManager(mockLoader)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegs, nil)
+			m, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
@@ -158,34 +161,34 @@ func TestAuthService_SubscribeServices(t *testing.T) {
 }
 
 func TestAuthService_ValidateServiceRegistration(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", ServiceAccountID: "dec8d277-b775-47a2-b7b0-ce8482871b67", Host: "https://test.rokwire.com", PubKey: nil}
-	authServiceReg := authservice.ServiceReg{ServiceID: "auth", ServiceAccountID: "6050ec62-d552-4fed-b11f-15a01bb1afc1", Host: "https://auth.rokwire.com", PubKey: nil}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
+	test2ServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test2.rokwire.com", nil}
+	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", nil}
+
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	serviceRegsMissing := []authservice.ServiceReg{authServiceReg}
+	serviceRegsInvalid := []authservice.ServiceReg{authServiceReg, test2ServiceReg}
 	subscribed := []string{"auth"}
 
-	type args struct {
-		serviceHost string
-	}
 	tests := []struct {
 		name             string
-		args             args
 		loadServicesResp []authservice.ServiceReg
 		wantErr          bool
 	}{
-		{"no error on registration found", args{"https://test.rokwire.com"}, serviceRegsValid, false},
-		{"error on registration not found", args{"https://test.rokwire.com"}, serviceRegsMissing, true},
-		{"error on wrong registration host", args{"https://test2.rokwire.com"}, serviceRegsValid, true},
+		{"no error on registration found", serviceRegsValid, false},
+		{"error on registration not found", serviceRegsMissing, true},
+		{"error on wrong registration host", serviceRegsInvalid, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, tt.loadServicesResp, nil)
-			m, err := testutils.SetupTestServiceRegManager(mockLoader)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, tt.loadServicesResp, nil)
+			m, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
 			}
-			if err := m.ValidateServiceRegistration(tt.args.serviceHost); (err != nil) != tt.wantErr {
+			if err := m.ValidateServiceRegistration(); (err != nil) != tt.wantErr {
 				t.Errorf("AuthService.ValidateServiceRegistration() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -208,9 +211,10 @@ LrSVbitnfQD1AgMBAAE=
 	wrongKey := setupPubKeyFromPem(wrongKeyPem)
 
 	wrongKey.LoadKeyFromPem()
-	testServiceReg := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", pubKey}
-	testServiceRegNoKey := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", nil}
-	testServiceRegWrongKey := authservice.ServiceReg{"test", "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test.rokwire.com", wrongKey}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, pubKey}
+	testServiceRegNoKey := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
+	testServiceRegWrongKey := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, wrongKey}
 
 	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", nil}
 
@@ -239,8 +243,8 @@ LrSVbitnfQD1AgMBAAE=
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(subscribed, tt.loadServicesResp, nil)
-			m, err := testutils.SetupTestServiceRegManager(mockLoader)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, tt.loadServicesResp, nil)
+			m, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 			if err != nil || m == nil {
 				t.Errorf("Error initializing test auth service: %v", err)
 				return
