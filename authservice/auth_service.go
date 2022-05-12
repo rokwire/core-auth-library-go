@@ -285,8 +285,6 @@ type AuthDataLoader interface {
 	GetAccessToken(appID string, orgID string) error
 	// GetAccessTokens get an access token for each app org pair a service account has access to
 	GetAccessTokens() error
-	// MakeRequest sends the provided HTTP request with the appropriate token, found using appID and orgID
-	MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error)
 	ServiceRegLoader
 }
 
@@ -295,9 +293,11 @@ type RemoteAuthDataLoaderImpl struct {
 	config *RemoteAuthDataLoaderConfig
 
 	accessTokens *syncmap.Map
+	appOrgPairs  []AppOrgPair
 
-	pairsLock   *sync.RWMutex
-	appOrgPairs []AppOrgPair
+	tokensLock          *sync.RWMutex
+	tokensUpdated       *time.Time
+	maxRefreshCacheFreq uint
 
 	timerDone               chan bool
 	getDeletedAccountsTimer *time.Timer
@@ -477,7 +477,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessToken(appID string, orgID string) er
 	if err != nil {
 		return fmt.Errorf("error sending access token request: %v", err)
 	}
-	body, err := r.parseResponse(resp)
+	body, err := r.ReadResponse(resp)
 	if err != nil {
 		return fmt.Errorf("error parsing access token response: %v", err)
 	}
@@ -508,7 +508,7 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() error {
 	if err != nil {
 		return fmt.Errorf("error sending access tokens request: %v", err)
 	}
-	body, err := r.parseResponse(resp)
+	body, err := r.ReadResponse(resp)
 	if err != nil {
 		return fmt.Errorf("error parsing access tokens response: %v", err)
 	}
@@ -520,8 +520,8 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() error {
 	}
 
 	r.accessTokens = &sync.Map{}
-	r.pairsLock.Lock()
-	defer r.pairsLock.Unlock()
+	r.tokensLock.Lock()
+	defer r.tokensLock.Unlock()
 
 	r.appOrgPairs = make([]AppOrgPair, len(accessTokens))
 	for i, res := range accessTokens {
@@ -531,6 +531,9 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() error {
 		r.accessTokens.Store(pair, res.AccessToken)
 	}
 
+	now := time.Now()
+	r.tokensUpdated = &now
+
 	return nil
 }
 
@@ -538,7 +541,19 @@ func (r *RemoteAuthDataLoaderImpl) GetAccessTokens() error {
 func (r *RemoteAuthDataLoaderImpl) MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error) {
 	token, appOrgPair := r.getCachedAccessToken(appID, orgID)
 	if token == nil || appOrgPair == nil {
-		return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
+		// check if tokens should be refreshed and get the new token if so
+		refreshed, err := r.checkForRefresh()
+		if err != nil {
+			return nil, fmt.Errorf("error checking access tokens refresh: %v", err)
+		}
+		if !refreshed {
+			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
+		}
+
+		token, appOrgPair = r.getCachedAccessToken(appID, orgID)
+		if token == nil || appOrgPair == nil {
+			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
+		}
 	}
 
 	req.Header.Set("Authorization", (*token).String())
@@ -570,7 +585,7 @@ func (r *RemoteAuthDataLoaderImpl) MakeRequest(req *http.Request, appID string, 
 	return resp, nil
 }
 
-//CachedAccessTokens returns a map containing all cached access tokens
+// CachedAccessTokens returns a map containing all cached access tokens
 func (r *RemoteAuthDataLoaderImpl) CachedAccessTokens() map[AppOrgPair]AccessToken {
 	tokens := make(map[AppOrgPair]AccessToken)
 	r.accessTokens.Range(func(key, item interface{}) bool {
@@ -592,12 +607,13 @@ func (r *RemoteAuthDataLoaderImpl) CachedAccessTokens() map[AppOrgPair]AccessTok
 	return tokens
 }
 
-//CachedAppOrgPairs returns the data loader's cached app org pairs
+// CachedAppOrgPairs returns the data loader's cached app org pairs
 func (r *RemoteAuthDataLoaderImpl) CachedAppOrgPairs() []AppOrgPair {
 	return r.appOrgPairs
 }
 
-func (r *RemoteAuthDataLoaderImpl) parseResponse(resp *http.Response) ([]byte, error) {
+// ReadResponse reads the body of a http.Response and returns it
+func (r *RemoteAuthDataLoaderImpl) ReadResponse(resp *http.Response) ([]byte, error) {
 	if resp == nil {
 		return nil, errors.New("response is nil")
 	}
@@ -684,7 +700,7 @@ func (r *RemoteAuthDataLoaderImpl) getDeletedAccountsAsync(appOrgPair AppOrgPair
 
 	if req, err = r.buildDeletedAccountsRequest(); err == nil {
 		if resp, err = r.MakeRequest(req, appOrgPair.AppID, appOrgPair.OrgID); err == nil {
-			if body, err = r.parseResponse(resp); err == nil {
+			if body, err = r.ReadResponse(resp); err == nil {
 				err = json.Unmarshal(body, &deleted)
 			}
 		}
@@ -744,6 +760,32 @@ func (r *RemoteAuthDataLoaderImpl) getDeletedAccounts(callback func([]string) er
 	}
 }
 
+// SetMaxRefreshCacheFreq sets the maximum frequency at which cached access tokens are refreshed in minutes
+// 	The default value is 30
+func (r *RemoteAuthDataLoaderImpl) SetMaxRefreshCacheFreq(freq uint) {
+	r.tokensLock.Lock()
+	r.maxRefreshCacheFreq = freq
+	r.tokensLock.Unlock()
+}
+
+//checkForRefresh checks if access tokens need to be reloaded
+func (r *RemoteAuthDataLoaderImpl) checkForRefresh() (bool, error) {
+	r.tokensLock.RLock()
+	tokensUpdated := r.tokensUpdated
+	maxRefreshFreq := r.maxRefreshCacheFreq
+	r.tokensLock.RUnlock()
+
+	now := time.Now()
+	if tokensUpdated == nil || now.Sub(*tokensUpdated).Minutes() > float64(maxRefreshFreq) {
+		err := r.GetAccessTokens()
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
 // NewRemoteAuthDataLoader creates and configures a new NewRemoteAuthDataLoaderImpl instance for the provided auth services url
 func NewRemoteAuthDataLoader(config *RemoteAuthDataLoaderConfig, subscribedServices []string, firstParty bool, logger *logs.Logger) (*RemoteAuthDataLoaderImpl, error) {
 	if config == nil {
@@ -760,11 +802,11 @@ func NewRemoteAuthDataLoader(config *RemoteAuthDataLoaderConfig, subscribedServi
 	accessTokens := &syncmap.Map{}
 
 	appOrgPairs := make([]AppOrgPair, 0)
-	pairsLock := &sync.RWMutex{}
+	lock := &sync.RWMutex{}
 
 	timerDone := make(chan bool)
 
-	dataLoader := RemoteAuthDataLoaderImpl{config: config, accessTokens: accessTokens, pairsLock: pairsLock,
+	dataLoader := RemoteAuthDataLoaderImpl{config: config, accessTokens: accessTokens, maxRefreshCacheFreq: 30, tokensLock: lock,
 		appOrgPairs: appOrgPairs, timerDone: timerDone, logger: logger, RemoteServiceRegLoaderImpl: serviceRegLoader}
 	serviceRegLoader.dataLoader = &dataLoader
 
