@@ -75,6 +75,10 @@ The `ServiceAccountManager` and `ServiceAccountLoader` types have been added. To
 
 See above for an example of how to create instances of these types to interact with a remote ROKWIRE Auth Service.
 
+The `coreservice` package has been added. It declares the `CoreService` type, which is used to interface with services on the [Core Building Block](https://github.com/rokwire/core-building-block). All deleted account-related functionality previously used by the `AuthDataLoader` interface has been moved to the `coreservice` package.
+
+The `KeyId` field in `sigauth.SignatureAuthHeader` is now called `KeyID`.
+
 ## ROKWIRE Auth Service
 The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block).
 
