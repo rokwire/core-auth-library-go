@@ -23,42 +23,71 @@ import (
   "github.com/rokwire/core-auth-library-go/authservice"
 )
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 func main() {
-    config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost: "https://rokwire.illinois.edu/auth",
-		ServiceToken:     "example_token",
-
-		DeletedAccountsCallback: printDeletedAccountIDs,
+	// Instantiate an AuthService to maintain basic auth data
+	authService := authservice.AuthService{
+		ServiceID:   "sample",
+		ServiceHost: "https://rokwire.illinois.edu/sample",
+		FirstParty:  true,
+		AuthBaseURL: "https://rokwire.illinois.edu/auth",
 	}
-	dataLoader := authservice.NewRemoteAuthDataLoader(config, nil)
-	authService, err := authservice.NewAuthService("example", "https://rokwire.illinois.edu/example", dataLoader)
+
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(&authService, []string{"auth"})
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing remote service registration loader: %v", err)
+	}
+
+	// Instantiate a ServiceRegManager to manage the service registration data loaded by serviceRegLoader
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service registration manager: %v", err)
+	}
+
+	// Instantiate a remote ServiceAccountManager to manage auth service account-related data from auth service
+    samConfig := authservice.RemoteServiceAccountManagerConfig{
+		AccountID: "accountID",
+		Token:     "sampleToken",
+	}
+	serviceAccountManager, err := authservice.NewRemoteServiceAccountManager(&authService, serviceAccountLoaderConfig)
+	if err != nil {
+		log.Fatalf("Error initializing remote service account manager: %v", err)
 	}
 
     ...
 }
 ```
 
+## Upgrading
 ### Staying up to date
 To update core-auth-library-go to the latest version, use `go get -u github.com/rokwire/core-auth-library-go`.
 
+### Migration steps
+#### Unreleased
+The `AuthDataLoader` interface has been removed and the `AuthService` type has been refactored to contain basic configuration data needed to communicate with the ROKWIRE Auth Service.
+
+The `ServiceRegManager` type has been added. To create a `ServiceRegManager`, a `ServiceRegLoader` must be created. The `ServiceRegLoader` is used to load service registration records retrieved from the ROKWIRE Auth Service, which are managed by the `ServiceRegManager`.
+
+The `ServiceAccountManager` type has been added. It is used to retrieve access tokens from the ROKWIRE Auth Service, where the implementing service must hold an account.
+
+See above for an example of how to create instances of these types to interact with a remote ROKWIRE Auth Service.
+
 ## ROKWIRE Auth Service
-The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block). 
+The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block).
 
 ## Packages
 This library contains several packages:
 
 ### `authservice`
-The `authservice` package provides the `AuthService` type which contains the configurations to locate and communicate with the ROKWIRE Auth Service. The other packages in this library depend on the `AuthService` object to handle any necessary communication with this central Auth Service. 
+The `authservice` package provides the `AuthService` type which contains the configurations to locate and communicate with the ROKWIRE Auth Service. The other packages in this library depend on the `AuthService` object to handle any necessary communication with this central Auth Service.
+
+This package also provides the `ServiceRegLoader`, `ServiceRegManager`, and `ServiceAccountManager` types. The `ServiceRegManager` type uses the configuration defined in an `AuthService` instance and a `ServiceRegLoader` instance to load, store, and manage service registration data (`ServiceReg` type). The `ServiceAccountManager` type uses the configuration defined in an `AuthService` to load, storage, and manage service account data (e.g., access tokens of the `AccessToken` type).
+
+### `coreservice`
+The `coreservice` package provides the `CoreService` type which contains the configurations and helper functions to utilize certain functions implemented by the ROKWIRE Core Building Block. One example of these functions is getting the IDs of accounts deleted within a set amount of time ago.
 
 ### `tokenauth`
-The `tokenauth` package provides the `TokenAuth` type which exposes the interface to validate and authorize auth tokens generated by the ROKWIRE Auth Service. 
+The `tokenauth` package provides the `TokenAuth` type which exposes the interface to validate and authorize auth tokens generated by the ROKWIRE Auth Service.
 
 ### `sigauth`
 The `sigauth` package provides the `SignatureAuth` type which exposes the interface to sign and verify HTTP requests to communicate securely between services within the ROKWIRE ecosystem.
@@ -84,4 +113,4 @@ The `NewEnvLoader()` function can be used to automatically select and create the
 The `authutils` package contains constants and standard utilities shared by the other packages.
 
 ## Usage
-To get started, take a look at the `example/` directory
+To get started, take a look at the `example/` directory.

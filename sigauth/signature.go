@@ -37,38 +37,9 @@ import (
 
 // SignatureAuth contains configurations and helper functions required to validate signatures
 type SignatureAuth struct {
-	authService *authservice.AuthService
+	serviceRegManager *authservice.ServiceRegManager
 
-	serviceAccountID string
-	serviceKey       *rsa.PrivateKey
-}
-
-// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string) (*http.Request, error) {
-	params := map[string]interface{}{
-		"auth_type": "signature",
-		"creds": map[string]string{
-			"id": s.serviceAccountID,
-		},
-	}
-	data, err := json.Marshal(params)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
-	}
-
-	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request for get access token: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	err = s.SignRequest(r)
-	if err != nil {
-		return nil, fmt.Errorf("error signing request for get access token: %v", err)
-	}
-
-	return r, nil
+	serviceKey *rsa.PrivateKey
 }
 
 // Sign generates and returns a signature for the provided message
@@ -90,7 +61,7 @@ func (s *SignatureAuth) Sign(message []byte) (string, error) {
 
 // CheckServiceSignature validates the provided message signature from the given service
 func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, signature string) error {
-	serviceReg, err := s.authService.GetServiceRegWithPubKey(serviceID)
+	serviceReg, err := s.serviceRegManager.GetServiceRegWithPubKey(serviceID)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
@@ -146,7 +117,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	sigAuthHeader := SignatureAuthHeader{KeyId: s.authService.GetServiceID(), Algorithm: "rsa-sha256", Headers: headers}
+	sigAuthHeader := SignatureAuthHeader{KeyId: s.serviceRegManager.AuthService.ServiceID, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -254,16 +225,56 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 	return sigString, sigAuthHeader, nil
 }
 
+// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
+func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, accountID string, _ string) (*http.Request, error) {
+	if host == "" {
+		return nil, errors.New("host is missing")
+	}
+	if path == "" {
+		return nil, errors.New("path is missing")
+	}
+	if accountID == "" {
+		return nil, errors.New("service account ID is missing")
+	}
+
+	params := map[string]interface{}{
+		"account_id": accountID,
+		"auth_type":  "signature",
+	}
+	data, err := json.Marshal(params)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
+	}
+
+	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request for get access token: %v", err)
+	}
+
+	r.Header.Set("Content-Type", "application/json")
+
+	err = s.SignRequest(r)
+	if err != nil {
+		return nil, fmt.Errorf("error signing request for get access token: %v", err)
+	}
+
+	return r, nil
+}
+
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey *rsa.PrivateKey, authService *authservice.AuthService, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey *rsa.PrivateKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+	if serviceRegManager == nil {
+		return nil, errors.New("service registration manager is missing")
+	}
+
 	if serviceRegKey {
-		err := authService.ValidateServiceRegistrationKey(serviceKey)
+		err := serviceRegManager.ValidateServiceRegistrationKey(serviceKey)
 		if err != nil {
 			return nil, fmt.Errorf("unable to validate service key registration: please contact the auth service system admin to register a public key for your service - %v", err)
 		}
 	}
 
-	return &SignatureAuth{serviceKey: serviceKey, authService: authService}, nil
+	return &SignatureAuth{serviceKey: serviceKey, serviceRegManager: serviceRegManager}, nil
 }
 
 // BuildSignatureString builds the string to be signed for the provided request
