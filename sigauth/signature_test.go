@@ -33,32 +33,33 @@ import (
 	"github.com/rokwire/core-auth-library-go/sigauth"
 )
 
-func setupTestSignatureAuth(mockLoader *mocks.AuthDataLoader) (*sigauth.SignatureAuth, error) {
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
+	manager, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), auth, true)
+	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), manager, true)
 }
 
-func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.AuthDataLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
+func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
 	if privKey == nil {
 		return nil, errors.New("private key is nil")
 	}
 
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+	manager, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(privKey, auth, true)
+	return sigauth.NewSignatureAuth(privKey, manager, true)
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
-	s, err := setupTestSignatureAuth(mockLoader)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)
 		return
@@ -92,10 +93,11 @@ func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
 	privKey := testutils.GetSamplePrivKey()
 	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
@@ -119,7 +121,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := setupTestSignatureAuthWithPrivKey(mockLoader, tt.args.privKey)
+			s, err := setupTestSignatureAuthWithPrivKey(authService, mockLoader, tt.args.privKey)
 			if err != nil || s == nil {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return
@@ -137,11 +139,12 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
-	s, err := setupTestSignatureAuth(mockLoader)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)
 		return
@@ -201,10 +204,11 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
 	privKey := testutils.GetSamplePrivKey()
 	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
@@ -242,7 +246,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := setupTestSignatureAuthWithPrivKey(mockLoader, tt.args.privKey)
+			s, err := setupTestSignatureAuthWithPrivKey(authService, mockLoader, tt.args.privKey)
 			if err != nil || s == nil {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return

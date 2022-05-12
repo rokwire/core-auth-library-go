@@ -22,7 +22,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/authorization"
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/tokenauth"
-	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for token auth
@@ -98,46 +97,36 @@ func (we WebAdapter) adminTokenWrapFunc(handler http.HandlerFunc) http.HandlerFu
 	}
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 // NewWebAdapter creates new WebAdapter instance
 func NewWebAdapter(tokenAuth *tokenauth.TokenAuth) WebAdapter {
 	return WebAdapter{tokenAuth: tokenAuth}
 }
 
 func main() {
-	serviceID := "sample"
-
-	staticTokenAuth, err := authservice.NewStaticTokenServiceAuth("sample_token")
-	if err != nil {
-		log.Fatalf("Error initializing static token auth: %v", err)
+	// Instantiate an AuthService to maintain basic auth data
+	authService := authservice.AuthService{
+		ServiceID:   "example",
+		ServiceHost: "http://localhost:5000",
+		FirstParty:  true,
+		AuthBaseURL: "http://localhost/core",
 	}
 
-	// Instantiate a remote AuthDataLoader to load auth service registration record from auth service
-	config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost:        "https://auth.rokwire.com/services",
-		DeletedAccountsCallback: printDeletedAccountIDs,
-		ServiceAuthRequests:     staticTokenAuth,
-	}
-	logger := logs.NewLogger("example", nil)
-	dataLoader, err := authservice.NewRemoteAuthDataLoader(&config, nil, true, logger)
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(&authService, []string{"auth"})
 	if err != nil {
-		log.Fatalf("Error initializing remote data loader: %v", err)
+		log.Fatalf("Error initializing remote service registration loader: %v", err)
 	}
 
-	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService(serviceID, "https://sample.rokwire.com", dataLoader)
+	// Instantiate a ServiceRegManager to manage service registration records
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
 
 	permissionAuth := authorization.NewCasbinStringAuthorization("./permissions_authorization_policy.csv")
-	scopeAuth := authorization.NewCasbinScopeAuthorization("./scope_authorization_policy.csv", serviceID)
+	scopeAuth := authorization.NewCasbinScopeAuthorization("./scope_authorization_policy.csv", authService.ServiceID)
 	// Instantiate TokenAuth instance to perform token validation
-	tokenAuth, err := tokenauth.NewTokenAuth(true, authService, permissionAuth, scopeAuth)
+	tokenAuth, err := tokenauth.NewTokenAuth(true, serviceRegManager, permissionAuth, scopeAuth)
 	if err != nil {
 		log.Fatalf("Error intitializing token auth: %v", err)
 	}

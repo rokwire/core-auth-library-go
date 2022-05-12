@@ -25,7 +25,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/sigauth"
-	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for signature auth
@@ -116,11 +115,6 @@ func (we WebAdapter) signatureAuthWrapFunction(handler http.HandlerFunc, service
 	}
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 // NewWebAdapter creates new WebAdapter instance
 func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 	return WebAdapter{signatureAuth: signatureAuth}
@@ -129,23 +123,26 @@ func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
-	services := []string{}
+	services := []string{"auth"}
 
-	// Instantiate a remote AuthDataLoader to load service registration records from auth service
-	config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost:        "http://localhost/core",
-		DeletedAccountsCallback: printDeletedAccountIDs,
-	}
-	logger := logs.NewLogger("example", nil)
-	dataLoader, err := authservice.NewRemoteAuthDataLoader(&config, services, true, logger)
-	if err != nil {
-		log.Fatalf("Error initializing remote data loader: %v", err)
+	// Instantiate an AuthService to maintain basic auth data
+	authService := authservice.AuthService{
+		ServiceID:   "example",
+		ServiceHost: "http://localhost:5000",
+		FirstParty:  true,
+		AuthBaseURL: "http://localhost/core",
 	}
 
-	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService("example", "http://localhost:8080", dataLoader)
+	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(&authService, services)
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing remote service registration loader: %v", err)
+	}
+
+	// Instantiate a ServiceRegManager to manage service registration records
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
 
 	privKey := testutils.GetSamplePrivKey()
@@ -153,7 +150,7 @@ func main() {
 	// TODO: Load service private key
 
 	// Instantiate SignatureAuth instance to perform token validation
-	signatureAuth, err := sigauth.NewSignatureAuth(privKey, authService, false)
+	signatureAuth, err := sigauth.NewSignatureAuth(privKey, serviceRegManager, false)
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}

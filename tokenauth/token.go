@@ -62,7 +62,7 @@ type Claims struct {
 
 // TokenAuth contains configurations and helper functions required to validate tokens
 type TokenAuth struct {
-	authService         *authservice.AuthService
+	serviceRegManager   *authservice.ServiceRegManager
 	acceptRokwireTokens bool
 
 	permissionAuth authorization.Authorization
@@ -80,7 +80,7 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 			return nil, fmt.Errorf("known invalid token")
 		}
 	}
-	authServiceReg, err := t.authService.GetServiceRegWithPubKey("auth")
+	authServiceReg, err := t.serviceRegManager.GetServiceRegWithPubKey("auth")
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve auth service pub key: %v", err)
 	}
@@ -121,8 +121,8 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	}
 
 	aud := strings.Split(claims.Audience, ",")
-	if !(authutils.ContainsString(aud, t.authService.GetServiceID()) || (t.acceptRokwireTokens && authutils.ContainsString(aud, AudRokwire))) {
-		acceptAuds := t.authService.GetServiceID()
+	if !(authutils.ContainsString(aud, t.serviceRegManager.AuthService.ServiceID) || (t.acceptRokwireTokens && authutils.ContainsString(aud, AudRokwire))) {
+		acceptAuds := t.serviceRegManager.AuthService.ServiceID
 		if t.acceptRokwireTokens {
 			acceptAuds += " or " + AudRokwire
 		}
@@ -143,7 +143,7 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	if kid != authServiceReg.PubKey.Kid {
 		if !parsedToken.Valid {
 			if claims.ExpiresAt > time.Now().Unix() {
-				refreshed, refreshErr := t.authService.CheckForRefresh()
+				refreshed, refreshErr := t.serviceRegManager.CheckForRefresh()
 				if refreshErr != nil {
 					return nil, fmt.Errorf("initial token check returned invalid, error on retry: %v", refreshErr)
 				}
@@ -268,7 +268,7 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 	}
 
 	scopes := strings.Split(claims.Scope, " ")
-	if authorization.CheckScopesGlobals(scopes, t.authService.GetServiceID()) {
+	if authorization.CheckScopesGlobals(scopes, t.serviceRegManager.AuthService.ServiceID) {
 		return nil
 	}
 
@@ -315,13 +315,17 @@ func (t *TokenAuth) SetBlacklistSize(size int) {
 
 // NewTokenAuth creates and configures a new TokenAuth instance
 // authorization maybe nil if performing manual authorization
-func NewTokenAuth(acceptRokwireTokens bool, authService *authservice.AuthService, permissionAuth authorization.Authorization, scopeAuth authorization.Authorization) (*TokenAuth, error) {
-	authService.SubscribeServices([]string{"auth"}, true)
+func NewTokenAuth(acceptRokwireTokens bool, serviceRegManager *authservice.ServiceRegManager, permissionAuth authorization.Authorization, scopeAuth authorization.Authorization) (*TokenAuth, error) {
+	if serviceRegManager == nil {
+		return nil, errors.New("service registration manager is missing")
+	}
+
+	serviceRegManager.SubscribeServices([]string{"auth"}, true)
 
 	blLock := &sync.RWMutex{}
 	bl := []string{}
 
-	return &TokenAuth{acceptRokwireTokens: acceptRokwireTokens, authService: authService, permissionAuth: permissionAuth, scopeAuth: scopeAuth, blacklistLock: blLock, blacklist: bl, blacklistSize: 1024}, nil
+	return &TokenAuth{acceptRokwireTokens: acceptRokwireTokens, serviceRegManager: serviceRegManager, permissionAuth: permissionAuth, scopeAuth: scopeAuth, blacklistLock: blLock, blacklist: bl, blacklistSize: 1024}, nil
 }
 
 // -------------------------- Helper Functions --------------------------
