@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	allID string = "all"
+	// AllID represents all possible options for an ID
+	AllID string = "all"
 )
 
 // -------------------- AuthService --------------------
@@ -67,7 +68,7 @@ func checkAuthService(as *AuthService, requireBaseURL bool) error {
 
 // -------------------- ServiceRegManager --------------------
 
-// ServiceRegManager declares an object to manage service registrations
+// ServiceRegManager declares a type used to manage service registrations
 type ServiceRegManager struct {
 	AuthService *AuthService
 
@@ -462,18 +463,8 @@ func NewServiceRegSubscriptions(subscribedServices []string) *ServiceRegSubscrip
 
 // -------------------- ServiceAccountManager --------------------
 
-// ServiceAccountManager declares an interface to manage data retrieved from an auth service
-type ServiceAccountManager interface {
-	// GetAccessToken gets an access token
-	GetAccessToken(appID string, orgID string) error
-	// GetAccessTokens get an access token for each app org pair a service account is granted access
-	GetAccessTokens() error
-	// CachedAccessToken returns a cached token
-	CachedAccessToken() AccessToken
-}
-
-//RemoteServiceAccountManagerImpl provides a ServiceAccountManager implementation for a remote auth service
-type RemoteServiceAccountManagerImpl struct {
+// ServiceAccountManager declares a type used to manage service account data
+type ServiceAccountManager struct {
 	AuthService *AuthService
 
 	accessTokens *syncmap.Map
@@ -483,88 +474,52 @@ type RemoteServiceAccountManagerImpl struct {
 	tokensUpdated       *time.Time
 	maxRefreshCacheFreq uint
 
-	accessTokenPath  string // Path to service account access token API
-	accessTokensPath string // Path to service account access tokens API
-
-	config RemoteServiceAccountManagerConfig
+	loader ServiceAccountLoader
 }
 
-// GetAccessToken implements ServiceAccountManager interface
-func (r *RemoteServiceAccountManagerImpl) GetAccessToken(appID string, orgID string) error {
-	req, err := r.buildAccessTokenRequest(appID, orgID)
+// GetAccessToken attempts to load an access token for appID and orgID, then caches it if successful
+func (s *ServiceAccountManager) GetAccessToken(appID string, orgID string) (*AccessToken, error) {
+	token, err := s.loader.LoadAccessToken(appID, orgID)
 	if err != nil {
-		return fmt.Errorf("error creating access token request: %v", err)
+		return nil, fmt.Errorf("error loading access token: %v", err)
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error sending access token request: %v", err)
-	}
-	body, err := r.ReadResponse(resp)
-	if err != nil {
-		return fmt.Errorf("error reading access token response: %v", err)
-	}
-
-	var accessToken AccessToken
-	err = json.Unmarshal(body, &accessToken)
-	if err != nil {
-		return fmt.Errorf("error on unmarshal access token response: %v", err)
-	}
-
-	r.accessTokens.Store(AppOrgPair{AppID: appID, OrgID: orgID}, accessToken)
-
-	return nil
+	s.accessTokens.Store(AppOrgPair{AppID: appID, OrgID: orgID}, *token)
+	return token, nil
 }
 
-// GetAccessTokens implements ServiceAccountManager interface
-func (r *RemoteServiceAccountManagerImpl) GetAccessTokens() error {
-	req, err := r.buildAccessTokensRequest()
+// GetAccessTokens attempts to get all allowed access tokens for the implementing service, then caches them if successful
+func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, error) {
+	tokens, err := s.loader.LoadAccessTokens()
 	if err != nil {
-		return fmt.Errorf("error creating access tokens request: %v", err)
-	}
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("error sending access tokens request: %v", err)
-	}
-	body, err := r.ReadResponse(resp)
-	if err != nil {
-		return fmt.Errorf("error reading access tokens response: %v", err)
-	}
-
-	var accessTokens []accessTokensResponse
-	err = json.Unmarshal(body, &accessTokens)
-	if err != nil {
-		return fmt.Errorf("error on unmarshal access tokens response: %v", err)
+		return nil, fmt.Errorf("error loading access tokens: %v", err)
 	}
 
 	// update caches
-	r.accessTokens = &sync.Map{}
-	r.tokensLock.Lock()
-	defer r.tokensLock.Unlock()
+	s.accessTokens = &sync.Map{}
+	s.tokensLock.Lock()
+	defer s.tokensLock.Unlock()
 
-	r.appOrgPairs = make([]AppOrgPair, len(accessTokens))
-	for i, res := range accessTokens {
-		pair := AppOrgPair{AppID: res.AppID, OrgID: res.OrgID}
-
-		r.appOrgPairs[i] = pair
-		r.accessTokens.Store(pair, res.AccessToken)
+	i := 0
+	s.appOrgPairs = make([]AppOrgPair, len(tokens))
+	for pair, token := range tokens {
+		s.appOrgPairs[i] = pair
+		s.accessTokens.Store(pair, token)
+		i++
 	}
 
 	now := time.Now()
-	r.tokensUpdated = &now
+	s.tokensUpdated = &now
 
-	return nil
+	return tokens, nil
 }
 
 // MakeRequest makes the provided http.Request with the token granting appropriate access to appID and orgID
-func (r *RemoteServiceAccountManagerImpl) MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error) {
-	token, appOrgPair := r.getCachedAccessToken(appID, orgID)
+func (s *ServiceAccountManager) MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error) {
+	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
 	if token == nil || appOrgPair == nil {
 		// check if tokens should be refreshed and get the new token if so
-		refreshed, err := r.checkForRefresh()
+		refreshed, err := s.checkForRefresh()
 		if err != nil {
 			return nil, fmt.Errorf("error checking access tokens refresh: %v", err)
 		}
@@ -572,13 +527,13 @@ func (r *RemoteServiceAccountManagerImpl) MakeRequest(req *http.Request, appID s
 			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
 		}
 
-		token, appOrgPair = r.getCachedAccessToken(appID, orgID)
+		token, appOrgPair = s.getCachedAccessToken(appID, orgID)
 		if token == nil || appOrgPair == nil {
 			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
 		}
 	}
 
-	req.Header.Set("Authorization", (*token).String())
+	req.Header.Set("Authorization", token.String())
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -588,12 +543,12 @@ func (r *RemoteServiceAccountManagerImpl) MakeRequest(req *http.Request, appID s
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		// access token may have expired, so get new ones and try once more
-		updateErr := r.GetAccessTokens()
+		_, updateErr := s.GetAccessTokens()
 		if updateErr != nil {
 			return nil, fmt.Errorf("error getting new access tokens (%s) - after %v", updateErr, err)
 		}
 
-		token, appOrgPair = r.getCachedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
+		token, appOrgPair = s.getCachedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
 		if token == nil || appOrgPair == nil {
 			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
 		}
@@ -607,10 +562,10 @@ func (r *RemoteServiceAccountManagerImpl) MakeRequest(req *http.Request, appID s
 	return resp, nil
 }
 
-// CachedAccessTokens returns a map containing all cached access tokens
-func (r *RemoteServiceAccountManagerImpl) CachedAccessTokens() map[AppOrgPair]AccessToken {
+// AccessTokens returns a map containing all cached access tokens
+func (s *ServiceAccountManager) AccessTokens() map[AppOrgPair]AccessToken {
 	tokens := make(map[AppOrgPair]AccessToken)
-	r.accessTokens.Range(func(key, item interface{}) bool {
+	s.accessTokens.Range(func(key, item interface{}) bool {
 		keyPair, ok := key.(AppOrgPair)
 		if !ok {
 			return false
@@ -629,73 +584,35 @@ func (r *RemoteServiceAccountManagerImpl) CachedAccessTokens() map[AppOrgPair]Ac
 	return tokens
 }
 
-// CachedAppOrgPairs returns the list of cached app org pairs
-func (r *RemoteServiceAccountManagerImpl) CachedAppOrgPairs() []AppOrgPair {
-	return r.appOrgPairs
-}
-
-// ReadResponse reads the body of a http.Response and returns it
-func (r *RemoteServiceAccountManagerImpl) ReadResponse(resp *http.Response) ([]byte, error) {
-	if resp == nil {
-		return nil, errors.New("response is nil")
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	if resp.StatusCode != 200 {
-		return body, fmt.Errorf("%s - %s", resp.Status, string(body))
-	}
-
-	return body, nil
+// AppOrgPairs returns the list of cached app org pairs
+func (s *ServiceAccountManager) AppOrgPairs() []AppOrgPair {
+	return s.appOrgPairs
 }
 
 // SetMaxRefreshCacheFreq sets the maximum frequency at which cached access tokens are refreshed in minutes
 // 	The default value is 30
-func (r *RemoteServiceAccountManagerImpl) SetMaxRefreshCacheFreq(freq uint) {
-	r.tokensLock.Lock()
-	r.maxRefreshCacheFreq = freq
-	r.tokensLock.Unlock()
-}
-
-//checkForRefresh checks if access tokens need to be reloaded
-func (r *RemoteServiceAccountManagerImpl) checkForRefresh() (bool, error) {
-	r.tokensLock.RLock()
-	tokensUpdated := r.tokensUpdated
-	maxRefreshFreq := r.maxRefreshCacheFreq
-	r.tokensLock.RUnlock()
-
-	now := time.Now()
-	if tokensUpdated == nil || now.Sub(*tokensUpdated).Minutes() > float64(maxRefreshFreq) {
-		err := r.GetAccessTokens()
-		if err != nil {
-			return false, err
-		}
-		return true, nil
-	}
-	return false, nil
+func (s *ServiceAccountManager) SetMaxRefreshCacheFreq(freq uint) {
+	s.tokensLock.Lock()
+	s.maxRefreshCacheFreq = freq
+	s.tokensLock.Unlock()
 }
 
 // getCachedAccessToken returns the most restrictive cached token (with corresponding pair) granting access to appID and orgID, if it exists
-func (r *RemoteServiceAccountManagerImpl) getCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
+func (s *ServiceAccountManager) getCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
 	allowedPairs := []AppOrgPair{{AppID: appID, OrgID: orgID}}
-	if appID != allID || orgID != allID {
-		if appID != allID && orgID != allID {
-			allowedPairs = append(allowedPairs, AppOrgPair{AppID: allID, OrgID: orgID})
-			allowedPairs = append(allowedPairs, AppOrgPair{AppID: appID, OrgID: allID})
+	if appID != AllID || orgID != AllID {
+		if appID != AllID && orgID != AllID {
+			allowedPairs = append(allowedPairs, AppOrgPair{AppID: AllID, OrgID: orgID})
+			allowedPairs = append(allowedPairs, AppOrgPair{AppID: appID, OrgID: AllID})
 		}
 
-		allowedPairs = append(allowedPairs, AppOrgPair{AppID: allID, OrgID: allID})
+		allowedPairs = append(allowedPairs, AppOrgPair{AppID: AllID, OrgID: AllID})
 	}
 
 	for _, allowed := range allowedPairs {
-		for _, cached := range r.appOrgPairs {
+		for _, cached := range s.appOrgPairs {
 			if cached.Equals(allowed) {
-				if item, found := r.accessTokens.Load(allowed); found && item != nil {
+				if item, found := s.accessTokens.Load(allowed); found && item != nil {
 					if token, ok := item.(AccessToken); ok {
 						return &token, &allowed
 					}
@@ -708,17 +625,136 @@ func (r *RemoteServiceAccountManagerImpl) getCachedAccessToken(appID string, org
 	return nil, nil
 }
 
-//RemoteServiceAccountManagerConfig represents a configuration for a remote service account manager
-type RemoteServiceAccountManagerConfig struct {
-	AccountID string // Service account ID on the auth service
+//checkForRefresh checks if access tokens need to be reloaded
+func (s *ServiceAccountManager) checkForRefresh() (bool, error) {
+	s.tokensLock.RLock()
+	tokensUpdated := s.tokensUpdated
+	maxRefreshFreq := s.maxRefreshCacheFreq
+	s.tokensLock.RUnlock()
 
-	ServiceAuthRequests ServiceAuthRequests
+	now := time.Now()
+	if tokensUpdated == nil || now.Sub(*tokensUpdated).Minutes() > float64(maxRefreshFreq) {
+		_, err := s.GetAccessTokens()
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+// NewServiceAccountManager creates and configures a new ServiceAccountManager instance
+func NewServiceAccountManager(authService *AuthService, serviceAccountLoader ServiceAccountLoader) (*ServiceAccountManager, error) {
+	err := checkAuthService(authService, false)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
+	}
+
+	if serviceAccountLoader == nil {
+		return nil, errors.New("service account loader is missing")
+	}
+
+	accessTokens := &syncmap.Map{}
+
+	appOrgPairs := make([]AppOrgPair, 0)
+	lock := &sync.RWMutex{}
+
+	manager := &ServiceAccountManager{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
+		tokensLock: lock, maxRefreshCacheFreq: 30, loader: serviceAccountLoader}
+
+	// Subscribe to the implementing service to validate registration
+	_, err = manager.GetAccessTokens()
+	if err != nil {
+		return nil, fmt.Errorf("error loading access tokens: %v", err)
+	}
+
+	return manager, nil
+}
+
+// -------------------- ServiceAccountLoader --------------------
+
+// ServiceAccountLoader declares an interface to load service account-related data from an auth service
+type ServiceAccountLoader interface {
+	// LoadAccessToken gets an access token for appID, orgID if the implementing service is granted access
+	LoadAccessToken(appID string, orgID string) (*AccessToken, error)
+	// LoadAccessToken gets an access token for each app org pair the implementing service is granted access
+	LoadAccessTokens() (map[AppOrgPair]AccessToken, error)
+}
+
+//RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
+type RemoteServiceAccountLoaderImpl struct {
+	authService *AuthService
+
+	accountID string // Service account ID on the auth service
+
+	accessTokenPath  string // Path to service account access token API
+	accessTokensPath string // Path to service account access tokens API
+
+	serviceAuthType ServiceAuthType // auth type used by ServiceAccountLoader requests to the auth service
+}
+
+// LoadAccessToken implements ServiceAccountLoader interface
+func (r *RemoteServiceAccountLoaderImpl) LoadAccessToken(appID string, orgID string) (*AccessToken, error) {
+	req, err := r.buildAccessTokenRequest(appID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("error creating access token request: %v", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error sending access token request: %v", err)
+	}
+	body, err := authutils.ReadResponseBody(resp)
+	if err != nil {
+		return nil, fmt.Errorf("error reading access token response: %v", err)
+	}
+
+	var token AccessToken
+	err = json.Unmarshal(body, &token)
+	if err != nil {
+		return nil, fmt.Errorf("error on unmarshal access token response: %v", err)
+	}
+
+	return &token, nil
+}
+
+// LoadAccessTokens implements ServiceAccountLoader interface
+func (r *RemoteServiceAccountLoaderImpl) LoadAccessTokens() (map[AppOrgPair]AccessToken, error) {
+	req, err := r.buildAccessTokensRequest()
+	if err != nil {
+		return nil, fmt.Errorf("error creating access tokens request: %v", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error sending access tokens request: %v", err)
+	}
+	body, err := authutils.ReadResponseBody(resp)
+	if err != nil {
+		return nil, fmt.Errorf("error reading access tokens response: %v", err)
+	}
+
+	var tokens []accessTokensResponse
+	err = json.Unmarshal(body, &tokens)
+	if err != nil {
+		return nil, fmt.Errorf("error on unmarshal access tokens response: %v", err)
+	}
+
+	tokenMap := make(map[AppOrgPair]AccessToken)
+	for _, res := range tokens {
+		pair := AppOrgPair{AppID: res.AppID, OrgID: res.OrgID}
+		tokenMap[pair] = res.AccessToken
+	}
+
+	return tokenMap, nil
 }
 
 // buildAccessTokenRequest returns a HTTP request to get a single access token
-func (r *RemoteServiceAccountManagerImpl) buildAccessTokenRequest(appID string, orgID string) (*http.Request, error) {
-	body := r.config.ServiceAuthRequests.BuildRequestAuthBody()
-	body["account_id"] = r.config.AccountID
+func (r *RemoteServiceAccountLoaderImpl) buildAccessTokenRequest(appID string, orgID string) (*http.Request, error) {
+	body := r.serviceAuthType.BuildRequestAuthBody()
+	body["account_id"] = r.accountID
 	body["app_id"] = appID
 	body["org_id"] = orgID
 
@@ -727,14 +763,14 @@ func (r *RemoteServiceAccountManagerImpl) buildAccessTokenRequest(appID string, 
 		return nil, fmt.Errorf("error marshaling request body to get access token: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", r.AuthService.AuthBaseURL+r.accessTokenPath, bytes.NewReader(data))
+	req, err := http.NewRequest("POST", r.authService.AuthBaseURL+r.accessTokenPath, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get access token: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	err = r.config.ServiceAuthRequests.ModifyRequest(req)
+	err = r.serviceAuthType.ModifyRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("error modifying request to get access token: %v", err)
 	}
@@ -743,23 +779,23 @@ func (r *RemoteServiceAccountManagerImpl) buildAccessTokenRequest(appID string, 
 }
 
 // buildAccessTokensRequest returns a HTTP request to get all allowed access tokens
-func (r *RemoteServiceAccountManagerImpl) buildAccessTokensRequest() (*http.Request, error) {
-	body := r.config.ServiceAuthRequests.BuildRequestAuthBody()
-	body["account_id"] = r.config.AccountID
+func (r *RemoteServiceAccountLoaderImpl) buildAccessTokensRequest() (*http.Request, error) {
+	body := r.serviceAuthType.BuildRequestAuthBody()
+	body["account_id"] = r.accountID
 
 	data, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling request body to get access tokens: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", r.AuthService.AuthBaseURL+r.accessTokensPath, bytes.NewReader(data))
+	req, err := http.NewRequest("POST", r.authService.AuthBaseURL+r.accessTokensPath, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get access tokens: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	err = r.config.ServiceAuthRequests.ModifyRequest(req)
+	err = r.serviceAuthType.ModifyRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("error modifying request to get access token: %v", err)
 	}
@@ -767,16 +803,18 @@ func (r *RemoteServiceAccountManagerImpl) buildAccessTokensRequest() (*http.Requ
 	return req, nil
 }
 
-// NewRemoteServiceAccountManager creates and configures a new RemoteServiceAccountManagerImpl instance for the provided config
-func NewRemoteServiceAccountManager(authService *AuthService, config RemoteServiceAccountManagerConfig) (*RemoteServiceAccountManagerImpl, error) {
+// NewRemoteServiceAccountLoader creates and configures a new RemoteServiceAccountLoaderImpl instance
+func NewRemoteServiceAccountLoader(authService *AuthService, accountID string, serviceAuthType ServiceAuthType) (*RemoteServiceAccountLoaderImpl, error) {
 	err := checkAuthService(authService, true)
 	if err != nil {
 		return nil, fmt.Errorf("error checking auth service: %v", err)
 	}
 
-	err = checkServiceAccountManagerConfig(&config)
-	if err != nil {
-		return nil, fmt.Errorf("error checking service account manager config: %v", err)
+	if accountID == "" {
+		return nil, errors.New("account ID is missing")
+	}
+	if serviceAuthType == nil {
+		return nil, fmt.Errorf("service auth requests are not set")
 	}
 
 	accessTokenPath := "tps/access-token"
@@ -786,34 +824,18 @@ func NewRemoteServiceAccountManager(authService *AuthService, config RemoteServi
 		accessTokensPath = "bbs/access-tokens"
 	}
 
-	accessTokens := &syncmap.Map{}
-
-	appOrgPairs := make([]AppOrgPair, 0)
-	lock := &sync.RWMutex{}
-
-	dataManager := RemoteServiceAccountManagerImpl{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
-		tokensLock: lock, maxRefreshCacheFreq: 30, accessTokenPath: accessTokenPath, accessTokensPath: accessTokensPath, config: config}
-	return &dataManager, nil
-}
-
-func checkServiceAccountManagerConfig(config *RemoteServiceAccountManagerConfig) error {
-	if config.AccountID == "" {
-		return errors.New("service account ID is missing")
-	}
-
-	if config.ServiceAuthRequests == nil {
-		return fmt.Errorf("service auth requests not set")
-	}
-
-	return nil
+	return &RemoteServiceAccountLoaderImpl{authService: authService, accountID: accountID, accessTokenPath: accessTokenPath,
+		accessTokensPath: accessTokensPath, serviceAuthType: serviceAuthType}, nil
 }
 
 // -------------------- ServiceAuthRequests --------------------
 
-// ServiceAuthRequests declares an interface for setting up HTTP requests to APIs requiring certain types of authentication
-type ServiceAuthRequests interface {
-	BuildRequestAuthBody() map[string]interface{} // Construct auth fields for service account request bodies
-	ModifyRequest(req *http.Request) error        // Performs any auth type specific modifications to the request and returns any errors that occur
+// ServiceAuthType declares an interface for setting up HTTP requests to APIs requiring certain types of authentication
+type ServiceAuthType interface {
+	// Construct auth fields for service account request bodies
+	BuildRequestAuthBody() map[string]interface{}
+	// Performs any auth type specific modifications to the request and returns any errors that occur
+	ModifyRequest(req *http.Request) error
 }
 
 // StaticTokenServiceAuth provides a ServiceAuthRequests implementation for static token-based auth

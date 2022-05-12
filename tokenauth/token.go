@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	// AudRokwire represents the ROKWIRE audience
 	AudRokwire string = "rokwire"
 )
 

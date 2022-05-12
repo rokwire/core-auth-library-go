@@ -25,7 +25,9 @@ import (
 )
 
 const (
-	ScopeAll    string = "all"
+	// ScopeAll represents all options of a scope component
+	ScopeAll string = "all"
+	// ScopeGlobal represents the global scope
 	ScopeGlobal string = "all:all:all"
 )
 
@@ -157,6 +159,7 @@ func NewCasbinScopeAuthorization(policyPath string, serviceID string) *CasbinSco
 }
 
 // -------------------------- Scope --------------------------
+
 // Scope represents a scope entity
 type Scope struct {
 	ServiceID string `json:"service_id" bson:"service_id"`

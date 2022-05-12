@@ -29,6 +29,7 @@ type WebAdapter struct {
 	tokenAuth *tokenauth.TokenAuth
 }
 
+// Start starts the web adapter for token auth
 func (we WebAdapter) Start() {
 	http.HandleFunc("/test", we.tokenAuthWrapFunc(we.test))
 	http.HandleFunc("/admin/test", we.adminTokenWrapFunc(we.adminTest))

@@ -133,7 +133,7 @@ func main() {
 		AuthBaseURL: "http://localhost/core",
 	}
 
-	// Instantiate a remote ServiceRegLoader to load auth service registration record from auth service
+	// Instantiate a remote ServiceRegLoader to load auth service registration records from auth service
 	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(&authService, services)
 	if err != nil {
 		log.Fatalf("Error initializing remote service registration loader: %v", err)
@@ -154,7 +154,22 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}
-	config.ServiceAuthRequests = signatureAuth
+
+	// Instantiate a remote ServiceAccountLoader to load auth service account data from auth service
+	accountID := "0ba899ed-ac7a-11ec-b09f-00ffd2760de8"
+	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(&authService, accountID, signatureAuth)
+	if err != nil {
+		log.Fatalf("Error initializing remote service account loader: %v", err)
+	}
+
+	// Instantiate a remote ServiceAccountManager to manage service account-related data
+	serviceAccountManager, err := authservice.NewServiceAccountManager(&authService, serviceAccountLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service account manager: %v", err)
+	}
+
+	appID := "9766"
+	orgID := "0a2eff20-e2cd-11eb-af68-60f81db5ecc0"
 
 	// Instantiate and start a new WebAdapter
 	adapter := NewWebAdapter(signatureAuth)
@@ -163,9 +178,9 @@ func main() {
 	// 		that you are receiving requests from
 
 	req := map[string]interface{}{
-		"account_id": "0ba899ed-ac7a-11ec-b09f-00ffd2760de8",
-		"app_id":     "9766",
-		"org_id":     "0a2eff20-e2cd-11eb-af68-60f81db5ecc0",
+		"account_id": accountID,
+		"app_id":     appID,
+		"org_id":     orgID,
 		"auth_type":  "signature",
 	}
 
@@ -177,5 +192,13 @@ func main() {
 		log.Printf("Error making sample signed request: %v", err)
 	} else {
 		log.Printf("Response: %s", response)
+	}
+
+	// Tip: This sends the same request as the manually signed request above
+	token, err := serviceAccountManager.GetAccessToken(appID, orgID)
+	if err != nil {
+		log.Printf("Error loading access token: %v", err)
+	} else {
+		log.Printf("Response: %s", token.String())
 	}
 }

@@ -22,6 +22,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 )
 
 // ContainsString returns true if the provided value is in the provided slice
@@ -93,4 +95,24 @@ func HashSha256(data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("error writing data: %v", err)
 	}
 	return hasher.Sum(nil), nil
+}
+
+// ReadResponseBody reads the body of a http.Response and returns it
+func ReadResponseBody(resp *http.Response) ([]byte, error) {
+	if resp == nil {
+		return nil, errors.New("response is nil")
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	if resp.StatusCode != 200 {
+		return body, fmt.Errorf("%s - %s", resp.Status, string(body))
+	}
+
+	return body, nil
 }
