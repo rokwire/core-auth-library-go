@@ -138,6 +138,11 @@ func (s *ServiceRegManager) LoadServices() error {
 	return loadServicesError
 }
 
+// SubscribedServices returns the list of currently subscribed services
+func (s *ServiceRegManager) SubscribedServices() []string {
+	return s.loader.GetSubscribedServices()
+}
+
 // SubscribeServices subscribes to the provided services
 //	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
 func (s *ServiceRegManager) SubscribeServices(serviceIDs []string, reload bool) error {

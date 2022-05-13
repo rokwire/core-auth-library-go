@@ -159,17 +159,40 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", err
 	}
 
-	//TODO: KeyIDs should not be serviceIDs
-	if requiredServiceIDs != nil && !authutils.ContainsString(requiredServiceIDs, sigAuthHeader.KeyId) {
-		return "", fmt.Errorf("request signer (%s) is not one of the required services %v", sigAuthHeader.KeyId, requiredServiceIDs)
+	var serviceReg *authservice.ServiceReg
+	var fingerprint string
+	found := false
+	if requiredServiceIDs == nil {
+		requiredServiceIDs = s.serviceRegManager.SubscribedServices()
 	}
 
-	err = s.CheckServiceSignature(sigAuthHeader.KeyId, []byte(sigString), sigAuthHeader.Signature)
+	for _, serviceID := range requiredServiceIDs {
+		serviceReg, err = s.serviceRegManager.GetServiceRegWithPubKey(serviceID)
+		if err != nil {
+			return "", fmt.Errorf("failed to retrieve service pub key: %v", err)
+		}
+
+		fingerprint, err = authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
+		if err != nil {
+			return "", fmt.Errorf("error getting service key fingerprint: %v", err)
+		}
+
+		if fingerprint == sigAuthHeader.KeyId {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "", fmt.Errorf("request signer fingerprint (%s) does not match any of the required services %v", sigAuthHeader.KeyId, requiredServiceIDs)
+	}
+
+	err = s.CheckSignature(serviceReg.PubKey.Key, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return "", fmt.Errorf("error validating signature: %v", err)
 	}
 
-	return sigAuthHeader.KeyId, nil
+	return serviceReg.ServiceID, nil
 }
 
 // CheckRequestSignature validates the signature on the provided request
