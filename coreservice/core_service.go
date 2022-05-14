@@ -72,53 +72,34 @@ func (c *CoreService) getDeletedAccountsWithCallback(callback func([]string) err
 }
 
 func (c *CoreService) getDeletedAccounts() ([]string, error) {
-	idChan := make(chan []string)
-	errChan := make(chan error)
 	accountIDs := make([]string, 0)
-	errStr := ""
 
-	pairs := c.serviceAccountManager.AppOrgPairs()
-	for _, pair := range pairs {
-		go c.getDeletedAccountsAsync(pair, idChan, errChan)
-	}
-
-	for i := 0; i < len(pairs); i++ {
-		partialAccountIDs := <-idChan
-		partialErr := <-errChan
-		if partialErr != nil {
-			if len(errStr) > 0 {
-				errStr += ", " + partialErr.Error()
-			} else {
-				errStr += partialErr.Error()
-			}
-		} else if partialAccountIDs != nil {
-			accountIDs = append(accountIDs, partialAccountIDs...)
+	for _, pair := range c.serviceAccountManager.AppOrgPairs() {
+		req, err := c.buildDeletedAccountsRequest()
+		if err != nil {
+			return nil, fmt.Errorf("error building deleted accounts request: %v", err)
 		}
+
+		res, err := c.serviceAccountManager.MakeRequest(req, pair.AppID, pair.OrgID)
+		if err != nil {
+			return nil, fmt.Errorf("error making deleted accounts request: %v", err)
+		}
+
+		body, err := authutils.ReadResponseBody(res)
+		if err != nil {
+			return nil, fmt.Errorf("error reading deleted accounts response body: %v", err)
+		}
+
+		var deleted []string
+		err = json.Unmarshal(body, &deleted)
+		if err != nil {
+			return nil, fmt.Errorf("error unmarshaling deleted accounts response body: %v", err)
+		}
+
+		accountIDs = append(accountIDs, deleted...)
 	}
 
-	if errStr != "" {
-		return accountIDs, errors.New(errStr)
-	}
 	return accountIDs, nil
-}
-
-func (c *CoreService) getDeletedAccountsAsync(appOrgPair authservice.AppOrgPair, d chan []string, e chan error) {
-	var req *http.Request
-	var resp *http.Response
-	var body []byte
-	var deleted []string
-	var err error
-
-	if req, err = c.buildDeletedAccountsRequest(); err == nil {
-		if resp, err = c.serviceAccountManager.MakeRequest(req, appOrgPair.AppID, appOrgPair.OrgID); err == nil {
-			if body, err = authutils.ReadResponseBody(resp); err == nil {
-				err = json.Unmarshal(body, &deleted)
-			}
-		}
-	}
-
-	d <- deleted
-	e <- err
 }
 
 func (c *CoreService) buildDeletedAccountsRequest() (*http.Request, error) {

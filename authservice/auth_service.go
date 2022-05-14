@@ -401,9 +401,9 @@ func NewRemoteServiceRegLoader(authService *AuthService, subscribedServices []st
 		return nil, fmt.Errorf("error checking auth service: %v", err)
 	}
 
-	path := "tps/service-regs"
+	path := "/tps/service-regs"
 	if authService.FirstParty {
-		path = "bbs/service-regs"
+		path = "/bbs/service-regs"
 	}
 
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
@@ -516,21 +516,15 @@ func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, e
 
 // MakeRequest makes the provided http.Request with the token granting appropriate access to appID and orgID
 func (s *ServiceAccountManager) MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error) {
+	// check if tokens should be refreshed and get the new token if so
+	_, err := s.checkForRefresh()
+	if err != nil {
+		return nil, fmt.Errorf("error checking access tokens refresh: %v", err)
+	}
+
 	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
 	if token == nil || appOrgPair == nil {
-		// check if tokens should be refreshed and get the new token if so
-		refreshed, err := s.checkForRefresh()
-		if err != nil {
-			return nil, fmt.Errorf("error checking access tokens refresh: %v", err)
-		}
-		if !refreshed {
-			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
-		}
-
-		token, appOrgPair = s.getCachedAccessToken(appID, orgID)
-		if token == nil || appOrgPair == nil {
-			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
-		}
+		return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
 	}
 
 	req.Header.Set("Authorization", token.String())
@@ -552,6 +546,8 @@ func (s *ServiceAccountManager) MakeRequest(req *http.Request, appID string, org
 		if token == nil || appOrgPair == nil {
 			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
 		}
+
+		req.Header.Set("Authorization", token.String())
 
 		resp, err = client.Do(req)
 		if err != nil {
@@ -817,11 +813,11 @@ func NewRemoteServiceAccountLoader(authService *AuthService, accountID string, s
 		return nil, fmt.Errorf("service auth requests are not set")
 	}
 
-	accessTokenPath := "tps/access-token"
-	accessTokensPath := "tps/access-tokens"
+	accessTokenPath := "/tps/access-token"
+	accessTokensPath := "/tps/access-tokens"
 	if authService.FirstParty {
-		accessTokenPath = "bbs/access-token"
-		accessTokensPath = "bbs/access-tokens"
+		accessTokenPath = "/bbs/access-token"
+		accessTokensPath = "/bbs/access-tokens"
 	}
 
 	return &RemoteServiceAccountLoaderImpl{authService: authService, accountID: accountID, accessTokenPath: accessTokenPath,
@@ -881,6 +877,9 @@ type AccessToken struct {
 
 // String returns the stored access token as a string
 func (t AccessToken) String() string {
+	if t.Token == "" {
+		return ""
+	}
 	return fmt.Sprintf("%s %s", t.TokenType, t.Token)
 }
 
