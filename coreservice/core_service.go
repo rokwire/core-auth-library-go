@@ -74,18 +74,18 @@ func (c *CoreService) getDeletedAccountsWithCallback(callback func([]string) err
 func (c *CoreService) getDeletedAccounts() ([]string, error) {
 	accountIDs := make([]string, 0)
 
-	for _, pair := range c.serviceAccountManager.AppOrgPairs() {
-		req, err := c.buildDeletedAccountsRequest()
-		if err != nil {
-			return nil, fmt.Errorf("error building deleted accounts request: %v", err)
+	req, err := c.buildDeletedAccountsRequest()
+	if err != nil {
+		return nil, fmt.Errorf("error building deleted accounts request: %v", err)
+	}
+
+	responses := c.serviceAccountManager.MakeRequests(req, nil)
+	for _, reqResp := range responses {
+		if reqResp.Error != nil {
+			return nil, fmt.Errorf("error making deleted accounts request: %v", reqResp.Error)
 		}
 
-		res, err := c.serviceAccountManager.MakeRequest(req, pair.AppID, pair.OrgID)
-		if err != nil {
-			return nil, fmt.Errorf("error making deleted accounts request: %v", err)
-		}
-
-		body, err := authutils.ReadResponseBody(res)
+		body, err := authutils.ReadResponseBody(reqResp.Response)
 		if err != nil {
 			return nil, fmt.Errorf("error reading deleted accounts response body: %v", err)
 		}
