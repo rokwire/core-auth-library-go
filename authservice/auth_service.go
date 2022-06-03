@@ -16,6 +16,7 @@ package authservice
 
 import (
 	"bytes"
+	"context"
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
@@ -558,39 +559,40 @@ func (s *ServiceAccountManager) MakeRequest(req *http.Request, appID string, org
 
 // MakeRequests makes the provided http.Request using tokens granting access to each AppOrgPair
 func (s *ServiceAccountManager) MakeRequests(req *http.Request, pairs []AppOrgPair) map[AppOrgPair]RequestResponse {
-	pairChan := make(chan []AppOrgPair)
 	rrChan := make(chan RequestResponse)
+	pairChan := make(chan []AppOrgPair)
+	duplicateTokenChan := make(chan bool)
 
 	responses := make(map[AppOrgPair]RequestResponse)
 	tokenPairs := make(map[AppOrgPair][]AppOrgPair)
-	usedPairs := make([]string, 0)
+	uniquePairs := make([]string, 0)
 
 	if pairs == nil {
 		pairs = s.appOrgPairs
 	}
 	for _, pair := range pairs {
 		// filter out duplicate pairs
-		if !authutils.ContainsString(usedPairs, pair.String()) {
-			usedPairs = append(usedPairs, pair.String())
-			go s.makeRequest(*req, pair.AppID, pair.OrgID, pairChan, rrChan)
+		if !authutils.ContainsString(uniquePairs, pair.String()) {
+			uniquePairs = append(uniquePairs, pair.String())
+			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, rrChan, pairChan, duplicateTokenChan)
 		}
 	}
 
-	for range pairs {
+	for range uniquePairs {
 		pairs := <-pairChan
 		tokenPair := pairs[0]
 		argPair := pairs[1]
 
 		if len(tokenPairs[tokenPair]) == 0 {
 			tokenPairs[tokenPair] = []AppOrgPair{argPair}
-			pairChan <- pairs
+			duplicateTokenChan <- false
 		} else {
 			tokenPairs[tokenPair] = append(tokenPairs[tokenPair], argPair)
-			pairChan <- nil
+			duplicateTokenChan <- true
 		}
 	}
 
-	for range pairs {
+	for range uniquePairs {
 		requestResp := <-rrChan
 		pairs := <-pairChan
 		tokenPair := pairs[0]
@@ -604,14 +606,14 @@ func (s *ServiceAccountManager) MakeRequests(req *http.Request, pairs []AppOrgPa
 	return responses
 }
 
-func (s *ServiceAccountManager) makeRequest(req http.Request, appID string, orgID string, pc chan []AppOrgPair, rrc chan<- RequestResponse) {
+func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, orgID string, rrc chan<- RequestResponse, pc chan<- []AppOrgPair, dc <-chan bool) {
 	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
 	if token == nil || appOrgPair == nil {
 		// check if tokens should be refreshed and get the new token if so
 		err := s.checkForRefresh()
 		if err != nil {
 			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
-			<-pc
+			<-dc
 
 			rrc <- RequestResponse{Error: fmt.Errorf("error checking access tokens refresh: %v", err)}
 			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}}
@@ -622,7 +624,7 @@ func (s *ServiceAccountManager) makeRequest(req http.Request, appID string, orgI
 		token, appOrgPair = s.getCachedAccessToken(appID, orgID)
 		if token == nil || appOrgPair == nil {
 			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
-			<-pc
+			<-dc
 
 			rrc <- RequestResponse{Error: fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)}
 			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}}
@@ -632,9 +634,7 @@ func (s *ServiceAccountManager) makeRequest(req http.Request, appID string, orgI
 	}
 
 	pc <- []AppOrgPair{*appOrgPair, {AppID: appID, OrgID: orgID}}
-	recvPairs := <-pc
-
-	if recvPairs == nil {
+	if <-dc {
 		rrc <- RequestResponse{}
 		pc <- []AppOrgPair{*appOrgPair}
 		return
@@ -643,7 +643,7 @@ func (s *ServiceAccountManager) makeRequest(req http.Request, appID string, orgI
 	req.Header.Set("Authorization", token.String())
 
 	client := &http.Client{}
-	resp, err := client.Do(&req)
+	resp, err := client.Do(req)
 	if err != nil {
 		rrc <- RequestResponse{Error: fmt.Errorf("error sending request: %v", err)}
 		pc <- []AppOrgPair{*appOrgPair}
@@ -667,7 +667,7 @@ func (s *ServiceAccountManager) makeRequest(req http.Request, appID string, orgI
 		}
 
 		req.Header.Set("Authorization", token.String())
-		resp, err = client.Do(&req)
+		resp, err = client.Do(req)
 		if err != nil {
 			rrc <- RequestResponse{Error: fmt.Errorf("error sending request: %v", err)}
 			pc <- []AppOrgPair{*appOrgPair}

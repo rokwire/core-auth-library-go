@@ -81,8 +81,9 @@ func (c *CoreService) getDeletedAccounts() ([]string, error) {
 
 	responses := c.serviceAccountManager.MakeRequests(req, nil)
 	for _, reqResp := range responses {
-		if reqResp.Error != nil {
-			return nil, fmt.Errorf("error making deleted accounts request: %v", reqResp.Error)
+		if reqResp.Error != nil && c.logger != nil {
+			c.logger.Errorf("error making deleted accounts request: %v", reqResp.Error)
+			continue
 		}
 
 		body, err := authutils.ReadResponseBody(reqResp.Response)
