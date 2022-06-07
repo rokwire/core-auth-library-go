@@ -490,19 +490,30 @@ func (s *ServiceAccountManager) GetAccessToken(appID string, orgID string) (*Acc
 }
 
 // GetAccessTokens attempts to get all allowed access tokens for the implementing service, then caches them if successful
-func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, error) {
+func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, []AppOrgPair, error) {
 	tokens, err := s.loader.LoadAccessTokens()
 	if err != nil {
-		return nil, fmt.Errorf("error loading access tokens: %v", err)
+		return nil, nil, fmt.Errorf("error loading access tokens: %v", err)
 	}
 
 	// update caches
 	s.accessTokens = &sync.Map{}
 
+	oldPairs := make([]string, len(s.appOrgPairs))
+	newPairs := make([]AppOrgPair, 0)
+	for i, pair := range s.appOrgPairs {
+		oldPairs[i] = pair.String()
+	}
+
 	i := 0
 	s.appOrgPairs = make([]AppOrgPair, len(tokens))
 	for pair, token := range tokens {
 		s.appOrgPairs[i] = pair
+		if !authutils.ContainsString(oldPairs, pair.String()) {
+			oldPairs = append(oldPairs, pair.String()) // filters out any duplicate new pairs
+			newPairs = append(newPairs, pair)
+		}
+
 		s.accessTokens.Store(pair, token)
 		i++
 	}
@@ -510,173 +521,31 @@ func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, e
 	now := time.Now()
 	s.tokensUpdated = &now
 
-	return tokens, nil
+	return tokens, newPairs, nil
 }
 
 // MakeRequest makes the provided http.Request with the token granting appropriate access to appID and orgID
 func (s *ServiceAccountManager) MakeRequest(req *http.Request, appID string, orgID string) (*http.Response, error) {
-	// if token is missing, check if tokens should be refreshed and get the new token if so
-	err := s.checkForRefresh()
-	if err != nil {
-		return nil, fmt.Errorf("error checking access tokens refresh: %v", err)
-	}
-
-	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
-	if token == nil || appOrgPair == nil {
-		return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
-	}
-
-	req.Header.Set("Authorization", token.String())
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error sending request: %v", err)
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		// access token may have expired, so get new ones and try once more
-		_, updateErr := s.GetAccessTokens()
-		if updateErr != nil {
-			return nil, fmt.Errorf("error getting new access tokens (%s) - after %v", updateErr, err)
-		}
-
-		token, appOrgPair = s.getCachedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
-		if token == nil || appOrgPair == nil {
-			return nil, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
-		}
-
-		req.Header.Set("Authorization", token.String())
-
-		resp, err = client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("error sending request: %v", err)
-		}
-	}
-
-	return resp, nil
+	return s.makeRequest(req, appID, orgID, nil, nil, nil)
 }
 
 // MakeRequests makes the provided http.Request using tokens granting access to each AppOrgPair
 func (s *ServiceAccountManager) MakeRequests(req *http.Request, pairs []AppOrgPair) map[AppOrgPair]RequestResponse {
-	rrChan := make(chan RequestResponse)
+	responseChan := make(chan RequestResponse)
 	pairChan := make(chan []AppOrgPair)
 	duplicateTokenChan := make(chan bool)
+	responseMapChan := make(chan map[AppOrgPair]RequestResponse)
 
 	responses := make(map[AppOrgPair]RequestResponse)
-	tokenPairs := make(map[AppOrgPair][]AppOrgPair)
-	uniquePairs := make([]string, 0)
 
-	if pairs == nil {
-		pairs = s.appOrgPairs
-	}
-	for _, pair := range pairs {
-		// filter out duplicate pairs
-		if !authutils.ContainsString(uniquePairs, pair.String()) {
-			uniquePairs = append(uniquePairs, pair.String())
-			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, rrChan, pairChan, duplicateTokenChan)
-		}
-	}
-
-	for range uniquePairs {
-		pairs := <-pairChan
-		tokenPair := pairs[0]
-		argPair := pairs[1]
-
-		if len(tokenPairs[tokenPair]) == 0 {
-			tokenPairs[tokenPair] = []AppOrgPair{argPair}
-			duplicateTokenChan <- false
-		} else {
-			tokenPairs[tokenPair] = append(tokenPairs[tokenPair], argPair)
-			duplicateTokenChan <- true
-		}
-	}
-
-	for range uniquePairs {
-		requestResp := <-rrChan
-		pairs := <-pairChan
-		tokenPair := pairs[0]
-
-		if !requestResp.IsZero() {
-			requestResp.Pairs = tokenPairs[tokenPair]
-			responses[tokenPair] = requestResp
+	go s.makeRequests(req, pairs, responseChan, pairChan, duplicateTokenChan, responseMapChan)
+	for responseMap := range responseMapChan {
+		for pair, res := range responseMap {
+			responses[pair] = res
 		}
 	}
 
 	return responses
-}
-
-func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, orgID string, rrc chan<- RequestResponse, pc chan<- []AppOrgPair, dc <-chan bool) {
-	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
-	if token == nil || appOrgPair == nil {
-		// check if tokens should be refreshed and get the new token if so
-		err := s.checkForRefresh()
-		if err != nil {
-			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
-			<-dc
-
-			rrc <- RequestResponse{Error: fmt.Errorf("error checking access tokens refresh: %v", err)}
-			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}}
-
-			return
-		}
-
-		token, appOrgPair = s.getCachedAccessToken(appID, orgID)
-		if token == nil || appOrgPair == nil {
-			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
-			<-dc
-
-			rrc <- RequestResponse{Error: fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)}
-			pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}}
-
-			return
-		}
-	}
-
-	pc <- []AppOrgPair{*appOrgPair, {AppID: appID, OrgID: orgID}}
-	if <-dc {
-		rrc <- RequestResponse{}
-		pc <- []AppOrgPair{*appOrgPair}
-		return
-	}
-
-	req.Header.Set("Authorization", token.String())
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		rrc <- RequestResponse{Error: fmt.Errorf("error sending request: %v", err)}
-		pc <- []AppOrgPair{*appOrgPair}
-		return
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized {
-		// check if tokens should be refreshed and get the new token if so
-		err := s.checkForRefresh()
-		if err != nil {
-			rrc <- RequestResponse{Error: fmt.Errorf("error checking access tokens refresh after unauthorized: %v", err)}
-			pc <- []AppOrgPair{*appOrgPair}
-			return
-		}
-
-		token, appOrgPair = s.getCachedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
-		if token == nil || appOrgPair == nil {
-			rrc <- RequestResponse{Error: fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)}
-			pc <- []AppOrgPair{{AppID: appOrgPair.AppID, OrgID: appOrgPair.OrgID}}
-			return
-		}
-
-		req.Header.Set("Authorization", token.String())
-		resp, err = client.Do(req)
-		if err != nil {
-			rrc <- RequestResponse{Error: fmt.Errorf("error sending request: %v", err)}
-			pc <- []AppOrgPair{*appOrgPair}
-			return
-		}
-	}
-
-	rrc <- RequestResponse{Response: resp}
-	pc <- []AppOrgPair{*appOrgPair}
 }
 
 // AccessTokens returns a map containing all cached access tokens
@@ -743,21 +612,181 @@ func (s *ServiceAccountManager) getCachedAccessToken(appID string, orgID string)
 }
 
 //checkForRefresh checks if access tokens need to be reloaded
-func (s *ServiceAccountManager) checkForRefresh() error {
+func (s *ServiceAccountManager) checkForRefresh() ([]AppOrgPair, error) {
 	s.tokensLock.Lock()
 	defer s.tokensLock.Unlock()
 	tokensUpdated := s.tokensUpdated
 	maxRefreshFreq := s.maxRefreshCacheFreq
 
+	var newPairs []AppOrgPair
+	var err error
 	now := time.Now()
 	if tokensUpdated == nil || now.Sub(*tokensUpdated).Minutes() > float64(maxRefreshFreq) {
-		_, err := s.GetAccessTokens()
+		_, newPairs, err = s.GetAccessTokens()
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return newPairs, nil
+}
+
+func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, orgID string, rrc chan<- RequestResponse, pc chan<- []AppOrgPair, dc <-chan bool) (*http.Response, error) {
+	async := (rrc != nil) && (pc != nil) && (dc != nil)
+
+	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
+	if token == nil || appOrgPair == nil {
+		// check if tokens should be refreshed and get the new token if so
+		_, err := s.checkForRefresh()
+		if err != nil {
+			retErr := fmt.Errorf("error checking access tokens refresh: %v", err)
+			if async {
+				pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
+				<-dc
+
+				rrc <- RequestResponse{TokenPair: AppOrgPair{AppID: appID, OrgID: orgID}, Error: retErr}
+				pc <- nil
+			}
+
+			return nil, retErr
+		}
+
+		token, appOrgPair = s.getCachedAccessToken(appID, orgID)
+		if token == nil || appOrgPair == nil {
+			retErr := fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
+			if async {
+				pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
+				<-dc
+
+				rrc <- RequestResponse{TokenPair: AppOrgPair{AppID: appID, OrgID: orgID}, Error: retErr}
+				pc <- nil
+			}
+
+			return nil, retErr
+		}
+	}
+
+	if async {
+		pc <- []AppOrgPair{*appOrgPair, {AppID: appID, OrgID: orgID}}
+		if <-dc {
+			rrc <- RequestResponse{TokenPair: *appOrgPair}
+			pc <- nil
+			return nil, nil
+		}
+	}
+
+	req.Header.Set("Authorization", token.String())
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		retErr := fmt.Errorf("error sending request: %v", err)
+		if async {
+			rrc <- RequestResponse{TokenPair: *appOrgPair, Error: retErr}
+			pc <- nil
+		}
+
+		return nil, retErr
+	}
+
+	var newPairs []AppOrgPair
+	if resp.StatusCode == http.StatusUnauthorized {
+		// check if tokens should be refreshed and get the new token if so
+		newPairs, err = s.checkForRefresh()
+		if err != nil {
+			retErr := fmt.Errorf("error checking access tokens refresh after unauthorized: %v", err)
+			if async {
+				rrc <- RequestResponse{TokenPair: *appOrgPair, Error: retErr}
+				pc <- nil
+			}
+
+			return nil, retErr
+		}
+
+		refreshedToken, refreshedPair := s.getCachedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
+		if refreshedToken == nil || refreshedPair == nil {
+			retErr := fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
+			if async {
+				rrc <- RequestResponse{TokenPair: AppOrgPair{AppID: appOrgPair.AppID, OrgID: appOrgPair.OrgID}, Error: retErr}
+				pc <- newPairs
+			}
+
+			return nil, retErr
+		}
+
+		req.Header.Set("Authorization", refreshedToken.String())
+		resp, err = client.Do(req)
+		if err != nil {
+			retErr := fmt.Errorf("error sending request: %v", err)
+			if async {
+				rrc <- RequestResponse{TokenPair: *refreshedPair, Error: retErr}
+				pc <- newPairs
+			}
+
+			return nil, retErr
+		}
+
+		appOrgPair = refreshedPair
+	}
+
+	if async {
+		rrc <- RequestResponse{TokenPair: *appOrgPair, Response: resp}
+		pc <- newPairs
+	}
+
+	return resp, nil
+}
+
+func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPair, rrc chan RequestResponse, pc chan []AppOrgPair, dc chan bool, rmc chan map[AppOrgPair]RequestResponse) {
+	responses := make(map[AppOrgPair]RequestResponse)
+	tokenPairs := make(map[AppOrgPair][]AppOrgPair)
+	uniquePairs := make([]string, 0)
+
+	useCachedPairs := pairs == nil
+	if useCachedPairs {
+		pairs = s.appOrgPairs
+	}
+	for _, pair := range pairs {
+		// filter out duplicate pairs
+		if !authutils.ContainsString(uniquePairs, pair.String()) {
+			uniquePairs = append(uniquePairs, pair.String())
+			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, rrc, pc, dc)
+		}
+	}
+
+	for range uniquePairs {
+		pairs := <-pc
+		tokenPair := pairs[0]
+		argPair := pairs[1]
+
+		if len(tokenPairs[tokenPair]) == 0 {
+			tokenPairs[tokenPair] = []AppOrgPair{argPair}
+			dc <- false
+		} else {
+			tokenPairs[tokenPair] = append(tokenPairs[tokenPair], argPair)
+			dc <- true
+		}
+	}
+
+	closeChannel := true
+	for range uniquePairs {
+		requestResp := <-rrc
+		if !requestResp.IsZero() {
+			requestResp.Pairs = tokenPairs[requestResp.TokenPair]
+			responses[requestResp.TokenPair] = requestResp
+		}
+
+		newPairs := <-pc
+		if len(newPairs) > 0 && useCachedPairs {
+			closeChannel = false
+			go s.makeRequests(req, newPairs, rrc, pc, dc, rmc)
+		}
+	}
+
+	rmc <- responses
+	if closeChannel {
+		close(rmc)
+	}
 }
 
 // NewServiceAccountManager creates and configures a new ServiceAccountManager instance
@@ -780,7 +809,7 @@ func NewServiceAccountManager(authService *AuthService, serviceAccountLoader Ser
 		tokensLock: lock, maxRefreshCacheFreq: 30, loader: serviceAccountLoader}
 
 	// Subscribe to the implementing service to validate registration
-	_, err = manager.GetAccessTokens()
+	_, _, err = manager.GetAccessTokens()
 	if err != nil {
 		return nil, fmt.Errorf("error loading access tokens: %v", err)
 	}
@@ -990,6 +1019,9 @@ func (ao AppOrgPair) Equals(other AppOrgPair) bool {
 
 // String returns the app org pair as a string
 func (ao AppOrgPair) String() string {
+	if ao.AppID == "" || ao.OrgID == "" {
+		return ""
+	}
 	return fmt.Sprintf("%s_%s", ao.AppID, ao.OrgID)
 }
 
@@ -1019,14 +1051,15 @@ type accessTokensResponse struct {
 
 // RequestResponse represents a response to a unique MakeRequest call
 type RequestResponse struct {
-	Pairs    []AppOrgPair
-	Response *http.Response
-	Error    error
+	Pairs     []AppOrgPair
+	TokenPair AppOrgPair
+	Response  *http.Response
+	Error     error
 }
 
 // IsZero determines if the RequestResponse object has its zero value
 func (rr RequestResponse) IsZero() bool {
-	return rr.Pairs == nil && rr.Response == nil && rr.Error == nil
+	return rr.Pairs == nil && len(rr.TokenPair.String()) == 0 && rr.Response == nil && rr.Error == nil
 }
 
 // -------------------- ServiceReg --------------------
