@@ -337,6 +337,7 @@ type ServiceRegLoader interface {
 //RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
 	authService *AuthService
+	client      *http.Client
 
 	path string // Path to service registrations resource on the auth service
 
@@ -349,7 +350,6 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 		return nil, nil
 	}
 
-	client := &http.Client{}
 	req, err := http.NewRequest("GET", r.authService.AuthBaseURL+r.path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to load services: %v", err)
@@ -361,7 +361,7 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 	q.Add("ids", servicesQuery)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error requesting services: %v", err)
 	}
@@ -408,7 +408,7 @@ func NewRemoteServiceRegLoader(authService *AuthService, subscribedServices []st
 	}
 
 	subscriptions := NewServiceRegSubscriptions(subscribedServices)
-	return &RemoteServiceRegLoaderImpl{authService: authService, path: path, ServiceRegSubscriptions: subscriptions}, nil
+	return &RemoteServiceRegLoaderImpl{authService: authService, client: &http.Client{}, path: path, ServiceRegSubscriptions: subscriptions}, nil
 }
 
 // -------------------- ServiceRegSubscriptions --------------------
@@ -475,6 +475,8 @@ type ServiceAccountManager struct {
 	tokensUpdated       *time.Time
 	maxRefreshCacheFreq uint
 
+	client *http.Client
+
 	loader ServiceAccountLoader
 }
 
@@ -531,15 +533,17 @@ func (s *ServiceAccountManager) MakeRequest(req *http.Request, appID string, org
 
 // MakeRequests makes the provided http.Request using tokens granting access to each AppOrgPair
 func (s *ServiceAccountManager) MakeRequests(req *http.Request, pairs []AppOrgPair) map[AppOrgPair]RequestResponse {
-	responseChan := make(chan RequestResponse)
-	pairChan := make(chan []AppOrgPair)
-	duplicateTokenChan := make(chan bool)
-	responseMapChan := make(chan map[AppOrgPair]RequestResponse)
-
+	responsesChan := make(chan map[AppOrgPair]RequestResponse, 2)
 	responses := make(map[AppOrgPair]RequestResponse)
 
-	go s.makeRequests(req, pairs, responseChan, pairChan, duplicateTokenChan, responseMapChan)
-	for responseMap := range responseMapChan {
+	// use WaitGroup to ensure all responses are collected (makeRequests may launch a single makeRequests goroutine if new pairs are discovered)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go s.makeRequests(req, pairs, responsesChan, &wg)
+	wg.Wait()
+
+	close(responsesChan)
+	for responseMap := range responsesChan {
 		for pair, res := range responseMap {
 			responses[pair] = res
 		}
@@ -611,7 +615,7 @@ func (s *ServiceAccountManager) getCachedAccessToken(appID string, orgID string)
 	return nil, nil
 }
 
-//checkForRefresh checks if access tokens need to be reloaded
+// checkForRefresh checks if access tokens need to be reloaded
 func (s *ServiceAccountManager) checkForRefresh() ([]AppOrgPair, error) {
 	s.tokensLock.Lock()
 	defer s.tokensLock.Unlock()
@@ -631,113 +635,95 @@ func (s *ServiceAccountManager) checkForRefresh() ([]AppOrgPair, error) {
 	return newPairs, nil
 }
 
+// getRefreshedAccessToken checks if tokens should be refreshed and gets a new token for appID, orgID if so
+func (s *ServiceAccountManager) getRefreshedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair, []AppOrgPair, error) {
+	newPairs, err := s.checkForRefresh()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error checking access tokens refresh: %v", err)
+	}
+
+	refreshedToken, refreshedPair := s.getCachedAccessToken(appID, orgID)
+	if refreshedToken == nil || refreshedPair == nil {
+		return nil, nil, newPairs, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
+	}
+
+	return refreshedToken, refreshedPair, newPairs, nil
+}
+
+// makeRequest sends a HTTP request with a token granting access to appID, orgID
 func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, orgID string, rrc chan<- RequestResponse, pc chan<- []AppOrgPair, dc <-chan bool) (*http.Response, error) {
 	async := (rrc != nil) && (pc != nil) && (dc != nil)
+	var err error
 
 	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
 	if token == nil || appOrgPair == nil {
-		// check if tokens should be refreshed and get the new token if so
-		_, err := s.checkForRefresh()
+		// the requested pair is missing from the cache, so try refreshing tokens to find the missing one
+		token, appOrgPair, _, err = s.getRefreshedAccessToken(appID, orgID)
 		if err != nil {
-			retErr := fmt.Errorf("error checking access tokens refresh: %v", err)
-			if async {
-				pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
-				<-dc
-
-				rrc <- RequestResponse{TokenPair: AppOrgPair{AppID: appID, OrgID: orgID}, Error: retErr}
-				pc <- nil
-			}
-
-			return nil, retErr
-		}
-
-		token, appOrgPair = s.getCachedAccessToken(appID, orgID)
-		if token == nil || appOrgPair == nil {
-			retErr := fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
-			if async {
-				pc <- []AppOrgPair{{AppID: appID, OrgID: orgID}, {AppID: appID, OrgID: orgID}}
-				<-dc
-
-				rrc <- RequestResponse{TokenPair: AppOrgPair{AppID: appID, OrgID: orgID}, Error: retErr}
-				pc <- nil
-			}
-
-			return nil, retErr
+			return s.handleRequestResponse(async, true, AppOrgPair{AppID: appID, OrgID: orgID}, nil, err, nil, rrc, pc, dc)
 		}
 	}
 
 	if async {
 		pc <- []AppOrgPair{*appOrgPair, {AppID: appID, OrgID: orgID}}
 		if <-dc {
-			rrc <- RequestResponse{TokenPair: *appOrgPair}
-			pc <- nil
-			return nil, nil
+			return s.handleRequestResponse(async, false, *appOrgPair, nil, nil, nil, rrc, pc, dc)
 		}
 	}
 
 	req.Header.Set("Authorization", token.String())
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := s.client.Do(req)
 	if err != nil {
 		retErr := fmt.Errorf("error sending request: %v", err)
-		if async {
-			rrc <- RequestResponse{TokenPair: *appOrgPair, Error: retErr}
-			pc <- nil
-		}
-
-		return nil, retErr
+		return s.handleRequestResponse(async, false, *appOrgPair, nil, retErr, nil, rrc, pc, dc)
 	}
 
 	var newPairs []AppOrgPair
 	if resp.StatusCode == http.StatusUnauthorized {
-		// check if tokens should be refreshed and get the new token if so
-		newPairs, err = s.checkForRefresh()
+		// unauthorized, so try refreshing tokens and try once more with a refreshed token
+		var refreshedPair *AppOrgPair
+		token, refreshedPair, newPairs, err = s.getRefreshedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
 		if err != nil {
-			retErr := fmt.Errorf("error checking access tokens refresh after unauthorized: %v", err)
-			if async {
-				rrc <- RequestResponse{TokenPair: *appOrgPair, Error: retErr}
-				pc <- nil
-			}
-
-			return nil, retErr
+			return s.handleRequestResponse(async, false, *appOrgPair, nil, err, newPairs, rrc, pc, dc)
 		}
 
-		refreshedToken, refreshedPair := s.getCachedAccessToken(appOrgPair.AppID, appOrgPair.OrgID)
-		if refreshedToken == nil || refreshedPair == nil {
-			retErr := fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
-			if async {
-				rrc <- RequestResponse{TokenPair: AppOrgPair{AppID: appOrgPair.AppID, OrgID: appOrgPair.OrgID}, Error: retErr}
-				pc <- newPairs
-			}
-
-			return nil, retErr
-		}
-
-		req.Header.Set("Authorization", refreshedToken.String())
-		resp, err = client.Do(req)
+		req.Header.Set("Authorization", token.String())
+		resp, err = s.client.Do(req)
 		if err != nil {
 			retErr := fmt.Errorf("error sending request: %v", err)
-			if async {
-				rrc <- RequestResponse{TokenPair: *refreshedPair, Error: retErr}
-				pc <- newPairs
-			}
-
-			return nil, retErr
+			return s.handleRequestResponse(async, false, *refreshedPair, nil, retErr, newPairs, rrc, pc, dc)
 		}
 
 		appOrgPair = refreshedPair
 	}
 
+	return s.handleRequestResponse(async, false, *appOrgPair, resp, nil, newPairs, rrc, pc, dc)
+}
+
+// handleRequestResponse sends and receives data on the given channels if used in an asynchronous call to makeRequest
+func (s *ServiceAccountManager) handleRequestResponse(async bool, allStage bool, tokenPair AppOrgPair, resp *http.Response, err error, newPairs []AppOrgPair,
+	rrc chan<- RequestResponse, pc chan<- []AppOrgPair, dc <-chan bool) (*http.Response, error) {
 	if async {
-		rrc <- RequestResponse{TokenPair: *appOrgPair, Response: resp}
+		if allStage {
+			pc <- []AppOrgPair{{AppID: tokenPair.AppID, OrgID: tokenPair.OrgID}, {AppID: tokenPair.AppID, OrgID: tokenPair.OrgID}}
+			<-dc
+		}
+
+		rrc <- RequestResponse{TokenPair: tokenPair, Response: resp, Error: err}
 		pc <- newPairs
 	}
 
-	return resp, nil
+	return resp, err
 }
 
-func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPair, rrc chan RequestResponse, pc chan []AppOrgPair, dc chan bool, rmc chan map[AppOrgPair]RequestResponse) {
+// makeRequests sends a HTTP request for each AppOrgPair in the given list, or all cached pairs if nil
+func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPair, rc chan map[AppOrgPair]RequestResponse, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	responseChan := make(chan RequestResponse)
+	pairChan := make(chan []AppOrgPair)
+	duplicateChan := make(chan bool)
+
 	responses := make(map[AppOrgPair]RequestResponse)
 	tokenPairs := make(map[AppOrgPair][]AppOrgPair)
 	uniquePairs := make([]string, 0)
@@ -746,47 +732,53 @@ func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPa
 	if useCachedPairs {
 		pairs = s.appOrgPairs
 	}
+
+	// filter out duplicate pairs and launch a goroutine for each unique requested pair
 	for _, pair := range pairs {
-		// filter out duplicate pairs
 		if !authutils.ContainsString(uniquePairs, pair.String()) {
 			uniquePairs = append(uniquePairs, pair.String())
-			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, rrc, pc, dc)
+			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, responseChan, pairChan, duplicateChan)
 		}
 	}
 
+	// store mapping of token pairs used for each unique requested pair, and signal each goroutine whether another goroutine is using its token pair
+	// token pairs are the pairs that correspond to the token each goroutine attempts to use in the given request
 	for range uniquePairs {
-		pairs := <-pc
+		pairs := <-pairChan
 		tokenPair := pairs[0]
 		argPair := pairs[1]
 
 		if len(tokenPairs[tokenPair]) == 0 {
 			tokenPairs[tokenPair] = []AppOrgPair{argPair}
-			dc <- false
+			duplicateChan <- false
 		} else {
 			tokenPairs[tokenPair] = append(tokenPairs[tokenPair], argPair)
-			dc <- true
+			duplicateChan <- true
 		}
 	}
 
-	closeChannel := true
+	// receive a response from each goroutine (one response for each unique token pair)
+	// if new pairs are discovered (i.e., during a token refresh), send requests for these if cached pairs are being used to send requests
 	for range uniquePairs {
-		requestResp := <-rrc
+		requestResp := <-responseChan
 		if !requestResp.IsZero() {
 			requestResp.Pairs = tokenPairs[requestResp.TokenPair]
 			responses[requestResp.TokenPair] = requestResp
 		}
 
-		newPairs := <-pc
+		newPairs := <-pairChan
 		if len(newPairs) > 0 && useCachedPairs {
-			closeChannel = false
-			go s.makeRequests(req, newPairs, rrc, pc, dc, rmc)
+			wg.Add(1)
+			go s.makeRequests(req, newPairs, rc, wg)
 		}
 	}
 
-	rmc <- responses
-	if closeChannel {
-		close(rmc)
-	}
+	// cleanup and send responses
+	close(responseChan)
+	close(pairChan)
+	close(duplicateChan)
+
+	rc <- responses
 }
 
 // NewServiceAccountManager creates and configures a new ServiceAccountManager instance
@@ -806,7 +798,7 @@ func NewServiceAccountManager(authService *AuthService, serviceAccountLoader Ser
 	lock := &sync.RWMutex{}
 
 	manager := &ServiceAccountManager{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
-		tokensLock: lock, maxRefreshCacheFreq: 30, loader: serviceAccountLoader}
+		tokensLock: lock, maxRefreshCacheFreq: 30, client: &http.Client{}, loader: serviceAccountLoader}
 
 	// Subscribe to the implementing service to validate registration
 	_, _, err = manager.GetAccessTokens()
@@ -830,6 +822,7 @@ type ServiceAccountLoader interface {
 //RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
 type RemoteServiceAccountLoaderImpl struct {
 	authService *AuthService
+	client      *http.Client
 
 	accountID string // Service account ID on the auth service
 
@@ -846,8 +839,7 @@ func (r *RemoteServiceAccountLoaderImpl) LoadAccessToken(appID string, orgID str
 		return nil, fmt.Errorf("error creating access token request: %v", err)
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error sending access token request: %v", err)
 	}
@@ -872,8 +864,7 @@ func (r *RemoteServiceAccountLoaderImpl) LoadAccessTokens() (map[AppOrgPair]Acce
 		return nil, fmt.Errorf("error creating access tokens request: %v", err)
 	}
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := r.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error sending access tokens request: %v", err)
 	}
@@ -970,7 +961,7 @@ func NewRemoteServiceAccountLoader(authService *AuthService, accountID string, s
 		accessTokensPath = "/bbs/access-tokens"
 	}
 
-	return &RemoteServiceAccountLoaderImpl{authService: authService, accountID: accountID, accessTokenPath: accessTokenPath,
+	return &RemoteServiceAccountLoaderImpl{authService: authService, client: &http.Client{}, accountID: accountID, accessTokenPath: accessTokenPath,
 		accessTokensPath: accessTokensPath, serviceAuthType: serviceAuthType}, nil
 }
 
