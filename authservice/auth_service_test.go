@@ -32,7 +32,7 @@ func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {
 	return authservice.NewServiceRegSubscriptions([]string{"auth", "test"})
 }
 
-func TestAuthService_GetServiceReg(t *testing.T) {
+func TestServiceRegManager_GetServiceReg(t *testing.T) {
 	authPubKey := testutils.GetSamplePubKey()
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
@@ -63,17 +63,17 @@ func TestAuthService_GetServiceReg(t *testing.T) {
 			}
 			got, err := m.GetServiceReg(tt.args.id)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AuthService.GetServiceReg() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ServiceRegManager.GetServiceReg() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("AuthService.GetServiceReg() = %v, want %v", got, tt.want)
+				t.Errorf("ServiceRegManager.GetServiceReg() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
+func TestServiceRegManager_GetServiceRegWithPubKey(t *testing.T) {
 	authPubKey := testutils.GetSamplePubKey()
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
@@ -105,17 +105,17 @@ func TestAuthService_GetServiceRegWithPubKey(t *testing.T) {
 			}
 			got, err := m.GetServiceRegWithPubKey(tt.args.id)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AuthService.GetServiceRegWithPubKey() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ServiceRegManager.GetServiceRegWithPubKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("AuthService.GetServiceRegWithPubKey() = %v, want %v", got, tt.want)
+				t.Errorf("ServiceRegManager.GetServiceRegWithPubKey() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-func TestAuthService_SubscribeServices(t *testing.T) {
+func TestServiceRegManager_SubscribeServices(t *testing.T) {
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
 	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", nil}
@@ -160,7 +160,7 @@ func TestAuthService_SubscribeServices(t *testing.T) {
 	}
 }
 
-func TestAuthService_ValidateServiceRegistration(t *testing.T) {
+func TestServiceRegManager_ValidateServiceRegistration(t *testing.T) {
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
 	test2ServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", "https://test2.rokwire.com", nil}
@@ -189,7 +189,7 @@ func TestAuthService_ValidateServiceRegistration(t *testing.T) {
 				return
 			}
 			if err := m.ValidateServiceRegistration(); (err != nil) != tt.wantErr {
-				t.Errorf("AuthService.ValidateServiceRegistration() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ServiceRegManager.ValidateServiceRegistration() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -250,7 +250,7 @@ LrSVbitnfQD1AgMBAAE=
 				return
 			}
 			if err := m.ValidateServiceRegistrationKey(tt.args.privKey); (err != nil) != tt.wantErr {
-				t.Errorf("AuthService.ValidateServiceRegistrationKey() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ServiceRegManager.ValidateServiceRegistrationKey() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

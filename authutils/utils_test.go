@@ -17,7 +17,11 @@ package authutils_test
 import (
 	"crypto/rsa"
 	"encoding/hex"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/rokwire/core-auth-library-go/authutils"
@@ -166,6 +170,37 @@ func TestGetPubKeyPem(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("GetPubKeyPem() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReadResponseBody(t *testing.T) {
+	unauthorized := &http.Response{StatusCode: http.StatusUnauthorized, Status: fmt.Sprintf("%d %s", http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)), Body: ioutil.NopCloser(strings.NewReader("test"))}
+	ok := &http.Response{StatusCode: http.StatusOK, Status: fmt.Sprintf("%d %s", http.StatusOK, http.StatusText(http.StatusOK)), Body: ioutil.NopCloser(strings.NewReader("test"))}
+
+	type args struct {
+		resp *http.Response
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []byte
+		wantErr bool
+	}{
+		{"return error on nil response", args{nil}, nil, true},
+		{"return error on bad status code", args{unauthorized}, []byte("test"), true},
+		{"return body", args{ok}, []byte("test"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := authutils.ReadResponseBody(tt.args.resp)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ReadResponseBody() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if string(got) != string(tt.want) {
+				t.Errorf("ReadResponseBody() = %v, want %v", got, tt.want)
 			}
 		})
 	}
