@@ -406,8 +406,8 @@ func TestSignatureAuthHeader_SetField(t *testing.T) {
 
 func TestSignatureAuthHeader_Build(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyId: "test", Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature"}
-	headerWithExtension := sigauth.SignatureAuthHeader{KeyId: "test", Algorithm: "rsa-sha256", Extensions: "test_extensions", Signature: "test_signature"}
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: "test", Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature"}
+	headerWithExtension := sigauth.SignatureAuthHeader{KeyID: "test", Algorithm: "rsa-sha256", Extensions: "test_extensions", Signature: "test_signature"}
 
 	tests := []struct {
 		name    string
@@ -416,7 +416,7 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "success", s: &sigAuthHeader, want: `Signature keyId="test",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`, wantErr: false},
-		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyId: "test", Signature: "test_aignature"}, want: "", wantErr: true},
+		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyID: "test", Signature: "test_aignature"}, want: "", wantErr: true},
 		{name: "use_extensions", s: &headerWithExtension, want: `Signature keyId="test",algorithm="rsa-sha256",extensions="test_extensions",signature="test_signature"`, wantErr: false},
 	}
 	for _, tt := range tests {
@@ -435,7 +435,7 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 
 func TestParseSignatureAuthHeader(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyId: "test", Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature=="}
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: "test", Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature=="}
 
 	type args struct {
 		header string

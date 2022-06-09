@@ -20,7 +20,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -117,7 +116,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	sigAuthHeader := SignatureAuthHeader{KeyId: s.serviceRegManager.AuthService.ServiceID, Algorithm: "rsa-sha256", Headers: headers}
+	sigAuthHeader := SignatureAuthHeader{KeyID: s.serviceRegManager.AuthService.ServiceID, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -155,16 +154,16 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", err
 	}
 
-	if requiredServiceIDs != nil && !authutils.ContainsString(requiredServiceIDs, sigAuthHeader.KeyId) {
-		return "", fmt.Errorf("request signer (%s) is not one of the required services %v", sigAuthHeader.KeyId, requiredServiceIDs)
+	if requiredServiceIDs != nil && !authutils.ContainsString(requiredServiceIDs, sigAuthHeader.KeyID) {
+		return "", fmt.Errorf("request signer (%s) is not one of the required services %v", sigAuthHeader.KeyID, requiredServiceIDs)
 	}
 
-	err = s.CheckServiceSignature(sigAuthHeader.KeyId, []byte(sigString), sigAuthHeader.Signature)
+	err = s.CheckServiceSignature(sigAuthHeader.KeyID, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return "", fmt.Errorf("error validating signature: %v", err)
 	}
 
-	return sigAuthHeader.KeyId, nil
+	return sigAuthHeader.KeyID, nil
 }
 
 // CheckRequestSignature validates the signature on the provided request
@@ -225,40 +224,22 @@ func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, 
 	return sigString, sigAuthHeader, nil
 }
 
-// BuildAccessTokenRequest builds a signed request to get an access token from an auth service
-func (s *SignatureAuth) BuildAccessTokenRequest(host string, path string, accountID string, _ string) (*http.Request, error) {
-	if host == "" {
-		return nil, errors.New("host is missing")
-	}
-	if path == "" {
-		return nil, errors.New("path is missing")
-	}
-	if accountID == "" {
-		return nil, errors.New("service account ID is missing")
-	}
+// Implement ServiceAuthRequests interface
 
-	params := map[string]interface{}{
-		"account_id": accountID,
-		"auth_type":  "signature",
+// BuildRequestAuthBody returns a map containing the auth fields for static token auth request bodies
+func (s *SignatureAuth) BuildRequestAuthBody() map[string]interface{} {
+	return map[string]interface{}{
+		"auth_type": "signature",
 	}
-	data, err := json.Marshal(params)
+}
+
+// ModifyRequest signs the passed request to perform signature auth
+func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
+	err := s.SignRequest(req)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling body for get access token: %v", err)
+		return fmt.Errorf("error signing request: %v", err)
 	}
-
-	r, err := http.NewRequest(http.MethodPost, host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error creating request for get access token: %v", err)
-	}
-
-	r.Header.Set("Content-Type", "application/json")
-
-	err = s.SignRequest(r)
-	if err != nil {
-		return nil, fmt.Errorf("error signing request for get access token: %v", err)
-	}
-
-	return r, nil
+	return nil
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
@@ -370,7 +351,7 @@ func ParseHTTPRequest(r *http.Request) (*Request, error) {
 
 //SignatureAuthHeader defines the structure of the Authorization header for signature authentication
 type SignatureAuthHeader struct {
-	KeyId      string   `json:"keyId" validate:"required"`
+	KeyID      string   `json:"keyId" validate:"required"`
 	Algorithm  string   `json:"algorithm" validate:"required"`
 	Headers    []string `json:"headers,omitempty"`
 	Extensions string   `json:"extensions,omitempty"`
@@ -381,7 +362,7 @@ type SignatureAuthHeader struct {
 func (s *SignatureAuthHeader) SetField(field string, value string) error {
 	switch field {
 	case "keyId":
-		s.KeyId = value
+		s.KeyID = value
 	case "algorithm":
 		s.Algorithm = value
 	case "headers":
@@ -415,7 +396,7 @@ func (s *SignatureAuthHeader) Build() (string, error) {
 		extensions = fmt.Sprintf("extensions=\"%s\",", s.Extensions)
 	}
 
-	return fmt.Sprintf("Signature keyId=\"%s\",algorithm=\"%s\",%s%ssignature=\"%s\"", s.KeyId, s.Algorithm, headers, extensions, s.Signature), nil
+	return fmt.Sprintf("Signature keyId=\"%s\",algorithm=\"%s\",%s%ssignature=\"%s\"", s.KeyID, s.Algorithm, headers, extensions, s.Signature), nil
 }
 
 // ParseSignatureAuthHeader parses a signature Authorization header string
