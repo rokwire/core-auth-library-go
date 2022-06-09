@@ -800,10 +800,40 @@ func NewServiceAccountManager(authService *AuthService, serviceAccountLoader Ser
 	manager := &ServiceAccountManager{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
 		tokensLock: lock, maxRefreshCacheFreq: 30, client: &http.Client{}, loader: serviceAccountLoader}
 
-	// Subscribe to the implementing service to validate registration
+	// Retrieve all access tokens granted to service account
 	_, _, err = manager.GetAccessTokens()
 	if err != nil {
 		return nil, fmt.Errorf("error loading access tokens: %v", err)
+	}
+
+	return manager, nil
+}
+
+// NewTestServiceAccountManager creates and configures a test ServiceAccountManager instance
+func NewTestServiceAccountManager(authService *AuthService, serviceAccountLoader ServiceAccountLoader, loadTokens bool) (*ServiceAccountManager, error) {
+	err := checkAuthService(authService, false)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
+	}
+
+	if serviceAccountLoader == nil {
+		return nil, errors.New("service account loader is missing")
+	}
+
+	accessTokens := &syncmap.Map{}
+
+	appOrgPairs := make([]AppOrgPair, 0)
+	lock := &sync.RWMutex{}
+
+	manager := &ServiceAccountManager{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
+		tokensLock: lock, maxRefreshCacheFreq: 30, client: &http.Client{}, loader: serviceAccountLoader}
+
+	if loadTokens {
+		// Retrieve all access tokens granted to service account
+		_, _, err = manager.GetAccessTokens()
+		if err != nil {
+			return nil, fmt.Errorf("error loading access tokens: %v", err)
+		}
 	}
 
 	return manager, nil

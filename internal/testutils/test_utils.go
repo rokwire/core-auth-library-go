@@ -91,6 +91,11 @@ func GetSamplePrivKey() *rsa.PrivateKey {
 	return privKey
 }
 
+// SetupTestAuthService returns a test AuthService
+func SetupTestAuthService(serviceID string, serviceHost string) *authservice.AuthService {
+	return &authservice.AuthService{ServiceID: serviceID, ServiceHost: serviceHost}
+}
+
 // SetupMockServiceRegLoader returns a mock ServiceRegLoader
 func SetupMockServiceRegLoader(authService *authservice.AuthService, subscribed []string, result []authservice.ServiceReg, err error) *mocks.ServiceRegLoader {
 	mockLoader := mocks.NewServiceRegLoader(authService, subscribed)
@@ -103,13 +108,27 @@ func SetupTestServiceRegManager(authService *authservice.AuthService, mockDataLo
 	return authservice.NewTestServiceRegManager(authService, mockDataLoader)
 }
 
-// SetupTestAuthService returns a test AuthService
-func SetupTestAuthService(serviceID string, serviceHost string) *authservice.AuthService {
-	return &authservice.AuthService{ServiceID: serviceID, ServiceHost: serviceHost}
+// SetupMockServiceAccountTokenLoader returns a mock ServiceAccountLoader which loads a single access token
+func SetupMockServiceAccountTokenLoader(authService *authservice.AuthService, appID string, orgID string, token *authservice.AccessToken, err error) *mocks.ServiceAccountLoader {
+	mockLoader := mocks.NewServiceAccountLoader(authService)
+	mockLoader.On("LoadAccessToken", appID, orgID).Return(token, err)
+	return mockLoader
 }
 
-// SetupExampleMockLoader returns an example mock ServiceRegLoader
-func SetupExampleMockLoader() *mocks.ServiceRegLoader {
+// SetupMockServiceAccountTokensLoader returns a mock ServiceAccountLoader which loads a set of access tokens
+func SetupMockServiceAccountTokensLoader(authService *authservice.AuthService, tokens map[authservice.AppOrgPair]authservice.AccessToken, err error) *mocks.ServiceAccountLoader {
+	mockLoader := mocks.NewServiceAccountLoader(authService)
+	mockLoader.On("LoadAccessTokens").Return(tokens, err)
+	return mockLoader
+}
+
+// SetupTestServiceAccountManager returns a test ServiceAccountManager
+func SetupTestServiceAccountManager(authService *authservice.AuthService, mockDataLoader *mocks.ServiceAccountLoader, loadTokens bool) (*authservice.ServiceAccountManager, error) {
+	return authservice.NewTestServiceAccountManager(authService, mockDataLoader, loadTokens)
+}
+
+// SetupExampleMockServiceRegLoader returns an example mock ServiceRegLoader
+func SetupExampleMockServiceRegLoader() *mocks.ServiceRegLoader {
 	testServiceReg := authservice.ServiceReg{ServiceID: "sample", Host: "https://sample.rokwire.com", PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}

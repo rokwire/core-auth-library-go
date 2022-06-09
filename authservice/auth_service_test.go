@@ -16,6 +16,7 @@ package authservice_test
 
 import (
 	"crypto/rsa"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -303,6 +304,168 @@ func TestServiceRegSubscriptions_UnsubscribeService(t *testing.T) {
 			}
 			if gotServices := r.GetSubscribedServices(); !reflect.DeepEqual(gotServices, tt.wantServices) {
 				t.Errorf("ServiceRegSubscriptions.UnsubscribeService() services: got %v, want %v", gotServices, tt.wantServices)
+			}
+		})
+	}
+}
+
+func TestServiceAccountManager_GetAccessToken(t *testing.T) {
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+
+	type args struct {
+		appID string
+		orgID string
+		token *authservice.AccessToken
+		err   error
+
+		readAppID string
+		readOrgID string
+	}
+	tests := []struct {
+		name        string
+		args        args
+		want        string
+		wantLoadErr bool
+		wantReadErr bool
+	}{
+		{"successfully read stored token", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", &authservice.AccessToken{Token: "sample_token", TokenType: "Bearer"}, nil, "4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}, "Bearer sample_token", false, false},
+		{"attempt to read unknown token", args{"9b25622b-e559-4824-9ea7-535c8b990725", "c83338f7-5fe9-47ac-b432-22fb987eb9f7", &authservice.AccessToken{Token: "sample_token", TokenType: "Bearer"}, nil, "4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}, "", false, true},
+		{"loading error", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", nil, errors.New("loading error"), "4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}, "", true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockLoader := testutils.SetupMockServiceAccountTokenLoader(authService, tt.args.appID, tt.args.orgID, tt.args.token, tt.args.err)
+			mockManager, _ := testutils.SetupTestServiceAccountManager(authService, mockLoader, false)
+
+			got, err := mockManager.GetAccessToken(tt.args.appID, tt.args.orgID)
+			if (err != nil) != tt.wantLoadErr {
+				t.Errorf("ServiceAccountManager.GetAccessToken() err = %v, wantLoadErr %v", err, tt.wantLoadErr)
+			}
+
+			stored := mockManager.AccessTokens()[authservice.AppOrgPair{AppID: tt.args.readAppID, OrgID: tt.args.readOrgID}]
+			if tt.wantReadErr != (stored.String() == "") {
+				t.Errorf("ServiceAccountManager.GetAccessToken() err = %v, wantReadErr %v", err, tt.wantReadErr)
+			} else if !tt.wantReadErr && (got.String() != stored.String()) {
+				t.Errorf("ServiceAccountManager.GetAccessToken() got = %s, want %s", got.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestServiceAccountManager_GetAccessTokens(t *testing.T) {
+	tokens := map[authservice.AppOrgPair]authservice.AccessToken{
+		{AppID: authservice.AllID, OrgID: "0716d801-ee13-4428-b10b-e52c6d989dcc"}:                      {Token: "all_apps_token", TokenType: "Bearer"},
+		{AppID: "4f684d01-8a8c-4674-9005-942c16136ab6", OrgID: "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}: {Token: "specific_token", TokenType: "Bearer"},
+	}
+
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+
+	type args struct {
+		appID  string
+		orgID  string
+		tokens map[authservice.AppOrgPair]authservice.AccessToken
+		err    error
+	}
+	tests := []struct {
+		name        string
+		args        args
+		want        string
+		wantLoadErr bool
+		wantReadErr bool
+	}{
+		{"successfully read stored apps token", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", tokens, nil}, "Bearer all_apps_token", false, false},
+		{"successfully read stored specific token", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", tokens, nil}, "Bearer specific_token", false, false},
+		{"attempt to read unknown token", args{"9b25622b-e559-4824-9ea7-535c8b990725", "c83338f7-5fe9-47ac-b432-22fb987eb9f7", tokens, nil}, "", false, true},
+		{"loading error", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", nil, errors.New("loading error")}, "", true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockLoader := testutils.SetupMockServiceAccountTokensLoader(authService, tt.args.tokens, tt.args.err)
+			mockManager, _ := testutils.SetupTestServiceAccountManager(authService, mockLoader, tt.args.err == nil)
+
+			tokens, _, err := mockManager.GetAccessTokens()
+			if (err != nil) != tt.wantLoadErr {
+				t.Errorf("ServiceAccountManager.GetAccessTokens() err = %v, wantLoadErr %v", err, tt.wantLoadErr)
+			} else if !tt.wantLoadErr && tokens != nil {
+				got := tokens[authservice.AppOrgPair{AppID: tt.args.appID, OrgID: tt.args.orgID}]
+				stored := mockManager.AccessTokens()[authservice.AppOrgPair{AppID: tt.args.appID, OrgID: tt.args.orgID}]
+				if tt.wantReadErr != (stored.String() == "") {
+					t.Errorf("ServiceAccountManager.GetAccessTokens() err = %v, wantReadErr %v", err, tt.wantReadErr)
+				} else if !tt.wantReadErr && (got.String() != stored.String()) {
+					t.Errorf("ServiceAccountManager.GetAccessTokens() got = %s, want %s", got.String(), tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestServiceAccountManager_GetCachedAccessToken(t *testing.T) {
+	allAllTokens := map[authservice.AppOrgPair]authservice.AccessToken{
+		{AppID: authservice.AllID, OrgID: authservice.AllID}: {Token: "all_all_token", TokenType: "Bearer"},
+	}
+	allAppTokens := map[authservice.AppOrgPair]authservice.AccessToken{
+		{AppID: authservice.AllID, OrgID: "0716d801-ee13-4428-b10b-e52c6d989dcc"}: {Token: "all_apps_token", TokenType: "Bearer"},
+	}
+	allOrgTokens := map[authservice.AppOrgPair]authservice.AccessToken{
+		{AppID: "83f0ed91-6e27-4101-8c44-c4d7e9115767", OrgID: authservice.AllID}: {Token: "all_orgs_token", TokenType: "Bearer"},
+	}
+	specificTokens := map[authservice.AppOrgPair]authservice.AccessToken{
+		{AppID: "4f684d01-8a8c-4674-9005-942c16136ab6", OrgID: "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}: {Token: "specific_token", TokenType: "Bearer"},
+	}
+
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+
+	type args struct {
+		appID  string
+		orgID  string
+		tokens map[authservice.AppOrgPair]authservice.AccessToken
+	}
+	tests := []struct {
+		name      string
+		args      args
+		wantToken string
+		wantPair  string
+		wantErr   bool
+	}{
+		{"all_all exact match", args{authservice.AllID, authservice.AllID, allAllTokens}, "Bearer all_all_token", "all_all", false},
+		{"all_all apps match", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", allAllTokens}, "Bearer all_all_token", "all_all", false},
+		{"all_all orgs match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authservice.AllID, allAllTokens}, "Bearer all_all_token", "all_all", false},
+		{"all_all specific pair match", args{"b38a5f4f-3f7c-4909-90b6-9188701031da", "c83338f7-5fe9-47ac-b432-22fb987eb9f7", allAllTokens}, "Bearer all_all_token", "all_all", false},
+
+		{"all_all apps mismatch", args{authservice.AllID, authservice.AllID, allAppTokens}, "", "", true},
+		{"all_apps exact match", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", allAppTokens}, "Bearer all_apps_token", "all_0716d801-ee13-4428-b10b-e52c6d989dcc", false},
+		{"all_orgs mismatch", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authservice.AllID, allAppTokens}, "", "", true},
+		{"all_apps specific pair match", args{"44ada4a9-7f75-4e26-994d-fda4212ac0a2", "0716d801-ee13-4428-b10b-e52c6d989dcc", allAppTokens}, "Bearer all_apps_token", "all_0716d801-ee13-4428-b10b-e52c6d989dcc", false},
+		{"all_apps specific pair mismatch", args{"44ada4a9-7f75-4e26-994d-fda4212ac0a2", "9b25622b-e559-4824-9ea7-535c8b990725", allAppTokens}, "", "", true},
+
+		{"all_all orgs mismatch", args{authservice.AllID, authservice.AllID, allOrgTokens}, "", "", true},
+		{"all_apps mismatch", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", allOrgTokens}, "", "", true},
+		{"all_orgs exact match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authservice.AllID, allOrgTokens}, "Bearer all_orgs_token", "83f0ed91-6e27-4101-8c44-c4d7e9115767_all", false},
+		{"all_orgs specific pair match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", "a09d7427-9424-4b51-9aaf-ca376388911e", allOrgTokens}, "Bearer all_orgs_token", "83f0ed91-6e27-4101-8c44-c4d7e9115767_all", false},
+		{"all_orgs specific pair mismatch", args{"6dfdf936-5042-4b93-a82d-220672d8bca1", "a09d7427-9424-4b51-9aaf-ca376388911e", allOrgTokens}, "", "", true},
+
+		{"specific all_all mismatch", args{authservice.AllID, authservice.AllID, specificTokens}, "", "", true},
+		{"specific all apps mismatch", args{authservice.AllID, "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "", "", true},
+		{"specific all orgs mismatch", args{"4f684d01-8a8c-4674-9005-942c16136ab6", authservice.AllID, specificTokens}, "", "", true},
+		{"specific app mismatch", args{"6dfdf936-5042-4b93-a82d-220672d8bca1", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "", "", true},
+		{"specific org mismatch", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "a09d7427-9424-4b51-9aaf-ca376388911e", specificTokens}, "", "", true},
+		{"specific exact match", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "Bearer specific_token", "4f684d01-8a8c-4674-9005-942c16136ab6_8a145f9e-bb5d-4f4c-8af0-a43527c05d16", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockLoader := testutils.SetupMockServiceAccountTokensLoader(authService, tt.args.tokens, nil)
+			mockManager, _ := testutils.SetupTestServiceAccountManager(authService, mockLoader, true)
+
+			token, pair := mockManager.GetCachedAccessToken(tt.args.appID, tt.args.orgID)
+			if (tt.wantToken == "") != tt.wantErr {
+				t.Errorf("ServiceAccountManager.GetCachedAccessToken() token = %s, wantErr %v", token.String(), tt.wantErr)
+			} else if !tt.wantErr && (token.String() != tt.wantToken) {
+				t.Errorf("ServiceAccountManager.GetCachedAccessToken() token = %s, want %s", token.String(), tt.wantToken)
+			}
+			if (tt.wantPair == "") != tt.wantErr {
+				t.Errorf("ServiceAccountManager.GetCachedAccessToken() pair = %s, wantErr %v", pair.String(), tt.wantErr)
+			} else if !tt.wantErr && (pair.String() != tt.wantPair) {
+				t.Errorf("ServiceAccountManager.GetCachedAccessToken() pair = %s, want %s", pair.String(), tt.wantPair)
 			}
 		})
 	}
