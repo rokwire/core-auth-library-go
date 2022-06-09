@@ -176,6 +176,8 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 		{name: "nil_request", args: args{r: nilReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: true},
 		{name: "success", args: args{r: testReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
 		{name: "bad_service_id", args: args{r: testReq, requiredServiceIDs: []string{"auth"}}, want: "auth", wantErr: true},
+		{name: "any_subscribed_service", args: args{r: testReq, requiredServiceIDs: nil}, want: "test", wantErr: false},
+		{name: "no_matching_services", args: args{r: testReq, requiredServiceIDs: []string{}}, want: "test", wantErr: true},
 		{name: "empty_body", args: args{r: testEmptyBody, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
 	}
 	for _, tt := range tests {
