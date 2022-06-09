@@ -67,13 +67,20 @@ Follow the steps below to upgrade to the associated version of this library. Not
 
 #### Unreleased
 ##### Breaking changes
-The `AuthDataLoader` interface has been removed and the `AuthService` type has been refactored to contain basic configuration data needed to communicate with the ROKWIRE Auth Service.
 
-The `ServiceRegManager` type has been added. To create a `ServiceRegManager`, a `ServiceRegLoader` must be created. The `ServiceRegLoader` is used to load service registration records retrieved from the ROKWIRE Auth Service, which are managed by the `ServiceRegManager`.
-
-The `ServiceAccountManager` type has been added. It is used to retrieve access tokens from the ROKWIRE Auth Service, where the implementing service must hold an account.
+###### AuthService
+* The `AuthDataLoader` interface has been removed and the `AuthService` type has been refactored to contain basic configuration data needed to communicate with the ROKWIRE Auth Service.
+* The `ServiceRegManager` type has been added. To create a `ServiceRegManager`, a `ServiceRegLoader` must be created. The `ServiceRegLoader` is used to load service registration records retrieved from the ROKWIRE Auth Service, which are managed by the `ServiceRegManager`.
+* The `ServiceAccountManager` type has been added. It is used to retrieve access tokens from the ROKWIRE Auth Service, where the implementing service must hold an account.
 
 See above for an example of how to create instances of these types to interact with a remote ROKWIRE Auth Service.
+
+###### String Casbin Authorization Policy Model
+A "description" (`descr`) parameter has been added to the Casbin string authorization policy model. This allows a description of each permission to be provided inline within the authorization policies. This change means that all Casbin string authorization policies (eg. permission policies) must be updated to include an additional column for this description. 
+
+See [example/token/permissions_authorization_policy.csv](example/token/permissions_authorization_policy.csv) for an example of the new policy format. 
+
+**Note:** While this new column must exist, it will not impact the actual authorization policy and may be left empty if appropriate.
 
 ## ROKWIRE Auth Service
 The ROKWIRE Auth Service is the system responsible for handling all user authentication and authorization in the ROKWIRE ecosystem. The Auth Service is a subsystem of the [Core Building Block](https://github.com/rokwire/core-building-block).
