@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update documentation to reflect process for breaking changes and deprecations [#54](https://github.com/rokwire/core-auth-library-go/issues/54)
 - BREAKING: Split AuthDataLoader interface [#36](https://github.com/rokwire/core-auth-library-go/issues/36)
 
+### Added
+- Add service account unit tests [#59](https://github.com/rokwire/core-auth-library-go/issues/59)
+
 ## [1.0.9] - 2022-04-27
 ### Fixed
 - Service token is required to create RemoteAuthDataLoaderImpl [#50](https://github.com/rokwire/core-auth-library-go/issues/50)
