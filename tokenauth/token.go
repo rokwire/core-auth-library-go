@@ -141,7 +141,7 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 		return nil, fmt.Errorf("token typ (%s) does not match JWT", typ)
 	}
 	kid, _ := parsedToken.Header["kid"].(string)
-	if kid != authServiceReg.PubKey.Kid {
+	if kid != authServiceReg.PubKey.KeyID {
 		if !parsedToken.Valid {
 			if claims.ExpiresAt > time.Now().Unix() {
 				refreshed, refreshErr := t.serviceRegManager.CheckForRefresh()

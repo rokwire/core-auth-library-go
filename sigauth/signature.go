@@ -116,11 +116,11 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
+	serviceReg, err := s.serviceRegManager.GetServiceRegWithPubKey(s.serviceRegManager.AuthService.ServiceID)
 	if err != nil {
-		return fmt.Errorf("error getting service key fingerprint: %v", err)
+		return fmt.Errorf("failed to retrieve service registration: %v", err)
 	}
-	sigAuthHeader := SignatureAuthHeader{KeyID: serviceKeyFingerprint, Algorithm: "rsa-sha256", Headers: headers}
+	sigAuthHeader := SignatureAuthHeader{KeyID: serviceReg.PubKey.KeyID, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -158,25 +158,19 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", err
 	}
 
-	var serviceReg *authservice.ServiceReg
-	var fingerprint string
-	found := false
 	if requiredServiceIDs == nil {
 		requiredServiceIDs = s.serviceRegManager.SubscribedServices()
 	}
 
+	var serviceReg *authservice.ServiceReg
+	found := false
 	for _, serviceID := range requiredServiceIDs {
 		serviceReg, err = s.serviceRegManager.GetServiceRegWithPubKey(serviceID)
 		if err != nil {
-			return "", fmt.Errorf("failed to retrieve service pub key: %v", err)
+			return "", fmt.Errorf("failed to retrieve service registration: %v", err)
 		}
 
-		fingerprint, err = authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
-		if err != nil {
-			return "", fmt.Errorf("error getting service key fingerprint: %v", err)
-		}
-
-		if fingerprint == sigAuthHeader.KeyID {
+		if serviceReg.PubKey.KeyID == sigAuthHeader.KeyID {
 			found = true
 			break
 		}

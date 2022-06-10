@@ -473,11 +473,11 @@ func TestServiceAccountManager_GetCachedAccessToken(t *testing.T) {
 
 func TestPubKey_LoadKeyFromPem(t *testing.T) {
 	tests := []struct {
-		name    string
-		p       *authservice.PubKey
-		wantErr bool
-		wantKey *rsa.PublicKey
-		wantKid string
+		name      string
+		p         *authservice.PubKey
+		wantErr   bool
+		wantKey   *rsa.PublicKey
+		wantKeyID string
 	}{
 		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem()), false, testutils.GetSamplePubKey().Key, testutils.GetSamplePubKeyFingerprint()},
 		{"return error on invalid pem", setupPubKeyFromPem("test"), true, nil, ""},
@@ -498,14 +498,14 @@ func TestPubKey_LoadKeyFromPem(t *testing.T) {
 				}
 			}
 			if tt.p == nil {
-				if tt.wantKid != "" {
-					t.Errorf("PubKey.LoadKeyFromPem() kid = nil, want %v", tt.wantKid)
+				if tt.wantKeyID != "" {
+					t.Errorf("PubKey.LoadKeyFromPem() kid = nil, want %v", tt.wantKeyID)
 				} else {
 					return
 				}
 			}
-			if tt.p.Kid != tt.wantKid {
-				t.Errorf("PubKey.LoadKeyFromPem() kid = %v, want %v", tt.p.Kid, tt.wantKid)
+			if tt.p.KeyID != tt.wantKeyID {
+				t.Errorf("PubKey.LoadKeyFromPem() kid = %v, want %v", tt.p.KeyID, tt.wantKeyID)
 			}
 		})
 	}

@@ -75,6 +75,7 @@ Follow the steps below to upgrade to the associated version of this library. Not
 * The `AuthDataLoader` interface has been removed and the `AuthService` type has been refactored to contain basic configuration data needed to communicate with the ROKWIRE Auth Service.
 * The `ServiceRegManager` type has been added. To create a `ServiceRegManager`, a `ServiceRegLoader` must be created. The `ServiceRegLoader` is used to load service registration records retrieved from the ROKWIRE Auth Service, which are managed by the `ServiceRegManager`.
 * The `ServiceAccountManager` and `ServiceAccountLoader` types have been added. To create a `ServiceAccountManager`, a `ServiceAccountLoader` must be created. The `ServiceAccountLoader` is used to load access tokens from the ROKWIRE Auth Service, where the implementing service must hold an account. These access tokens are managed by the `ServiceAccountManager`.
+* The `Kid` field in `PubKey` is now called `KeyID`.
 
 See above for an example of how to create instances of these types to interact with a remote ROKWIRE Auth Service.
 
