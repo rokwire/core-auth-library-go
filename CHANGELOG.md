@@ -8,12 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Changed
 - BREAKING: Service ID used as key ID in signatures [#49](https://github.com/rokwire/core-auth-library-go/issues/49)
+- BREAKING: Handle service account access tokens [#35](https://github.com/rokwire/core-auth-library-go/issues/35)
 - BREAKING: Add description to permission authorization policy model [#57](https://github.com/rokwire/core-auth-library-go/issues/57)
 - Update documentation to reflect process for breaking changes and deprecations [#54](https://github.com/rokwire/core-auth-library-go/issues/54)
 - BREAKING: Split AuthDataLoader interface [#36](https://github.com/rokwire/core-auth-library-go/issues/36)
 
 ## [1.0.9] - 2022-04-27
-## Fixed
+### Fixed
 - Service token is required to create RemoteAuthDataLoaderImpl [#50](https://github.com/rokwire/core-auth-library-go/issues/50)
 
 ## [1.0.8] - 2022-04-04

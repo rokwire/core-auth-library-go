@@ -409,8 +409,8 @@ func TestSignatureAuthHeader_SetField(t *testing.T) {
 func TestSignatureAuthHeader_Build(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 	sampleFingerprint := testutils.GetSamplePubKeyFingerprint()
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyId: sampleFingerprint, Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature"}
-	headerWithExtension := sigauth.SignatureAuthHeader{KeyId: sampleFingerprint, Algorithm: "rsa-sha256", Extensions: "test_extensions", Signature: "test_signature"}
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature"}
+	headerWithExtension := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: "rsa-sha256", Extensions: "test_extensions", Signature: "test_signature"}
 
 	tests := []struct {
 		name    string
@@ -419,7 +419,7 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "success", s: &sigAuthHeader, want: fmt.Sprintf(`Signature keyId="%s",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint), wantErr: false},
-		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyId: sampleFingerprint, Signature: "test_aignature"}, want: "", wantErr: true},
+		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Signature: "test_aignature"}, want: "", wantErr: true},
 		{name: "use_extensions", s: &headerWithExtension, want: fmt.Sprintf(`Signature keyId="%s",algorithm="rsa-sha256",extensions="test_extensions",signature="test_signature"`, sampleFingerprint), wantErr: false},
 	}
 	for _, tt := range tests {
@@ -439,7 +439,7 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 func TestParseSignatureAuthHeader(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 	sampleFingerprint := testutils.GetSamplePubKeyFingerprint()
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyId: sampleFingerprint, Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature=="}
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature=="}
 
 	type args struct {
 		header string

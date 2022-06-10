@@ -15,15 +15,14 @@
 package authutils
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 )
 
@@ -98,39 +97,22 @@ func HashSha256(data []byte) ([]byte, error) {
 	return hasher.Sum(nil), nil
 }
 
-// BuildDefaultAccessTokenRequest returns a HTTP request to get an access token using a static token
-func BuildDefaultAccessTokenRequest(host string, path string, accountID string, token string) (*http.Request, error) {
-	if host == "" {
-		return nil, errors.New("host is missing")
-	}
-	if path == "" {
-		return nil, errors.New("path is missing")
-	}
-	if accountID == "" {
-		return nil, errors.New("account ID is missing")
-	}
-	if token == "" {
-		return nil, errors.New("token is missing")
+// ReadResponseBody reads the body of a http.Response and returns it
+func ReadResponseBody(resp *http.Response) ([]byte, error) {
+	if resp == nil {
+		return nil, errors.New("response is nil")
 	}
 
-	params := map[string]interface{}{
-		"account_id": accountID,
-		"auth_type":  "static_token",
-		"creds": map[string]string{
-			"token": token,
-		},
-	}
-	data, err := json.Marshal(params)
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling request body toget access token: %v", err)
+		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
 
-	r, err := http.NewRequest("POST", host+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get access token: %v", err)
+	if resp.StatusCode != 200 {
+		return body, fmt.Errorf("%s - %s", resp.Status, string(body))
 	}
 
-	r.Header.Set("Content-Type", "application/json")
-
-	return r, nil
+	return body, nil
 }

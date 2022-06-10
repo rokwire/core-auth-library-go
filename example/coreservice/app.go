@@ -26,18 +26,22 @@ func main() {
 	// Instantiate an AuthService to maintain basic auth data
 	authService := authservice.AuthService{
 		ServiceID:   "example",
+		ServiceHost: "http://localhost:5000",
 		FirstParty:  true,
 		AuthBaseURL: "http://localhost/core",
 	}
 
-	// Instantiate a remote ServiceAccountManager to manage service account-related data
-	serviceAccountManagerConfig := authservice.RemoteServiceAccountManagerConfig{
-		AccountID: "exampleAccountID",
-		Token:     "exampleToken",
-	}
-	serviceAccountManager, err := authservice.NewRemoteServiceAccountManager(&authService, serviceAccountManagerConfig)
+	// Instantiate a remote ServiceAccountLoader to load auth service account data from auth service
+	staticTokenAuth := authservice.StaticTokenServiceAuth{ServiceToken: "exampleToken"}
+	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(&authService, "exampleAccountID", staticTokenAuth)
 	if err != nil {
-		log.Fatalf("Error initializing remote service account manager: %v", err)
+		log.Fatalf("Error initializing remote service account loader: %v", err)
+	}
+
+	// Instantiate a remote ServiceAccountManager to manage service account-related data
+	serviceAccountManager, err := authservice.NewServiceAccountManager(&authService, serviceAccountLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service account manager: %v", err)
 	}
 
 	// Instantiate a CoreService to utilize certain core services, such as reading deleted account IDs
@@ -45,7 +49,7 @@ func main() {
 		Callback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger(authService.ServiceID, nil)
-	coreService, err := coreservice.NewCoreService(serviceAccountManager, &deletedAccountsConfig, true, logger)
+	coreService, err := coreservice.NewCoreService(serviceAccountManager, &deletedAccountsConfig, logger)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}
