@@ -574,21 +574,8 @@ func (s *ServiceAccountManager) AccessTokens() map[AppOrgPair]AccessToken {
 	return tokens
 }
 
-// AppOrgPairs returns the list of cached app org pairs
-func (s *ServiceAccountManager) AppOrgPairs() []AppOrgPair {
-	return s.appOrgPairs
-}
-
-// SetMaxRefreshCacheFreq sets the maximum frequency at which cached access tokens are refreshed in minutes
-// 	The default value is 30
-func (s *ServiceAccountManager) SetMaxRefreshCacheFreq(freq uint) {
-	s.tokensLock.Lock()
-	s.maxRefreshCacheFreq = freq
-	s.tokensLock.Unlock()
-}
-
-// getCachedAccessToken returns the most restrictive cached token (with corresponding pair) granting access to appID and orgID, if it exists
-func (s *ServiceAccountManager) getCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
+// GetCachedAccessToken returns the most restrictive cached token (with corresponding pair) granting access to appID and orgID, if it exists
+func (s *ServiceAccountManager) GetCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
 	allowedPairs := []AppOrgPair{{AppID: appID, OrgID: orgID}}
 	if appID != AllID || orgID != AllID {
 		if appID != AllID && orgID != AllID {
@@ -613,6 +600,19 @@ func (s *ServiceAccountManager) getCachedAccessToken(appID string, orgID string)
 	}
 
 	return nil, nil
+}
+
+// AppOrgPairs returns the list of cached app org pairs
+func (s *ServiceAccountManager) AppOrgPairs() []AppOrgPair {
+	return s.appOrgPairs
+}
+
+// SetMaxRefreshCacheFreq sets the maximum frequency at which cached access tokens are refreshed in minutes
+// 	The default value is 30
+func (s *ServiceAccountManager) SetMaxRefreshCacheFreq(freq uint) {
+	s.tokensLock.Lock()
+	s.maxRefreshCacheFreq = freq
+	s.tokensLock.Unlock()
 }
 
 // checkForRefresh checks if access tokens need to be reloaded
@@ -642,7 +642,7 @@ func (s *ServiceAccountManager) getRefreshedAccessToken(appID string, orgID stri
 		return nil, nil, nil, fmt.Errorf("error checking access tokens refresh: %v", err)
 	}
 
-	refreshedToken, refreshedPair := s.getCachedAccessToken(appID, orgID)
+	refreshedToken, refreshedPair := s.GetCachedAccessToken(appID, orgID)
 	if refreshedToken == nil || refreshedPair == nil {
 		return nil, nil, newPairs, fmt.Errorf("access not granted for appID %s, orgID %s", appID, orgID)
 	}
@@ -655,7 +655,7 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 	async := (rrc != nil) && (pc != nil) && (dc != nil)
 	var err error
 
-	token, appOrgPair := s.getCachedAccessToken(appID, orgID)
+	token, appOrgPair := s.GetCachedAccessToken(appID, orgID)
 	if token == nil || appOrgPair == nil {
 		// the requested pair is missing from the cache, so try refreshing tokens to find the missing one
 		token, appOrgPair, _, err = s.getRefreshedAccessToken(appID, orgID)
@@ -800,10 +800,40 @@ func NewServiceAccountManager(authService *AuthService, serviceAccountLoader Ser
 	manager := &ServiceAccountManager{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
 		tokensLock: lock, maxRefreshCacheFreq: 30, client: &http.Client{}, loader: serviceAccountLoader}
 
-	// Subscribe to the implementing service to validate registration
+	// Retrieve all access tokens granted to service account
 	_, _, err = manager.GetAccessTokens()
 	if err != nil {
 		return nil, fmt.Errorf("error loading access tokens: %v", err)
+	}
+
+	return manager, nil
+}
+
+// NewTestServiceAccountManager creates and configures a test ServiceAccountManager instance
+func NewTestServiceAccountManager(authService *AuthService, serviceAccountLoader ServiceAccountLoader, loadTokens bool) (*ServiceAccountManager, error) {
+	err := checkAuthService(authService, false)
+	if err != nil {
+		return nil, fmt.Errorf("error checking auth service: %v", err)
+	}
+
+	if serviceAccountLoader == nil {
+		return nil, errors.New("service account loader is missing")
+	}
+
+	accessTokens := &syncmap.Map{}
+
+	appOrgPairs := make([]AppOrgPair, 0)
+	lock := &sync.RWMutex{}
+
+	manager := &ServiceAccountManager{AuthService: authService, accessTokens: accessTokens, appOrgPairs: appOrgPairs,
+		tokensLock: lock, maxRefreshCacheFreq: 30, client: &http.Client{}, loader: serviceAccountLoader}
+
+	if loadTokens {
+		// Retrieve all access tokens granted to service account
+		_, _, err = manager.GetAccessTokens()
+		if err != nil {
+			return nil, fmt.Errorf("error loading access tokens: %v", err)
+		}
 	}
 
 	return manager, nil
