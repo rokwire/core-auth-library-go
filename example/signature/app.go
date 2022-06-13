@@ -25,7 +25,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/authservice"
 	"github.com/rokwire/core-auth-library-go/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/sigauth"
-	"github.com/rokwire/logging-library-go/logs"
 )
 
 // WebAdapter is the web adapter for signature auth
@@ -116,11 +115,6 @@ func (we WebAdapter) signatureAuthWrapFunction(handler http.HandlerFunc, service
 	}
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
-}
-
 // NewWebAdapter creates new WebAdapter instance
 func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 	return WebAdapter{signatureAuth: signatureAuth}
@@ -129,23 +123,26 @@ func NewWebAdapter(signatureAuth *sigauth.SignatureAuth) WebAdapter {
 func main() {
 	// Define list of services to load public keys for. For signature auth, this includes all services
 	// 	that this service will receive signed requests from.
-	services := []string{}
-	// Instantiate a remote AuthDataLoader to load service registration records from auth service
-	config := authservice.RemoteAuthDataLoaderConfig{
-		AuthServicesHost: "http://localhost/core",
-		ServiceToken:     "sample_token",
-		// DeletedAccountsCallback: printDeletedAccountIDs,
-	}
-	logger := logs.NewLogger("example", nil)
-	dataLoader, err := authservice.NewRemoteAuthDataLoader(config, services, logger)
-	if err != nil {
-		log.Fatalf("Error initializing remote data loader: %v", err)
+	services := []string{"auth"}
+
+	// Instantiate an AuthService to maintain basic auth data
+	authService := authservice.AuthService{
+		ServiceID:   "example",
+		ServiceHost: "http://localhost:5000",
+		FirstParty:  true,
+		AuthBaseURL: "http://localhost/core",
 	}
 
-	// Instantiate AuthService instance
-	authService, err := authservice.NewAuthService("example", "http://localhost:8080", dataLoader)
+	// Instantiate a remote ServiceRegLoader to load auth service registration records from auth service
+	serviceRegLoader, err := authservice.NewRemoteServiceRegLoader(&authService, services)
 	if err != nil {
-		log.Fatalf("Error initializing auth service: %v", err)
+		log.Fatalf("Error initializing remote service registration loader: %v", err)
+	}
+
+	// Instantiate a ServiceRegManager to manage service registration records
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
 
 	privKey := testutils.GetSamplePrivKey()
@@ -153,10 +150,26 @@ func main() {
 	// TODO: Load service private key
 
 	// Instantiate SignatureAuth instance to perform token validation
-	signatureAuth, err := sigauth.NewSignatureAuth(privKey, authService, false)
+	signatureAuth, err := sigauth.NewSignatureAuth(privKey, serviceRegManager, false)
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}
+
+	// Instantiate a remote ServiceAccountLoader to load auth service account data from auth service
+	accountID := "0ba899ed-ac7a-11ec-b09f-00ffd2760de8"
+	serviceAccountLoader, err := authservice.NewRemoteServiceAccountLoader(&authService, accountID, signatureAuth)
+	if err != nil {
+		log.Fatalf("Error initializing remote service account loader: %v", err)
+	}
+
+	// Instantiate a remote ServiceAccountManager to manage service account-related data
+	serviceAccountManager, err := authservice.NewServiceAccountManager(&authService, serviceAccountLoader)
+	if err != nil {
+		log.Fatalf("Error initializing service account manager: %v", err)
+	}
+
+	appID := "9766"
+	orgID := "0a2eff20-e2cd-11eb-af68-60f81db5ecc0"
 
 	// Instantiate and start a new WebAdapter
 	adapter := NewWebAdapter(signatureAuth)
@@ -165,9 +178,9 @@ func main() {
 	// 		that you are receiving requests from
 
 	req := map[string]interface{}{
-		"account_id": "0ba899ed-ac7a-11ec-b09f-00ffd2760de8",
-		"app_id":     "9766",
-		"org_id":     "0a2eff20-e2cd-11eb-af68-60f81db5ecc0",
+		"account_id": accountID,
+		"app_id":     appID,
+		"org_id":     orgID,
 		"auth_type":  "signature",
 	}
 
@@ -179,5 +192,13 @@ func main() {
 		log.Printf("Error making sample signed request: %v", err)
 	} else {
 		log.Printf("Response: %s", response)
+	}
+
+	// Tip: This sends the same request as the manually signed request above
+	token, err := serviceAccountManager.GetAccessToken(appID, orgID)
+	if err != nil {
+		log.Printf("Error loading access token: %v", err)
+	} else {
+		log.Printf("Response: %s", token.String())
 	}
 }

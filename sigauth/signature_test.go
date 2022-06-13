@@ -33,32 +33,33 @@ import (
 	"github.com/rokwire/core-auth-library-go/sigauth"
 )
 
-func setupTestSignatureAuth(mockLoader *mocks.AuthDataLoader) (*sigauth.SignatureAuth, error) {
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
+	manager, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), auth, true)
+	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), manager, true)
 }
 
-func setupTestSignatureAuthWithPrivKey(mockLoader *mocks.AuthDataLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
+func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
 	if privKey == nil {
 		return nil, errors.New("private key is nil")
 	}
 
-	auth, err := testutils.SetupTestAuthService(mockLoader)
+	manager, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(privKey, auth, true)
+	return sigauth.NewSignatureAuth(privKey, manager, true)
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
-	s, err := setupTestSignatureAuth(mockLoader)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)
 		return
@@ -92,10 +93,11 @@ func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
 	privKey := testutils.GetSamplePrivKey()
 	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
@@ -119,7 +121,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := setupTestSignatureAuthWithPrivKey(mockLoader, tt.args.privKey)
+			s, err := setupTestSignatureAuthWithPrivKey(authService, mockLoader, tt.args.privKey)
 			if err != nil || s == nil {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return
@@ -137,11 +139,12 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
-	s, err := setupTestSignatureAuth(mockLoader)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)
 		return
@@ -173,6 +176,8 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 		{name: "nil_request", args: args{r: nilReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: true},
 		{name: "success", args: args{r: testReq, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
 		{name: "bad_service_id", args: args{r: testReq, requiredServiceIDs: []string{"auth"}}, want: "auth", wantErr: true},
+		{name: "any_subscribed_service", args: args{r: testReq, requiredServiceIDs: nil}, want: "test", wantErr: false},
+		{name: "no_matching_services", args: args{r: testReq, requiredServiceIDs: []string{}}, want: "test", wantErr: true},
 		{name: "empty_body", args: args{r: testEmptyBody, requiredServiceIDs: []string{"test"}}, want: "test", wantErr: false},
 	}
 	for _, tt := range tests {
@@ -201,10 +206,11 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
-	testServiceReg := authservice.ServiceReg{ServiceID: "test", Host: "https://test.rokwire.com", PubKey: testutils.GetSamplePubKey()}
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: testutils.GetSamplePubKey()}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockDataLoader(nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
 	privKey := testutils.GetSamplePrivKey()
 	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
@@ -242,7 +248,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := setupTestSignatureAuthWithPrivKey(mockLoader, tt.args.privKey)
+			s, err := setupTestSignatureAuthWithPrivKey(authService, mockLoader, tt.args.privKey)
 			if err != nil || s == nil {
 				t.Errorf("Error initializing test signature auth: %v", err)
 				return
@@ -402,8 +408,9 @@ func TestSignatureAuthHeader_SetField(t *testing.T) {
 
 func TestSignatureAuthHeader_Build(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyId: "test", Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature"}
-	headerWithExtension := sigauth.SignatureAuthHeader{KeyId: "test", Algorithm: "rsa-sha256", Extensions: "test_extensions", Signature: "test_signature"}
+	sampleFingerprint := testutils.GetSamplePubKeyFingerprint()
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature"}
+	headerWithExtension := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: "rsa-sha256", Extensions: "test_extensions", Signature: "test_signature"}
 
 	tests := []struct {
 		name    string
@@ -411,9 +418,9 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "success", s: &sigAuthHeader, want: `Signature keyId="test",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`, wantErr: false},
-		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyId: "test", Signature: "test_aignature"}, want: "", wantErr: true},
-		{name: "use_extensions", s: &headerWithExtension, want: `Signature keyId="test",algorithm="rsa-sha256",extensions="test_extensions",signature="test_signature"`, wantErr: false},
+		{name: "success", s: &sigAuthHeader, want: fmt.Sprintf(`Signature keyId="%s",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint), wantErr: false},
+		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Signature: "test_aignature"}, want: "", wantErr: true},
+		{name: "use_extensions", s: &headerWithExtension, want: fmt.Sprintf(`Signature keyId="%s",algorithm="rsa-sha256",extensions="test_extensions",signature="test_signature"`, sampleFingerprint), wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -431,7 +438,8 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 
 func TestParseSignatureAuthHeader(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyId: "test", Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature=="}
+	sampleFingerprint := testutils.GetSamplePubKeyFingerprint()
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: "rsa-sha256", Headers: headers, Signature: "test_signature=="}
 
 	type args struct {
 		header string
@@ -442,11 +450,11 @@ func TestParseSignatureAuthHeader(t *testing.T) {
 		want    *sigauth.SignatureAuthHeader
 		wantErr bool
 	}{
-		{name: "success", args: args{header: `Signature keyId="test",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature=="`}, want: &sigAuthHeader, wantErr: false},
-		{name: "invalid_format", args: args{header: `keyId="test",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`}, want: nil, wantErr: true},
+		{name: "success", args: args{header: fmt.Sprintf(`Signature keyId="%s",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature=="`, sampleFingerprint)}, want: &sigAuthHeader, wantErr: false},
+		{name: "invalid_format", args: args{header: fmt.Sprintf(`keyId="%s",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint)}, want: nil, wantErr: true},
 		{name: "invalid_param_format", args: args{header: `Signature keyId=,algorithm="rsa-sha256",extensions=="test_extensions",signature="test_signature"`}, want: nil, wantErr: true},
-		{name: "extra_field", args: args{header: `Signature keyId="test",extraHeader="test",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`}, want: nil, wantErr: true},
-		{name: "multiple_comma", args: args{header: `Signature keyId="test",,algorithm="rsa-sha256",,headers="request-line host date digest content-length",signature="test_signature"`}, want: nil, wantErr: true},
+		{name: "extra_field", args: args{header: fmt.Sprintf(`Signature keyId="%s",extraHeader="test",algorithm="rsa-sha256",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint)}, want: nil, wantErr: true},
+		{name: "multiple_comma", args: args{header: fmt.Sprintf(`Signature keyId="%s",,algorithm="rsa-sha256",,headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint)}, want: nil, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

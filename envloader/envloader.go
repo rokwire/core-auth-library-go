@@ -106,13 +106,13 @@ func (a *AWSSecretsManagerEnvLoader) GetEnvVar(key string, required bool) string
 }
 
 // GetAndLogEnvVar implements EnvLoader
-func (l *AWSSecretsManagerEnvLoader) GetAndLogEnvVar(key string, required bool, sensitive bool) string {
-	value := l.GetEnvVar(key, required)
-	logEnvVar(key, value, sensitive, l.version, l.logger)
+func (a *AWSSecretsManagerEnvLoader) GetAndLogEnvVar(key string, required bool, sensitive bool) string {
+	value := a.GetEnvVar(key, required)
+	logEnvVar(key, value, sensitive, a.version, a.logger)
 	return value
 }
 
-// NewLocalEnvLoader instantiates a new AWSSecretsManagerEnvLoader instance
+// NewAWSSecretsManagerEnvLoader instantiates a new AWSSecretsManagerEnvLoader instance
 func NewAWSSecretsManagerEnvLoader(secretName string, region string, version string, logger *logs.Logger) *AWSSecretsManagerEnvLoader {
 	if secretName == "" {
 		logger.Fatal("Secret name cannot be empty")
