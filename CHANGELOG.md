@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- Update documentation [#62](https://github.com/rokwire/core-auth-library-go/issues/62)
 - BREAKING: Service ID used as key ID in signatures [#49](https://github.com/rokwire/core-auth-library-go/issues/49)
 - BREAKING: Handle service account access tokens [#35](https://github.com/rokwire/core-auth-library-go/issues/35)
 - BREAKING: Add description to permission authorization policy model [#57](https://github.com/rokwire/core-auth-library-go/issues/57)
