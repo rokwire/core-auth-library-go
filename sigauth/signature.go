@@ -116,11 +116,11 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	serviceReg, err := s.serviceRegManager.GetServiceRegWithPubKey(s.serviceRegManager.AuthService.ServiceID)
+	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
 	if err != nil {
-		return fmt.Errorf("failed to retrieve service registration: %v", err)
+		return fmt.Errorf("error getting service key fingerprint: %v", err)
 	}
-	sigAuthHeader := SignatureAuthHeader{KeyID: serviceReg.PubKey.KeyID, Algorithm: "rsa-sha256", Headers: headers}
+	sigAuthHeader := SignatureAuthHeader{KeyID: serviceKeyFingerprint, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
