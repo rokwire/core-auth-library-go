@@ -116,7 +116,11 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	sigAuthHeader := SignatureAuthHeader{KeyID: s.serviceRegManager.AuthService.ServiceID, Algorithm: "rsa-sha256", Headers: headers}
+	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
+	if err != nil {
+		return fmt.Errorf("error getting service key fingerprint: %v", err)
+	}
+	sigAuthHeader := SignatureAuthHeader{KeyID: serviceKeyFingerprint, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -154,16 +158,34 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", err
 	}
 
-	if requiredServiceIDs != nil && !authutils.ContainsString(requiredServiceIDs, sigAuthHeader.KeyID) {
-		return "", fmt.Errorf("request signer (%s) is not one of the required services %v", sigAuthHeader.KeyID, requiredServiceIDs)
+	if requiredServiceIDs == nil {
+		requiredServiceIDs = s.serviceRegManager.SubscribedServices()
 	}
 
-	err = s.CheckServiceSignature(sigAuthHeader.KeyID, []byte(sigString), sigAuthHeader.Signature)
+	var serviceReg *authservice.ServiceReg
+	found := false
+	for _, serviceID := range requiredServiceIDs {
+		serviceReg, err = s.serviceRegManager.GetServiceRegWithPubKey(serviceID)
+		if err != nil {
+			return "", fmt.Errorf("failed to retrieve service registration: %v", err)
+		}
+
+		if serviceReg.PubKey.KeyID == sigAuthHeader.KeyID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return "", fmt.Errorf("request signer fingerprint (%s) does not match any of the required services %v", sigAuthHeader.KeyID, requiredServiceIDs)
+	}
+
+	err = s.CheckSignature(serviceReg.PubKey.Key, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return "", fmt.Errorf("error validating signature: %v", err)
 	}
 
-	return sigAuthHeader.KeyID, nil
+	return serviceReg.ServiceID, nil
 }
 
 // CheckRequestSignature validates the signature on the provided request

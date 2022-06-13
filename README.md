@@ -75,6 +75,7 @@ Follow the steps below to upgrade to the associated version of this library. Not
 * The `AuthDataLoader` interface has been removed and the `AuthService` type has been refactored to contain basic configuration data needed to communicate with the ROKWIRE Auth Service.
 * The `ServiceRegManager` type has been added. To create a `ServiceRegManager`, a `ServiceRegLoader` must be created. The `ServiceRegLoader` is used to load service registration records retrieved from the ROKWIRE Auth Service, which are managed by the `ServiceRegManager`.
 * The `ServiceAccountManager` and `ServiceAccountLoader` types have been added. To create a `ServiceAccountManager`, a `ServiceAccountLoader` must be created. The `ServiceAccountLoader` is used to load access tokens from the ROKWIRE Auth Service, where the implementing service must hold an account. These access tokens are managed by the `ServiceAccountManager`.
+* The `Kid` field in `PubKey` is now called `KeyID`.
 
 See above for an example of how to create instances of these types to interact with a remote ROKWIRE Auth Service.
 
@@ -83,7 +84,8 @@ See above for an example of how to create instances of these types to interact w
 * All deleted account-related functionality previously used by the `AuthDataLoader` interface has been moved to the `coreservice` package.
 
 ###### sigauth
-* The `KeyId` field in `sigauth.SignatureAuthHeader` is now called `KeyID`.
+* The `KeyId` field in `SignatureAuthHeader` is now called `KeyID`, and it contains the SHA256 fingerprint of the signing service's public key instead of the signing service ID.
+* Signed requests reflect this change, and checking signed requests requires the `KeyID` matches the public key fingerprint of a provided list of service registrations.
 
 ###### String Casbin Authorization Policy Model
 A "description" (`descr`) parameter has been added to the Casbin string authorization policy model. This allows a description of each permission to be provided inline within the authorization policies. This change means that all Casbin string authorization policies (eg. permission policies) must be updated to include an additional column for this description. 

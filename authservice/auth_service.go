@@ -145,6 +145,11 @@ func (s *ServiceRegManager) LoadServices() error {
 	return loadServicesError
 }
 
+// SubscribedServices returns the list of currently subscribed services
+func (s *ServiceRegManager) SubscribedServices() []string {
+	return s.loader.GetSubscribedServices()
+}
+
 // SubscribeServices subscribes to the provided services
 //	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
 func (s *ServiceRegManager) SubscribeServices(serviceIDs []string, reload bool) error {
@@ -1100,7 +1105,7 @@ type PubKey struct {
 	Key    *rsa.PublicKey `json:"-" bson:"-"`
 	KeyPem string         `json:"key_pem" bson:"key_pem" validate:"required"`
 	Alg    string         `json:"alg" bson:"alg" validate:"required"`
-	Kid    string         `json:"-" bson:"-"`
+	KeyID  string         `json:"-" bson:"-"`
 }
 
 // LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
@@ -1112,19 +1117,19 @@ func (p *PubKey) LoadKeyFromPem() error {
 	key, err := jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
 	if err != nil {
 		p.Key = nil
-		p.Kid = ""
+		p.KeyID = ""
 		return fmt.Errorf("error parsing key string: %v", err)
 	}
 
 	kid, err := authutils.GetKeyFingerprint(key)
 	if err != nil {
 		p.Key = nil
-		p.Kid = ""
+		p.KeyID = ""
 		return fmt.Errorf("error getting key fingerprint: %v", err)
 	}
 
 	p.Key = key
-	p.Kid = kid
+	p.KeyID = kid
 
 	return nil
 }
