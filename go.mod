@@ -1,4 +1,4 @@
-module github.com/rokwire/core-auth-library-go
+module github.com/rokwire/core-auth-library-go/v2
 
 go 1.16
 
