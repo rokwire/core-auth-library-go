@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	authservice "github.com/rokwire/core-auth-library-go/authservice"
+	authservice "github.com/rokwire/core-auth-library-go/v2/authservice"
 	mock "github.com/stretchr/testify/mock"
 )
 

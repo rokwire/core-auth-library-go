@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/rokwire/core-auth-library-go/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"golang.org/x/sync/syncmap"
 	"gopkg.in/go-playground/validator.v9"
 )

@@ -27,10 +27,10 @@ import (
 	"testing"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/rokwire/core-auth-library-go/authservice"
-	"github.com/rokwire/core-auth-library-go/authservice/mocks"
-	"github.com/rokwire/core-auth-library-go/internal/testutils"
-	"github.com/rokwire/core-auth-library-go/sigauth"
+	"github.com/rokwire/core-auth-library-go/v2/authservice"
+	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
+	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
+	"github.com/rokwire/core-auth-library-go/v2/sigauth"
 )
 
 func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
