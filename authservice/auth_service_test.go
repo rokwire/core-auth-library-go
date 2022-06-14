@@ -20,9 +20,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rokwire/core-auth-library-go/authservice"
-	"github.com/rokwire/core-auth-library-go/authutils"
-	"github.com/rokwire/core-auth-library-go/internal/testutils"
+	"github.com/rokwire/core-auth-library-go/v2/authservice"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 )
 
 func setupPubKeyFromPem(pem string) *authservice.PubKey {

@@ -18,8 +18,8 @@ import (
 	"crypto/rsa"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/rokwire/core-auth-library-go/authservice"
-	"github.com/rokwire/core-auth-library-go/authservice/mocks"
+	"github.com/rokwire/core-auth-library-go/v2/authservice"
+	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
 )
 
 // GetSamplePubKeyPem returns a sample public key PEM

@@ -17,8 +17,8 @@ package main
 import (
 	"log"
 
-	"github.com/rokwire/core-auth-library-go/authservice"
-	"github.com/rokwire/core-auth-library-go/coreservice"
+	"github.com/rokwire/core-auth-library-go/v2/authservice"
+	"github.com/rokwire/core-auth-library-go/v2/coreservice"
 	"github.com/rokwire/logging-library-go/logs"
 )
 

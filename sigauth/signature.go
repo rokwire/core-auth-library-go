@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rokwire/core-auth-library-go/authservice"
-	"github.com/rokwire/core-auth-library-go/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/authservice"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"gopkg.in/go-playground/validator.v9"
 )
 
