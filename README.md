@@ -4,7 +4,7 @@ Auth library for validation of Core Building Block auth tokens
 ## Installation
 To install this package, use `go get`:
 
-    go get github.com/rokwire/core-auth-library-go
+    go get github.com/rokwire/core-auth-library-go/v2
 
 This will then make the following packages available to you:
 
@@ -68,7 +68,7 @@ To update core-auth-library-go to the latest version, use `go get -u github.com/
 ### Migration steps
 Follow the steps below to upgrade to the associated version of this library. Note that the steps for each version are cumulative, so if you are attempting to upgrade by several versions, be sure to make the changes described for each version between your current version and the latest.
 
-#### [v2.0.0](https://github.com/rokwire/core-auth-library-go/compare/v1.0.9...v2.0.0)
+#### [v2.0.1](https://github.com/rokwire/core-auth-library-go/compare/v1.0.9...v2.0.1)
 ##### Breaking changes
 
 ###### authservice
