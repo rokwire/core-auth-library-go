@@ -136,7 +136,8 @@ func (s *ServiceRegManager) GetServiceRegWithPubKey(id string) (*ServiceReg, err
 }
 
 // LoadServices loads the subscribed service registration records and caches them
-// 	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
+//
+//	This function will be called periodically after refreshCacheFreq, but can be called directly to force a cache refresh
 func (s *ServiceRegManager) LoadServices() error {
 	services, loadServicesError := s.loader.LoadServices()
 	if services != nil {
@@ -151,6 +152,7 @@ func (s *ServiceRegManager) SubscribedServices() []string {
 }
 
 // SubscribeServices subscribes to the provided services
+//
 //	If reload is true and one of the services is not already subscribed, the service registrations will be reloaded immediately
 func (s *ServiceRegManager) SubscribeServices(serviceIDs []string, reload bool) error {
 	newSub := false
@@ -212,7 +214,8 @@ func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *rsa.PrivateK
 }
 
 // SetMinRefreshCacheFreq sets the minimum frequency at which cached service registration records are refreshed in minutes
-// 	The default value is 1
+//
+//	The default value is 1
 func (s *ServiceRegManager) SetMinRefreshCacheFreq(freq uint) {
 	s.servicesLock.Lock()
 	s.minRefreshCacheFreq = freq
@@ -220,7 +223,8 @@ func (s *ServiceRegManager) SetMinRefreshCacheFreq(freq uint) {
 }
 
 // SetMaxRefreshCacheFreq sets the maximum frequency at which cached service registration records are refreshed in minutes
-// 	The default value is 60
+//
+//	The default value is 60
 func (s *ServiceRegManager) SetMaxRefreshCacheFreq(freq uint) {
 	s.servicesLock.Lock()
 	if freq >= s.minRefreshCacheFreq {
@@ -339,7 +343,7 @@ type ServiceRegLoader interface {
 	UnsubscribeService(serviceID string) bool
 }
 
-//RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
+// RemoteServiceRegLoaderImpl provides a ServiceRegLoader implementation for a remote auth service
 type RemoteServiceRegLoaderImpl struct {
 	authService *AuthService
 	client      *http.Client
@@ -419,7 +423,8 @@ func NewRemoteServiceRegLoader(authService *AuthService, subscribedServices []st
 // -------------------- ServiceRegSubscriptions --------------------
 
 // ServiceRegSubscriptions defined a struct to hold service registration subscriptions
-// 	This struct implements the subcription part of the ServiceRegManager interface
+//
+//	This struct implements the subcription part of the ServiceRegManager interface
 //	If you subscribe to the reserved "all" service ID, all registered services
 //	will be loaded
 type ServiceRegSubscriptions struct {
@@ -436,7 +441,8 @@ func (r *ServiceRegSubscriptions) GetSubscribedServices() []string {
 }
 
 // SubscribeService adds the given service ID to the list of subscribed services if not already present
-// 	Returns true if the specified service was added or false if it was already found
+//
+//	Returns true if the specified service was added or false if it was already found
 func (r *ServiceRegSubscriptions) SubscribeService(serviceID string) bool {
 	r.servicesLock.Lock()
 	defer r.servicesLock.Unlock()
@@ -450,7 +456,8 @@ func (r *ServiceRegSubscriptions) SubscribeService(serviceID string) bool {
 }
 
 // UnsubscribeService removed the given service ID from the list of subscribed services if presents
-// 	Returns true if the specified service was removed or false if it was not found
+//
+//	Returns true if the specified service was removed or false if it was not found
 func (r *ServiceRegSubscriptions) UnsubscribeService(serviceID string) bool {
 	r.servicesLock.Lock()
 	defer r.servicesLock.Unlock()
@@ -613,7 +620,8 @@ func (s *ServiceAccountManager) AppOrgPairs() []AppOrgPair {
 }
 
 // SetMaxRefreshCacheFreq sets the maximum frequency at which cached access tokens are refreshed in minutes
-// 	The default value is 30
+//
+//	The default value is 30
 func (s *ServiceAccountManager) SetMaxRefreshCacheFreq(freq uint) {
 	s.tokensLock.Lock()
 	s.maxRefreshCacheFreq = freq
@@ -854,7 +862,7 @@ type ServiceAccountLoader interface {
 	LoadAccessTokens() (map[AppOrgPair]AccessToken, error)
 }
 
-//RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
+// RemoteServiceAccountLoaderImpl provides a ServiceAccountLoader implementation for a remote auth service
 type RemoteServiceAccountLoaderImpl struct {
 	authService *AuthService
 	client      *http.Client

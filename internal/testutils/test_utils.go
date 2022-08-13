@@ -23,7 +23,8 @@ import (
 )
 
 // GetSamplePubKeyPem returns a sample public key PEM
-// 	Matches GetSamplePrivKeyPem
+//
+//	Matches GetSamplePrivKeyPem
 func GetSamplePubKeyPem() string {
 	return `-----BEGIN RSA PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq2gWKpPRb2xQRee4OXbg
@@ -54,7 +55,8 @@ func GetSamplePubKeyFingerprint() string {
 }
 
 // GetSamplePrivKeyPem returns a sample private key PEM
-// 	Matches GetSamplePubKeyPem
+//
+//	Matches GetSamplePubKeyPem
 func GetSamplePrivKeyPem() string {
 	return `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAq2gWKpPRb2xQRee4OXbgKMzGAy8aPcAqgfL8xmi7tozoi917

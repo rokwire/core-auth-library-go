@@ -48,6 +48,7 @@ type CasbinAuthorization struct {
 }
 
 // Any will validate that if the casbin enforcer gives access to one or more of the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinAuthorization) Any(values []string, object string, action string) error {
 	for _, value := range values {
@@ -60,6 +61,7 @@ func (c *CasbinAuthorization) Any(values []string, object string, action string)
 }
 
 // All will validate that if the casbin enforcer gives access to all the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinAuthorization) All(values []string, object string, action string) error {
 	for _, value := range values {
@@ -98,6 +100,7 @@ type CasbinScopeAuthorization struct {
 }
 
 // Any will validate that if the Casbin enforcer gives access to one or more of the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinScopeAuthorization) Any(values []string, object string, action string) error {
 	if CheckScopesGlobals(values, c.serviceID) {
@@ -123,6 +126,7 @@ func (c *CasbinScopeAuthorization) Any(values []string, object string, action st
 }
 
 // All will validate that if the Casbin enforcer gives access to all the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinScopeAuthorization) All(values []string, object string, action string) error {
 	for _, value := range values {
