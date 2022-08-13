@@ -44,16 +44,22 @@ func main() {
 		log.Fatalf("Error initializing service account manager: %v", err)
 	}
 
-	// Instantiate a CoreService to utilize certain core services, such as reading deleted account IDs
+	// Instantiate a CoreService to utilize certain core services
 	deletedAccountsConfig := coreservice.DeletedAccountsConfig{
 		Callback: printDeletedAccountIDs,
 	}
+	permissionsConfig := coreservice.PermissionsConfig{
+		Callback:   updatePermissionsResultHandler,
+		PolicyPath: "./test_permissions.authorization_policy.csv",
+	}
 	logger := logs.NewLogger(authService.ServiceID, nil)
-	coreService, err := coreservice.NewCoreService(serviceAccountManager, logger, &deletedAccountsConfig)
+	coreService, err := coreservice.NewCoreService(serviceAccountManager, logger, &deletedAccountsConfig, &permissionsConfig)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}
 
+	// Perform core services
+	coreService.RegisterPermissions()
 	coreService.StartDeletedAccountsTimer()
 }
 
@@ -64,4 +70,14 @@ func printDeletedAccountIDs(accountIDs []string, err error) {
 	}
 
 	log.Printf("Deleted account IDs: %v\n", accountIDs)
+}
+
+func updatePermissionsResultHandler(success bool, err error) {
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
+	if success {
+		log.Println("Permissions updated successfully")
+	}
 }

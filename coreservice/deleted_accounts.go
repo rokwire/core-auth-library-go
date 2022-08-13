@@ -132,7 +132,7 @@ func (dac *DeletedAccountsConfig) makeCallback(data interface{}, err error) erro
 }
 
 func (dac *DeletedAccountsConfig) startTimer(onExpired func(CoreOperationConfig)) {
-	duration := time.Minute * time.Duration(int64(dac.Period))
+	duration := time.Hour * time.Duration(int64(dac.Period))
 	dac.timer = time.NewTimer(duration)
 	select {
 	case <-dac.timer.C:
