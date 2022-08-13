@@ -49,7 +49,7 @@ func main() {
 		Callback: printDeletedAccountIDs,
 	}
 	logger := logs.NewLogger(authService.ServiceID, nil)
-	coreService, err := coreservice.NewCoreService(serviceAccountManager, &deletedAccountsConfig, logger)
+	coreService, err := coreservice.NewCoreService(serviceAccountManager, logger, &deletedAccountsConfig)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}
@@ -57,7 +57,11 @@ func main() {
 	coreService.StartDeletedAccountsTimer()
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
+func printDeletedAccountIDs(accountIDs []string, err error) {
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
 	log.Printf("Deleted account IDs: %v\n", accountIDs)
-	return nil
 }

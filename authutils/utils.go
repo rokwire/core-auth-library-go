@@ -37,7 +37,8 @@ func ContainsString(slice []string, val string) bool {
 }
 
 // RemoveString removes the provided value from the provided slice
-// 	Returns modified slice. If val is not found returns unmodified slice
+//
+//	Returns modified slice. If val is not found returns unmodified slice
 func RemoveString(slice []string, val string) ([]string, bool) {
 	for i, other := range slice {
 		if other == val {
