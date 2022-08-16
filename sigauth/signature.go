@@ -22,7 +22,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/textproto"
 	"strconv"
@@ -145,15 +145,16 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 }
 
 // CheckRequestServiceSignature validates the signature on the provided request
-// 	The request must be signed by one of the services in requiredServiceIDs. If nil, any valid signature
+//
+//	The request must be signed by one of the services in requiredServiceIDs. If nil, any valid signature
 //	from a subscribed service will be accepted
-// 	Returns the service ID of the signing service
+//	Returns the service ID of the signing service
 func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredServiceIDs []string) (string, error) {
 	if r == nil {
 		return "", errors.New("request is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.checkRequest(r)
+	sigString, sigAuthHeader, err := s.CheckRequest(r)
 	if err != nil {
 		return "", err
 	}
@@ -189,7 +190,8 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 }
 
 // CheckRequestSignature validates the signature on the provided request
-// 	The request must be signed by the private key paired with the provided public key
+//
+//	The request must be signed by the private key paired with the provided public key
 func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey *rsa.PublicKey) error {
 	if r == nil {
 		return errors.New("request is nil")
@@ -199,7 +201,7 @@ func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey *rsa.PublicKey)
 		return errors.New("public key is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.checkRequest(r)
+	sigString, sigAuthHeader, err := s.CheckRequest(r)
 	if err != nil {
 		return err
 	}
@@ -212,13 +214,14 @@ func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey *rsa.PublicKey)
 	return nil
 }
 
-func (s *SignatureAuth) checkRequest(r *Request) (string, *SignatureAuthHeader, error) {
-	authHeader := r.getHeader("Authorization")
+// CheckRequest checks the request's digest and returns its signature string and parsed header
+func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, error) {
+	authHeader := r.GetHeader("Authorization")
 	if authHeader == "" {
 		return "", nil, errors.New("request missing authorization header")
 	}
 
-	digestHeader := r.getHeader("Digest")
+	digestHeader := r.GetHeader("Digest")
 
 	digest, _, err := GetRequestDigest(r.Body)
 	if err != nil {
@@ -281,7 +284,8 @@ func NewSignatureAuth(serviceKey *rsa.PrivateKey, serviceRegManager *authservice
 }
 
 // BuildSignatureString builds the string to be signed for the provided request
-// 	"headers" specify which headers to include in the signature string
+//
+//	"headers" specify which headers to include in the signature string
 func BuildSignatureString(r *Request, headers []string) (string, error) {
 	sigString := ""
 	for _, header := range headers {
@@ -295,7 +299,7 @@ func BuildSignatureString(r *Request, headers []string) (string, error) {
 		} else if header == "host" { // Go removes the "Host" header and moves it the request Host field
 			val = header + ": " + r.Host
 		} else {
-			val = header + ": " + r.getHeader(header)
+			val = header + ": " + r.GetHeader(header)
 		}
 
 		if val == "" {
@@ -333,7 +337,7 @@ func GetRequestDigest(body []byte) (string, int, error) {
 
 // -------------------- Request --------------------
 
-//Request defines the components of a signed request required for signature authentication
+// Request defines the components of a signed request required for signature authentication
 type Request struct {
 	Headers map[string][]string
 	Body    []byte
@@ -344,11 +348,12 @@ type Request struct {
 	Protocol string
 }
 
-func (s Request) getHeader(key string) string {
+// GetHeader gets the request header for a given key
+func (s Request) GetHeader(key string) string {
 	return textproto.MIMEHeader(s.Headers).Get(key)
 }
 
-//ParseHTTPRequest parses a http.Request into a Request
+// ParseHTTPRequest parses a http.Request into a Request
 func ParseHTTPRequest(r *http.Request) (*Request, error) {
 	if r == nil {
 		return nil, nil
@@ -357,13 +362,13 @@ func ParseHTTPRequest(r *http.Request) (*Request, error) {
 	var body []byte
 	var err error
 	if r.Body != nil {
-		body, err = ioutil.ReadAll(r.Body)
+		body, err = io.ReadAll(r.Body)
 		if err != nil {
 			return nil, fmt.Errorf("error reading request body: %v", err)
 		}
 		r.Body.Close()
 
-		r.Body = ioutil.NopCloser(bytes.NewReader(body))
+		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
 
 	return &Request{Headers: r.Header, Body: body, Host: r.Host, Method: r.Method, Path: r.URL.Path, Protocol: r.Proto}, nil
@@ -371,7 +376,7 @@ func ParseHTTPRequest(r *http.Request) (*Request, error) {
 
 // -------------------- SignatureAuthHeader --------------------
 
-//SignatureAuthHeader defines the structure of the Authorization header for signature authentication
+// SignatureAuthHeader defines the structure of the Authorization header for signature authentication
 type SignatureAuthHeader struct {
 	KeyID      string   `json:"keyId" validate:"required"`
 	Algorithm  string   `json:"algorithm" validate:"required"`

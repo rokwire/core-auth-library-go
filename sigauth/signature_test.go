@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -514,7 +514,7 @@ func TestParseHTTPRequest(t *testing.T) {
 			}
 
 			if tt.args.r != nil && tt.args.r.Body != nil {
-				requestBody, _ := ioutil.ReadAll(tt.args.r.Body)
+				requestBody, _ := io.ReadAll(tt.args.r.Body)
 				if !reflect.DeepEqual(requestBody, tt.wantRequestBody) {
 					t.Errorf("ParseHTTPRequest() original request body = %v, wantRequestBody %v", requestBody, tt.wantRequestBody)
 				}
