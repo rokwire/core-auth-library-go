@@ -18,7 +18,7 @@ import (
 	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -176,8 +176,8 @@ func TestGetPubKeyPem(t *testing.T) {
 }
 
 func TestReadResponseBody(t *testing.T) {
-	unauthorized := &http.Response{StatusCode: http.StatusUnauthorized, Status: fmt.Sprintf("%d %s", http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)), Body: ioutil.NopCloser(strings.NewReader("test"))}
-	ok := &http.Response{StatusCode: http.StatusOK, Status: fmt.Sprintf("%d %s", http.StatusOK, http.StatusText(http.StatusOK)), Body: ioutil.NopCloser(strings.NewReader("test"))}
+	unauthorized := &http.Response{StatusCode: http.StatusUnauthorized, Status: fmt.Sprintf("%d %s", http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)), Body: io.NopCloser(strings.NewReader("test"))}
+	ok := &http.Response{StatusCode: http.StatusOK, Status: fmt.Sprintf("%d %s", http.StatusOK, http.StatusText(http.StatusOK)), Body: io.NopCloser(strings.NewReader("test"))}
 
 	type args struct {
 		resp *http.Response

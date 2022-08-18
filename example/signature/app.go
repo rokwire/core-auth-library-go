@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 
@@ -85,7 +85,7 @@ func (we WebAdapter) sampleSignedRequest(url string, param string, body []byte) 
 		return "", fmt.Errorf("error from sample request: %d - %s", resp.StatusCode, resp.Body)
 	}
 
-	response, err := ioutil.ReadAll(resp.Body)
+	response, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading body of sample response: %v", err)
 	}
