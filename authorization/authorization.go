@@ -201,13 +201,13 @@ func (s *Scope) Match(other Scope) bool {
 	return true
 }
 
-// MatchSymmetric returns true if the scope matches the provided "other" scope
+// MatchSymmetric returns true if the scope matches the provided "other" scope, or the reverse is true
 func (s *Scope) MatchSymmetric(other Scope) bool {
 	if !matchScopeField(s.ServiceID, other.ServiceID, false, true) {
 		return false
 	}
 
-	if !matchScopeField(s.Resource, other.Resource, false, true) {
+	if !matchScopeField(s.Resource, other.Resource, true, true) {
 		return false
 	}
 
@@ -218,13 +218,30 @@ func (s *Scope) MatchSymmetric(other Scope) bool {
 	return true
 }
 
+// Intersect returns true if either a scope field matches the corresponding "other" scope field, or the reverse is true, for each field
+// func (s *Scope) Intersect(other Scope) bool {
+// 	if !matchScopeField(s.ServiceID, other.ServiceID, false, false) && !matchScopeField(other.ServiceID, s.ServiceID, false, false) {
+// 		return false
+// 	}
+
+// 	if !matchScopeField(s.Resource, other.Resource, true, false) && !matchScopeField(other.Resource, s.Resource, true, false) {
+// 		return false
+// 	}
+
+// 	if !matchScopeField(s.Operation, other.Operation, false, false) && !matchScopeField(other.Operation, s.Operation, false, false) {
+// 		return false
+// 	}
+
+// 	return true
+// }
+
 // AssociatedScopes returns the subset of scopes that s grants access to or that grant access to s
 //
 //	Optionally trims the Resource of s from matched scopes' Resources
 func (s *Scope) AssociatedScopes(scopes []Scope, trimResource bool) []Scope {
 	relevant := make([]Scope, 0)
 	for _, scope := range scopes {
-		if s.Match(scope) || scope.Match(*s) {
+		if s.MatchSymmetric(scope) {
 			if trimResource {
 				scope.Resource = strings.TrimPrefix(scope.Resource, s.Resource+".")
 			}
@@ -304,7 +321,20 @@ func MatchList(scopes []Scope, other Scope, all bool) bool {
 //			accessKeys ([]string): all data keys the provided scopes grant access to in minAllAccessScope context
 //			err (error): returned if scopes do not grant access to all requested resources
 func ResourceAccessForScopes(scopes []Scope, minAllAccessScope Scope, requestedResources []string) (bool, []string, error) {
+	// get scopes relevant to determining resource access
 	associatedScopes := minAllAccessScope.AssociatedScopes(scopes, true)
+	if len(associatedScopes) == 0 {
+		return false, nil, fmt.Errorf("no associated scopes for resource %s", minAllAccessScope.Resource)
+	}
+	accessKeys := make([]string, 0)
+	for _, scope := range associatedScopes {
+		if scope.Match(minAllAccessScope) {
+			return true, nil, nil
+		}
+		accessKeys = append(accessKeys, scope.Resource)
+	}
+
+	// check all requested resources against relevant scopes
 	for _, resource := range requestedResources {
 		minResourceScope := Scope{ServiceID: minAllAccessScope.ServiceID, Resource: resource, Operation: minAllAccessScope.Operation}
 		validRequest := false
@@ -318,14 +348,10 @@ func ResourceAccessForScopes(scopes []Scope, minAllAccessScope Scope, requestedR
 			}
 		}
 		if !validRequest {
-			return false, nil, fmt.Errorf("provided scopes do not grant access to resource %s", minResourceScope.Resource)
+			return false, nil, fmt.Errorf("provided scopes do not grant %s access to resource %s", minResourceScope.Operation, minResourceScope.Resource)
 		}
 	}
 
-	accessKeys := make([]string, 0)
-	for _, scope := range associatedScopes {
-		accessKeys = append(accessKeys, scope.Resource)
-	}
 	return false, accessKeys, nil
 }
 
@@ -351,7 +377,8 @@ func CheckScopesGlobals(scopes []string, serviceID string) bool {
 }
 
 func matchScopeField(x string, y string, matchPrefix bool, symmetric bool) bool {
-	if x == y || (!symmetric && matchPrefix && strings.HasPrefix(y, x)) || x == ScopeAll || (symmetric && y == ScopeAll) {
+	prefixMatch := matchPrefix && (strings.HasPrefix(y, x) || (symmetric && strings.HasPrefix(x, y)))
+	if x == y || x == ScopeAll || (symmetric && y == ScopeAll) || prefixMatch {
 		return true
 	}
 	return false

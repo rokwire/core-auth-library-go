@@ -291,7 +291,7 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 			continue
 		}
 
-		if scope.Match(*required) {
+		if scope.MatchSymmetric(*required) {
 			return nil
 		}
 	}
