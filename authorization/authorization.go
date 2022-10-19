@@ -29,6 +29,14 @@ const (
 	ScopeAll string = "all"
 	// ScopeGlobal represents the global scope
 	ScopeGlobal string = "all:all:all"
+	//ScopeOperationGet indicates a scope may be used for a get operation
+	ScopeOperationGet string = "get"
+	//ScopeOperationCreate indicates a scope may be used for a create operation
+	ScopeOperationCreate string = "create"
+	//ScopeOperationUpdate indicates a scope may be used for a update operation
+	ScopeOperationUpdate string = "update"
+	//ScopeOperationDelete indicates a scope may be used for a delete operation
+	ScopeOperationDelete string = "delete"
 )
 
 var (
@@ -48,6 +56,7 @@ type CasbinAuthorization struct {
 }
 
 // Any will validate that if the casbin enforcer gives access to one or more of the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinAuthorization) Any(values []string, object string, action string) error {
 	for _, value := range values {
@@ -60,6 +69,7 @@ func (c *CasbinAuthorization) Any(values []string, object string, action string)
 }
 
 // All will validate that if the casbin enforcer gives access to all the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinAuthorization) All(values []string, object string, action string) error {
 	for _, value := range values {
@@ -98,6 +108,7 @@ type CasbinScopeAuthorization struct {
 }
 
 // Any will validate that if the Casbin enforcer gives access to one or more of the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinScopeAuthorization) Any(values []string, object string, action string) error {
 	if CheckScopesGlobals(values, c.serviceID) {
@@ -110,7 +121,7 @@ func (c *CasbinScopeAuthorization) Any(values []string, object string, action st
 			continue
 		}
 
-		if !matchScopeField(scope.ServiceID, c.serviceID) {
+		if !matchScopeField(scope.ServiceID, c.serviceID, false, true) {
 			continue
 		}
 
@@ -123,6 +134,7 @@ func (c *CasbinScopeAuthorization) Any(values []string, object string, action st
 }
 
 // All will validate that if the Casbin enforcer gives access to all the provided values
+//
 //	Returns nil on success and error on failure.
 func (c *CasbinScopeAuthorization) All(values []string, object string, action string) error {
 	for _, value := range values {
@@ -136,7 +148,7 @@ func (c *CasbinScopeAuthorization) All(values []string, object string, action st
 			continue
 		}
 
-		if !matchScopeField(scope.ServiceID, c.serviceID) {
+		if !matchScopeField(scope.ServiceID, c.serviceID, false, true) {
 			return reqErr
 		}
 
@@ -173,20 +185,53 @@ func (s *Scope) String() string {
 }
 
 // Match returns true if the scope matches the provided "other" scope
-func (s *Scope) Match(other *Scope) bool {
-	if !matchScopeField(s.ServiceID, other.ServiceID) {
+func (s *Scope) Match(other Scope) bool {
+	if !matchScopeField(s.ServiceID, other.ServiceID, false, false) {
 		return false
 	}
 
-	if !matchScopeField(s.Resource, other.Resource) {
+	if !matchScopeField(s.Resource, other.Resource, true, false) {
 		return false
 	}
 
-	if !matchScopeField(s.Operation, other.Operation) {
+	if !matchScopeField(s.Operation, other.Operation, false, false) {
 		return false
 	}
 
 	return true
+}
+
+// MatchSymmetric returns true if the scope matches the provided "other" scope
+func (s *Scope) MatchSymmetric(other Scope) bool {
+	if !matchScopeField(s.ServiceID, other.ServiceID, false, true) {
+		return false
+	}
+
+	if !matchScopeField(s.Resource, other.Resource, false, true) {
+		return false
+	}
+
+	if !matchScopeField(s.Operation, other.Operation, false, true) {
+		return false
+	}
+
+	return true
+}
+
+// AssociatedScopes returns the subset of scopes that s grants access to or that grant access to s
+//
+//	Optionally trims the Resource of s from matched scopes' Resources
+func (s *Scope) AssociatedScopes(scopes []Scope, trimResource bool) []Scope {
+	relevant := make([]Scope, 0)
+	for _, scope := range scopes {
+		if s.Match(scope) || scope.Match(*s) {
+			if trimResource {
+				scope.Resource = strings.TrimPrefix(scope.Resource, s.Resource+".")
+			}
+			relevant = append(relevant, scope)
+		}
+	}
+	return relevant
 }
 
 // IsGlobal returns true if the scope is the global scope
@@ -206,6 +251,82 @@ func ScopeFromString(scope string) (*Scope, error) {
 		return nil, fmt.Errorf("invalid scope string %s: format must be <service_id>:<resource>:<operation>", scope)
 	}
 	return &Scope{ServiceID: comps[0], Resource: comps[1], Operation: comps[2]}, nil
+}
+
+// ScopesFromStrings creates a list of scope objects from a list of string representations
+func ScopesFromStrings(scopeStrings []string) ([]Scope, error) {
+	scopes := make([]Scope, len(scopeStrings))
+	for i, s := range scopeStrings {
+		scope, err := ScopeFromString(s)
+		if err != nil {
+			return nil, err
+		}
+		scopes[i] = *scope
+	}
+	return scopes, nil
+}
+
+// ScopesToStrings creates a list of string representations from a list of scope objects
+func ScopesToStrings(scopes []Scope) []string {
+	scopeStrings := make([]string, len(scopes))
+	for i, s := range scopes {
+		scopeStrings[i] = s.String()
+	}
+	return scopeStrings
+}
+
+// MatchList returs true if any or all scopes match the provided "other" scope
+func MatchList(scopes []Scope, other Scope, all bool) bool {
+	if len(scopes) == 0 {
+		return false
+	}
+
+	for _, s := range scopes {
+		if s.Match(other) {
+			if !all {
+				return true
+			}
+		} else if all {
+			return false
+		}
+	}
+	return all
+}
+
+// ResourceAccessForScopes checks which resources a list of scopes grant access to
+//
+//	 Inputs:
+//			scopes ([]Scope): list of scopes that have been granted
+//			minAllAccessScope (Scope): minimum access scope that grants access to all requested resources
+//			requestedResources: ([]string): list of data keys for which scope access should be checked
+//	 Outputs:
+//			allAccess (bool): whether any scope in scopes grants access to all requested resources
+//			accessKeys ([]string): all data keys the provided scopes grant access to in minAllAccessScope context
+//			err (error): returned if scopes do not grant access to all requested resources
+func ResourceAccessForScopes(scopes []Scope, minAllAccessScope Scope, requestedResources []string) (bool, []string, error) {
+	associatedScopes := minAllAccessScope.AssociatedScopes(scopes, true)
+	for _, resource := range requestedResources {
+		minResourceScope := Scope{ServiceID: minAllAccessScope.ServiceID, Resource: resource, Operation: minAllAccessScope.Operation}
+		validRequest := false
+		for _, scope := range associatedScopes {
+			if scope.Match(minAllAccessScope) {
+				return true, nil, nil
+			}
+			if scope.Match(minResourceScope) {
+				validRequest = true
+				break
+			}
+		}
+		if !validRequest {
+			return false, nil, fmt.Errorf("provided scopes do not grant access to resource %s", minResourceScope.Resource)
+		}
+	}
+
+	accessKeys := make([]string, 0)
+	for _, scope := range associatedScopes {
+		accessKeys = append(accessKeys, scope.Resource)
+	}
+	return false, accessKeys, nil
 }
 
 // ScopeServiceGlobal returns the global scope
@@ -229,9 +350,9 @@ func CheckScopesGlobals(scopes []string, serviceID string) bool {
 	return authutils.ContainsString(scopes, serviceAll)
 }
 
-func matchScopeField(x string, y string) bool {
-	if x != y && x != ScopeAll && y != ScopeAll {
-		return false
+func matchScopeField(x string, y string, matchPrefix bool, symmetric bool) bool {
+	if x == y || (!symmetric && matchPrefix && strings.HasPrefix(y, x)) || x == ScopeAll || (symmetric && y == ScopeAll) {
+		return true
 	}
-	return true
+	return false
 }

@@ -33,11 +33,6 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 )
 
-const (
-	// AllID represents all possible options for an ID
-	AllID string = "all"
-)
-
 // -------------------- AuthService --------------------
 
 // AuthService contains the configurations needed to interface with the auth service
@@ -588,17 +583,10 @@ func (s *ServiceAccountManager) AccessTokens() map[AppOrgPair]AccessToken {
 
 // GetCachedAccessToken returns the most restrictive cached token (with corresponding pair) granting access to appID and orgID, if it exists
 func (s *ServiceAccountManager) GetCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
-	allowedPairs := []AppOrgPair{{AppID: appID, OrgID: orgID}}
-	if appID != AllID || orgID != AllID {
-		if appID != AllID && orgID != AllID {
-			allowedPairs = append(allowedPairs, AppOrgPair{AppID: AllID, OrgID: orgID})
-			allowedPairs = append(allowedPairs, AppOrgPair{AppID: appID, OrgID: AllID})
-		}
+	appIDs, orgIDs := authutils.GetAccessPairs(appID, orgID)
 
-		allowedPairs = append(allowedPairs, AppOrgPair{AppID: AllID, OrgID: AllID})
-	}
-
-	for _, allowed := range allowedPairs {
+	for i := range appIDs {
+		allowed := AppOrgPair{AppID: appIDs[i], OrgID: orgIDs[i]}
 		for _, cached := range s.appOrgPairs {
 			if cached.Equals(allowed) {
 				if item, found := s.accessTokens.Load(allowed); found && item != nil {

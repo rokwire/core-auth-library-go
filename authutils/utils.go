@@ -26,6 +26,13 @@ import (
 	"net/http"
 )
 
+const (
+	//AllApps indicates that all apps may be accessed
+	AllApps string = "all"
+	//AllOrgs indicates that all orgs may be accessed
+	AllOrgs string = "all"
+)
+
 // ContainsString returns true if the provided value is in the provided slice
 func ContainsString(slice []string, val string) bool {
 	for _, v := range slice {
@@ -116,4 +123,22 @@ func ReadResponseBody(resp *http.Response) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+// GetAccessPairs returns a list of appIDs and a list of orgIDs representing AppOrgPairs giving potential access to the given appID, orgID pair
+func GetAccessPairs(appID string, orgID string) ([]string, []string) {
+	appIDs := []string{appID}
+	orgIDs := []string{orgID}
+	if appID != AllApps || orgID != AllOrgs {
+		if appID != AllApps && orgID != AllOrgs {
+			appIDs = append(appIDs, AllApps)
+			orgIDs = append(orgIDs, orgID)
+			appIDs = append(appIDs, appID)
+			orgIDs = append(orgIDs, AllOrgs)
+		}
+
+		appIDs = append(appIDs, AllApps)
+		orgIDs = append(orgIDs, AllOrgs)
+	}
+	return appIDs, orgIDs
 }
