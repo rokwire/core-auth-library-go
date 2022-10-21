@@ -121,7 +121,7 @@ func (c *CasbinScopeAuthorization) Any(values []string, object string, action st
 			continue
 		}
 
-		if !matchScopeField(scope.ServiceID, c.serviceID, false, true) {
+		if !matchScopeField(scope.ServiceID, c.serviceID, false) {
 			continue
 		}
 
@@ -148,7 +148,7 @@ func (c *CasbinScopeAuthorization) All(values []string, object string, action st
 			continue
 		}
 
-		if !matchScopeField(scope.ServiceID, c.serviceID, false, true) {
+		if !matchScopeField(scope.ServiceID, c.serviceID, false) {
 			return reqErr
 		}
 
@@ -180,84 +180,72 @@ type Scope struct {
 }
 
 // String converts the scope to the string representation
-func (s *Scope) String() string {
+func (s Scope) String() string {
 	return fmt.Sprintf("%s:%s:%s", s.ServiceID, s.Resource, s.Operation)
 }
 
-// Match returns true if the scope matches the provided "other" scope
-func (s *Scope) Match(other Scope) bool {
-	if !matchScopeField(s.ServiceID, other.ServiceID, false, false) {
+// Grants returns true if the scope (we have) grants access to the provided "want" scope
+func (s Scope) Grants(want Scope) bool {
+	if !matchScopeField(s.ServiceID, want.ServiceID, false) {
 		return false
 	}
 
-	if !matchScopeField(s.Resource, other.Resource, true, false) {
+	if !matchScopeField(s.Resource, want.Resource, true) {
 		return false
 	}
 
-	if !matchScopeField(s.Operation, other.Operation, false, false) {
-		return false
-	}
-
-	return true
-}
-
-// MatchSymmetric returns true if the scope matches the provided "other" scope, or the reverse is true
-func (s *Scope) MatchSymmetric(other Scope) bool {
-	if !matchScopeField(s.ServiceID, other.ServiceID, false, true) {
-		return false
-	}
-
-	if !matchScopeField(s.Resource, other.Resource, true, true) {
-		return false
-	}
-
-	if !matchScopeField(s.Operation, other.Operation, false, true) {
+	if !matchScopeField(s.Operation, want.Operation, false) {
 		return false
 	}
 
 	return true
 }
 
-// Intersect returns true if either a scope field matches the corresponding "other" scope field, or the reverse is true, for each field
-// func (s *Scope) Intersect(other Scope) bool {
-// 	if !matchScopeField(s.ServiceID, other.ServiceID, false, false) && !matchScopeField(other.ServiceID, s.ServiceID, false, false) {
-// 		return false
-// 	}
+// Sub returns true if the scope is a sub-scope of the provided "super" scope
+func (s Scope) IsSub(super Scope) bool {
+	if !matchScopeField(s.ServiceID, super.ServiceID, false) {
+		return false
+	}
 
-// 	if !matchScopeField(s.Resource, other.Resource, true, false) && !matchScopeField(other.Resource, s.Resource, true, false) {
-// 		return false
-// 	}
+	if !matchScopeField(super.Resource, s.Resource, true) {
+		return false
+	}
 
-// 	if !matchScopeField(s.Operation, other.Operation, false, false) && !matchScopeField(other.Operation, s.Operation, false, false) {
-// 		return false
-// 	}
+	if !matchScopeField(s.Operation, super.Operation, false) {
+		return false
+	}
 
-// 	return true
-// }
+	return true
+}
 
-// AssociatedScopes returns the subset of scopes that s grants access to or that grant access to s
+// AssociatedResources returns the subset of scope resources that s grants access to or that grant access to s,
+//	and a boolean indicator if a direct asymmetric match is found
 //
 //	Optionally trims the Resource of s from matched scopes' Resources
-func (s *Scope) AssociatedScopes(scopes []Scope, trimResource bool) []Scope {
-	relevant := make([]Scope, 0)
+func (s Scope) AssociatedResources(scopes []Scope, trimResource bool) (bool, []string) {
+	relevant := make([]string, 0)
 	for _, scope := range scopes {
-		if s.MatchSymmetric(scope) {
+		if scope.Grants(s) {
+			return true, nil
+		}
+		if scope.IsSub(s) {
+			resource := scope.Resource
 			if trimResource {
-				scope.Resource = strings.TrimPrefix(scope.Resource, s.Resource+".")
+				resource = strings.TrimPrefix(resource, s.Resource+".")
 			}
-			relevant = append(relevant, scope)
+			relevant = append(relevant, resource)
 		}
 	}
-	return relevant
+	return false, relevant
 }
 
 // IsGlobal returns true if the scope is the global scope
-func (s *Scope) IsGlobal() bool {
+func (s Scope) IsGlobal() bool {
 	return s.ServiceID == ScopeAll && s.Resource == ScopeAll && s.Operation == ScopeAll
 }
 
 // IsServiceGlobal returns true if the scope is the service-level global scope
-func (s *Scope) IsServiceGlobal(serviceID string) bool {
+func (s Scope) IsServiceGlobal(serviceID string) bool {
 	return s.ServiceID == serviceID && s.Resource == ScopeAll && s.Operation == ScopeAll
 }
 
@@ -292,14 +280,29 @@ func ScopesToStrings(scopes []Scope) []string {
 	return scopeStrings
 }
 
-// MatchList returs true if any or all scopes match the provided "other" scope
-func MatchList(scopes []Scope, other Scope, all bool) bool {
+// ListGrants returns true if any of the listed scopes grant the provided "want" scope
+func ListGrants(scopes []Scope, want Scope) bool {
 	if len(scopes) == 0 {
 		return false
 	}
 
 	for _, s := range scopes {
-		if s.Match(other) {
+		if s.Grants(want) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// ListGranted returns true if any or all scopes listed are granted by the provided "have" scope
+func ListGranted(scopes []Scope, have Scope, all bool) bool {
+	if len(scopes) == 0 {
+		return false
+	}
+
+	for _, s := range scopes {
+		if have.Grants(s) {
 			if !all {
 				return true
 			}
@@ -322,37 +325,29 @@ func MatchList(scopes []Scope, other Scope, all bool) bool {
 //			err (error): returned if scopes do not grant access to all requested resources
 func ResourceAccessForScopes(scopes []Scope, minAllAccessScope Scope, requestedResources []string) (bool, []string, error) {
 	// get scopes relevant to determining resource access
-	associatedScopes := minAllAccessScope.AssociatedScopes(scopes, true)
-	if len(associatedScopes) == 0 {
-		return false, nil, fmt.Errorf("no associated scopes for resource %s", minAllAccessScope.Resource)
+	allAccess, associatedResources := minAllAccessScope.AssociatedResources(scopes, true)
+	if allAccess {
+		return true, nil, nil
 	}
-	accessKeys := make([]string, 0)
-	for _, scope := range associatedScopes {
-		if scope.Match(minAllAccessScope) {
-			return true, nil, nil
-		}
-		accessKeys = append(accessKeys, scope.Resource)
+	if len(associatedResources) == 0 {
+		return false, nil, fmt.Errorf("no associated scopes for resource %s", minAllAccessScope.Resource)
 	}
 
 	// check all requested resources against relevant scopes
 	for _, resource := range requestedResources {
-		minResourceScope := Scope{ServiceID: minAllAccessScope.ServiceID, Resource: resource, Operation: minAllAccessScope.Operation}
 		validRequest := false
-		for _, scope := range associatedScopes {
-			if scope.Match(minAllAccessScope) {
-				return true, nil, nil
-			}
-			if scope.Match(minResourceScope) {
+		for _, associatedResource := range associatedResources {
+			if matchScopeField(associatedResource, resource, true) {
 				validRequest = true
 				break
 			}
 		}
 		if !validRequest {
-			return false, nil, fmt.Errorf("provided scopes do not grant %s access to resource %s", minResourceScope.Operation, minResourceScope.Resource)
+			return false, nil, fmt.Errorf("provided scopes do not grant %s access to resource %s", minAllAccessScope.Operation, resource)
 		}
 	}
 
-	return false, accessKeys, nil
+	return false, associatedResources, nil
 }
 
 // ScopeServiceGlobal returns the global scope
@@ -376,9 +371,13 @@ func CheckScopesGlobals(scopes []string, serviceID string) bool {
 	return authutils.ContainsString(scopes, serviceAll)
 }
 
-func matchScopeField(x string, y string, matchPrefix bool, symmetric bool) bool {
-	prefixMatch := matchPrefix && (strings.HasPrefix(y, x) || (symmetric && strings.HasPrefix(x, y)))
-	if x == y || x == ScopeAll || (symmetric && y == ScopeAll) || prefixMatch {
+// Returns whether the provided scope fields match each other
+// Inputs:
+//		have (string): scope field to compare against
+//		want (string): scope field to be compared
+//		matchPrefix (bool): If true, uses prefixes to match, if false uses equality
+func matchScopeField(have string, want string, matchPrefix bool) bool {
+	if have == want || have == ScopeAll || (matchPrefix && strings.HasPrefix(want, have)) {
 		return true
 	}
 	return false

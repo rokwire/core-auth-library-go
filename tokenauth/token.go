@@ -268,7 +268,7 @@ func (t *TokenAuth) AuthorizeRequestPermissions(claims *Claims, request *http.Re
 
 // ValidateScopeClaim will validate that the provided token claims contain the required scope
 //
-//	If an empty required scope is provided, the claims must contain a valid global scope such as 'all' or '{service}:all'
+//	If an empty required scope is provided, the claims must contain a valid global scope such as 'all:all:all' or '{service}:all:all'
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) error {
 	if claims == nil || claims.Scope == "" {
@@ -291,7 +291,7 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 			continue
 		}
 
-		if scope.MatchSymmetric(*required) {
+		if scope.Grants(*required) {
 			return nil
 		}
 	}
