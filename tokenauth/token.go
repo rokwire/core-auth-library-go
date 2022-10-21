@@ -65,6 +65,11 @@ func (c Claims) AppOrg() authservice.AppOrgPair {
 	return authservice.AppOrgPair{AppID: c.AppID, OrgID: c.OrgID}
 }
 
+func (c Claims) Scopes() []authorization.Scope {
+	scopes, _ := authorization.ScopesFromStrings(strings.Split(c.Scope, " "), true)
+	return scopes
+}
+
 // TokenAuth contains configurations and helper functions required to validate tokens
 type TokenAuth struct {
 	serviceRegManager   *authservice.ServiceRegManager
