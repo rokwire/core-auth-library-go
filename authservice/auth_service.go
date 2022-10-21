@@ -583,10 +583,8 @@ func (s *ServiceAccountManager) AccessTokens() map[AppOrgPair]AccessToken {
 
 // GetCachedAccessToken returns the most restrictive cached token (with corresponding pair) granting access to appID and orgID, if it exists
 func (s *ServiceAccountManager) GetCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
-	appIDs, orgIDs := authutils.GetAccessPairs(appID, orgID)
-
-	for i := range appIDs {
-		allowed := AppOrgPair{AppID: appIDs[i], OrgID: orgIDs[i]}
+	pairs := GetAccessPairs(appID, orgID)
+	for _, allowed := range pairs {
 		for _, cached := range s.appOrgPairs {
 			if cached.Equals(allowed) {
 				if item, found := s.accessTokens.Load(allowed); found && item != nil {
@@ -780,6 +778,19 @@ func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPa
 	close(duplicateChan)
 
 	rc <- responses
+}
+
+// GetAccessPairs returns a list of appIDs and a list of orgIDs representing AppOrgPairs giving potential access to the given appID, orgID pair
+func GetAccessPairs(appID string, orgID string) []AppOrgPair {
+	pairs := []AppOrgPair{{AppID: appID, OrgID: orgID}}
+	if appID != authutils.AllApps || orgID != authutils.AllOrgs {
+		if appID != authutils.AllApps && orgID != authutils.AllOrgs {
+			pairs = append(pairs, AppOrgPair{AppID: authutils.AllApps, OrgID: orgID})
+			pairs = append(pairs, AppOrgPair{AppID: appID, OrgID: authutils.AllOrgs})
+		}
+		pairs = append(pairs, AppOrgPair{AppID: authutils.AllApps, OrgID: authutils.AllOrgs})
+	}
+	return pairs
 }
 
 // NewServiceAccountManager creates and configures a new ServiceAccountManager instance
