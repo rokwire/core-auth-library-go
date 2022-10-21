@@ -305,3 +305,136 @@ func TestResourceAccessForScopes(t *testing.T) {
 		})
 	}
 }
+
+func TestScopesFromStrings(t *testing.T) {
+	getAccount := Scope{ServiceID: "core", Resource: "account", Operation: "get"}
+	updateAccountProfile := Scope{ServiceID: "core", Resource: "account.profile", Operation: "update"}
+	otherServiceAllAccountProfile := Scope{ServiceID: "other", Resource: "account.profile", Operation: "all"}
+	getAll := Scope{ServiceID: "core", Resource: "all", Operation: "get"}
+
+	type args struct {
+		scopeStrings []string
+		skipInvalid  bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    []Scope
+		wantErr bool
+	}{
+		{"valid scopes", args{[]string{"core:account:get", "core:account.profile:update", "other:account.profile:all", "core:all:get"}, false},
+			[]Scope{getAccount, updateAccountProfile, otherServiceAllAccountProfile, getAll}, false},
+		{"invalid scope ignore", args{[]string{"core:account:get", "core:account.profile", "other:account.profile:all", "core:all:get"}, true},
+			[]Scope{getAccount, otherServiceAllAccountProfile, getAll}, false},
+		{"invalid scope error", args{[]string{"core:account:get", "core:account.profile", "other:account.profile:all", "core:all:get"}, false},
+			nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ScopesFromStrings(tt.args.scopeStrings, tt.args.skipInvalid)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ScopesFromStrings() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ScopesFromStrings() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestScopesToStrings(t *testing.T) {
+	getAccount := Scope{ServiceID: "core", Resource: "account", Operation: "get"}
+	updateAccountProfile := Scope{ServiceID: "core", Resource: "account.profile", Operation: "update"}
+	otherServiceAllAccountProfile := Scope{ServiceID: "other", Resource: "account.profile", Operation: "all"}
+	getAll := Scope{ServiceID: "core", Resource: "all", Operation: "get"}
+
+	type args struct {
+		scopes []Scope
+	}
+	tests := []struct {
+		name string
+		args args
+		want []string
+	}{
+		{"valid scopes", args{[]Scope{getAccount, updateAccountProfile, otherServiceAllAccountProfile, getAll}},
+			[]string{"core:account:get", "core:account.profile:update", "other:account.profile:all", "core:all:get"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ScopesToStrings(tt.args.scopes); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ScopesToStrings() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestListGrants(t *testing.T) {
+	allAccount := Scope{ServiceID: "core", Resource: "account", Operation: "all"}
+	getAccount := Scope{ServiceID: "core", Resource: "account", Operation: "get"}
+	updateAccount := Scope{ServiceID: "core", Resource: "account", Operation: "update"}
+	getAccountProfile := Scope{ServiceID: "core", Resource: "account.profile", Operation: "get"}
+	allAccountProfile := Scope{ServiceID: "core", Resource: "account.profile", Operation: "all"}
+	getApplications := Scope{ServiceID: "core", Resource: "applications", Operation: "get"}
+	otherServiceAllAccountProfile := Scope{ServiceID: "other", Resource: "account.profile", Operation: "all"}
+	getAll := Scope{ServiceID: "core", Resource: "all", Operation: "get"}
+
+	type args struct {
+		scopes []Scope
+		want   Scope
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"valid grant exact", args{[]Scope{getAccount, allAccountProfile, getApplications}, getAccount}, true},
+		{"valid grant super", args{[]Scope{allAccount, getApplications, otherServiceAllAccountProfile}, getAccountProfile}, true},
+		{"valid grant global resource", args{[]Scope{getAll}, getAccount}, true},
+		{"invalid grant other service", args{[]Scope{otherServiceAllAccountProfile, getApplications}, getAccount}, false},
+		{"invalid grant operation", args{[]Scope{updateAccount, getApplications}, getAccount}, false},
+		{"invalid grant resource", args{[]Scope{getApplications, getAccountProfile}, getAccount}, false},
+		{"empty scopes", args{[]Scope{}, getApplications}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ListGrants(tt.args.scopes, tt.args.want); got != tt.want {
+				t.Errorf("ListGrants() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestListGranted(t *testing.T) {
+	allAccount := Scope{ServiceID: "core", Resource: "account", Operation: "all"}
+	getAccount := Scope{ServiceID: "core", Resource: "account", Operation: "get"}
+	updateAccount := Scope{ServiceID: "core", Resource: "account", Operation: "update"}
+	getAccountProfile := Scope{ServiceID: "core", Resource: "account.profile", Operation: "get"}
+	allAccountProfile := Scope{ServiceID: "core", Resource: "account.profile", Operation: "all"}
+	getApplications := Scope{ServiceID: "core", Resource: "applications", Operation: "get"}
+	otherServiceAllAccountProfile := Scope{ServiceID: "other", Resource: "account.profile", Operation: "all"}
+
+	type args struct {
+		scopes []Scope
+		have   Scope
+		all    bool
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{"valid grant all", args{[]Scope{getAccount, updateAccount, allAccountProfile}, allAccount, true}, true},
+		{"valid grant any", args{[]Scope{getAccountProfile, otherServiceAllAccountProfile, getApplications}, allAccount, false}, true},
+		{"invalid grant all", args{[]Scope{updateAccount, getAccountProfile, allAccountProfile, getApplications}, allAccount, true}, false},
+		{"invalid grant any", args{[]Scope{updateAccount, otherServiceAllAccountProfile}, getApplications, false}, false},
+		{"empty scopes", args{[]Scope{}, getApplications, false}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ListGranted(tt.args.scopes, tt.args.have, tt.args.all); got != tt.want {
+				t.Errorf("ListGranted() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

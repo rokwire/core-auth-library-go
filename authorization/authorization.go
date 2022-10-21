@@ -258,15 +258,19 @@ func ScopeFromString(scope string) (*Scope, error) {
 	return &Scope{ServiceID: comps[0], Resource: comps[1], Operation: comps[2]}, nil
 }
 
-// ScopesFromStrings creates a list of scope objects from a list of string representations
-func ScopesFromStrings(scopeStrings []string) ([]Scope, error) {
-	scopes := make([]Scope, len(scopeStrings))
-	for i, s := range scopeStrings {
+// ScopesFromStrings creates a list of scope objects from a list of string representations.
+//	If skipInvalid is true, invalid scopes will be skipped, if false an error will be returned
+func ScopesFromStrings(scopeStrings []string, skipInvalid bool) ([]Scope, error) {
+	var scopes []Scope
+	for _, s := range scopeStrings {
 		scope, err := ScopeFromString(s)
 		if err != nil {
-			return nil, err
+			if !skipInvalid {
+				return nil, err
+			}
+		} else {
+			scopes = append(scopes, *scope)
 		}
-		scopes[i] = *scope
 	}
 	return scopes, nil
 }
