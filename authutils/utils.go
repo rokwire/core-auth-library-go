@@ -26,6 +26,13 @@ import (
 	"net/http"
 )
 
+const (
+	//AllApps indicates that all apps may be accessed
+	AllApps string = "all"
+	//AllOrgs indicates that all orgs may be accessed
+	AllOrgs string = "all"
+)
+
 // ContainsString returns true if the provided value is in the provided slice
 func ContainsString(slice []string, val string) bool {
 	for _, v := range slice {

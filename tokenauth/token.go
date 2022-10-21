@@ -61,6 +61,15 @@ type Claims struct {
 	UID string `json:"uid,omitempty"` // Unique user identifier for specified "auth_type"
 }
 
+func (c Claims) AppOrg() authservice.AppOrgPair {
+	return authservice.AppOrgPair{AppID: c.AppID, OrgID: c.OrgID}
+}
+
+func (c Claims) Scopes() []authorization.Scope {
+	scopes, _ := authorization.ScopesFromStrings(strings.Split(c.Scope, " "), true)
+	return scopes
+}
+
 // TokenAuth contains configurations and helper functions required to validate tokens
 type TokenAuth struct {
 	serviceRegManager   *authservice.ServiceRegManager
@@ -181,9 +190,12 @@ func (t *TokenAuth) retryCheckToken(token string, purpose string) (*Claims, erro
 // CheckRequestTokens is a convenience function which retrieves and checks any tokens included in a request
 // and returns the access token claims
 // Mobile Clients/Secure Servers: Access tokens must be provided as a Bearer token
-//								  in the "Authorization" header
+//
+//	in the "Authorization" header
+//
 // Web Clients: Access tokens must be provided in the "rokwire-access-token" cookie
-//				and CSRF tokens must be provided in the "CSRF" header
+//
+//	and CSRF tokens must be provided in the "CSRF" header
 func (t *TokenAuth) CheckRequestTokens(r *http.Request) (*Claims, error) {
 	accessToken, csrfToken, err := GetRequestTokens(r)
 	if err != nil {
@@ -211,6 +223,7 @@ func (t *TokenAuth) CheckRequestTokens(r *http.Request) (*Claims, error) {
 }
 
 // ValidateCsrfTokenClaims will validate that the CSRF token claims appropriately match the access token claims
+//
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) ValidateCsrfTokenClaims(accessClaims *Claims, csrfClaims *Claims) error {
 	if csrfClaims.Subject != accessClaims.Subject {
@@ -225,6 +238,7 @@ func (t *TokenAuth) ValidateCsrfTokenClaims(accessClaims *Claims, csrfClaims *Cl
 }
 
 // ValidatePermissionsClaim will validate that the provided token claims contain one or more of the required permissions
+//
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) ValidatePermissionsClaim(claims *Claims, requiredPermissions []string) error {
 	if len(requiredPermissions) == 0 {
@@ -247,6 +261,7 @@ func (t *TokenAuth) ValidatePermissionsClaim(claims *Claims, requiredPermissions
 }
 
 // AuthorizeRequestPermissions will authorize the request if the permissions claim passes the permissionsAuth
+//
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) AuthorizeRequestPermissions(claims *Claims, request *http.Request) error {
 	if claims == nil || claims.Permissions == "" {
@@ -261,7 +276,8 @@ func (t *TokenAuth) AuthorizeRequestPermissions(claims *Claims, request *http.Re
 }
 
 // ValidateScopeClaim will validate that the provided token claims contain the required scope
-// 	If an empty required scope is provided, the claims must contain a valid global scope such as 'all' or '{service}:all'
+//
+//	If an empty required scope is provided, the claims must contain a valid global scope such as 'all:all:all' or '{service}:all:all'
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) error {
 	if claims == nil || claims.Scope == "" {
@@ -284,7 +300,7 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 			continue
 		}
 
-		if scope.Match(required) {
+		if scope.Grants(*required) {
 			return nil
 		}
 	}
@@ -293,6 +309,7 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 }
 
 // AuthorizeRequestScope will authorize the request if the scope claim passes the scopeAuth
+//
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) AuthorizeRequestScope(claims *Claims, request *http.Request) error {
 	if claims == nil || claims.Scope == "" {
@@ -307,7 +324,8 @@ func (t *TokenAuth) AuthorizeRequestScope(claims *Claims, request *http.Request)
 }
 
 // SetBlacklistSize sets the maximum size of the token blacklist queue
-// 	The default value is 1024
+//
+//	The default value is 1024
 func (t *TokenAuth) SetBlacklistSize(size int) {
 	t.blacklistLock.Lock()
 	t.blacklistSize = size
@@ -333,9 +351,12 @@ func NewTokenAuth(acceptRokwireTokens bool, serviceRegManager *authservice.Servi
 
 // GetRequestTokens retrieves tokens from the request headers and/or cookies
 // Mobile Clients/Secure Servers: Access tokens must be provided as a Bearer token
-//								  in the "Authorization" header
+//
+//	in the "Authorization" header
+//
 // Web Clients: Access tokens must be provided in the "rokwire-access-token" cookie
-//				and CSRF tokens must be provided in the "CSRF" header
+//
+//	and CSRF tokens must be provided in the "CSRF" header
 func GetRequestTokens(r *http.Request) (string, string, error) {
 	authorizationHeader := r.Header.Get("Authorization")
 	if authorizationHeader != "" {

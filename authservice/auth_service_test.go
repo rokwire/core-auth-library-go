@@ -354,7 +354,7 @@ func TestServiceAccountManager_GetAccessToken(t *testing.T) {
 
 func TestServiceAccountManager_GetAccessTokens(t *testing.T) {
 	tokens := map[authservice.AppOrgPair]authservice.AccessToken{
-		{AppID: authservice.AllID, OrgID: "0716d801-ee13-4428-b10b-e52c6d989dcc"}:                      {Token: "all_apps_token", TokenType: "Bearer"},
+		{AppID: authutils.AllApps, OrgID: "0716d801-ee13-4428-b10b-e52c6d989dcc"}:                      {Token: "all_apps_token", TokenType: "Bearer"},
 		{AppID: "4f684d01-8a8c-4674-9005-942c16136ab6", OrgID: "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}: {Token: "specific_token", TokenType: "Bearer"},
 	}
 
@@ -373,7 +373,7 @@ func TestServiceAccountManager_GetAccessTokens(t *testing.T) {
 		wantLoadErr bool
 		wantReadErr bool
 	}{
-		{"successfully read stored apps token", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", tokens, nil}, "Bearer all_apps_token", false, false},
+		{"successfully read stored apps token", args{authutils.AllApps, "0716d801-ee13-4428-b10b-e52c6d989dcc", tokens, nil}, "Bearer all_apps_token", false, false},
 		{"successfully read stored specific token", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", tokens, nil}, "Bearer specific_token", false, false},
 		{"attempt to read unknown token", args{"9b25622b-e559-4824-9ea7-535c8b990725", "c83338f7-5fe9-47ac-b432-22fb987eb9f7", tokens, nil}, "", false, true},
 		{"loading error", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", nil, errors.New("loading error")}, "", true, true},
@@ -401,13 +401,13 @@ func TestServiceAccountManager_GetAccessTokens(t *testing.T) {
 
 func TestServiceAccountManager_GetCachedAccessToken(t *testing.T) {
 	allAllTokens := map[authservice.AppOrgPair]authservice.AccessToken{
-		{AppID: authservice.AllID, OrgID: authservice.AllID}: {Token: "all_all_token", TokenType: "Bearer"},
+		{AppID: authutils.AllApps, OrgID: authutils.AllOrgs}: {Token: "all_all_token", TokenType: "Bearer"},
 	}
 	allAppTokens := map[authservice.AppOrgPair]authservice.AccessToken{
-		{AppID: authservice.AllID, OrgID: "0716d801-ee13-4428-b10b-e52c6d989dcc"}: {Token: "all_apps_token", TokenType: "Bearer"},
+		{AppID: authutils.AllApps, OrgID: "0716d801-ee13-4428-b10b-e52c6d989dcc"}: {Token: "all_apps_token", TokenType: "Bearer"},
 	}
 	allOrgTokens := map[authservice.AppOrgPair]authservice.AccessToken{
-		{AppID: "83f0ed91-6e27-4101-8c44-c4d7e9115767", OrgID: authservice.AllID}: {Token: "all_orgs_token", TokenType: "Bearer"},
+		{AppID: "83f0ed91-6e27-4101-8c44-c4d7e9115767", OrgID: authutils.AllOrgs}: {Token: "all_orgs_token", TokenType: "Bearer"},
 	}
 	specificTokens := map[authservice.AppOrgPair]authservice.AccessToken{
 		{AppID: "4f684d01-8a8c-4674-9005-942c16136ab6", OrgID: "8a145f9e-bb5d-4f4c-8af0-a43527c05d16"}: {Token: "specific_token", TokenType: "Bearer"},
@@ -427,26 +427,26 @@ func TestServiceAccountManager_GetCachedAccessToken(t *testing.T) {
 		wantPair  string
 		wantErr   bool
 	}{
-		{"all_all exact match", args{authservice.AllID, authservice.AllID, allAllTokens}, "Bearer all_all_token", "all_all", false},
-		{"all_all apps match", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", allAllTokens}, "Bearer all_all_token", "all_all", false},
-		{"all_all orgs match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authservice.AllID, allAllTokens}, "Bearer all_all_token", "all_all", false},
+		{"all_all exact match", args{authutils.AllApps, authutils.AllOrgs, allAllTokens}, "Bearer all_all_token", "all_all", false},
+		{"all_all apps match", args{authutils.AllApps, "0716d801-ee13-4428-b10b-e52c6d989dcc", allAllTokens}, "Bearer all_all_token", "all_all", false},
+		{"all_all orgs match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authutils.AllOrgs, allAllTokens}, "Bearer all_all_token", "all_all", false},
 		{"all_all specific pair match", args{"b38a5f4f-3f7c-4909-90b6-9188701031da", "c83338f7-5fe9-47ac-b432-22fb987eb9f7", allAllTokens}, "Bearer all_all_token", "all_all", false},
 
-		{"all_all apps mismatch", args{authservice.AllID, authservice.AllID, allAppTokens}, "", "", true},
-		{"all_apps exact match", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", allAppTokens}, "Bearer all_apps_token", "all_0716d801-ee13-4428-b10b-e52c6d989dcc", false},
-		{"all_orgs mismatch", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authservice.AllID, allAppTokens}, "", "", true},
+		{"all_all apps mismatch", args{authutils.AllApps, authutils.AllOrgs, allAppTokens}, "", "", true},
+		{"all_apps exact match", args{authutils.AllApps, "0716d801-ee13-4428-b10b-e52c6d989dcc", allAppTokens}, "Bearer all_apps_token", "all_0716d801-ee13-4428-b10b-e52c6d989dcc", false},
+		{"all_orgs mismatch", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authutils.AllOrgs, allAppTokens}, "", "", true},
 		{"all_apps specific pair match", args{"44ada4a9-7f75-4e26-994d-fda4212ac0a2", "0716d801-ee13-4428-b10b-e52c6d989dcc", allAppTokens}, "Bearer all_apps_token", "all_0716d801-ee13-4428-b10b-e52c6d989dcc", false},
 		{"all_apps specific pair mismatch", args{"44ada4a9-7f75-4e26-994d-fda4212ac0a2", "9b25622b-e559-4824-9ea7-535c8b990725", allAppTokens}, "", "", true},
 
-		{"all_all orgs mismatch", args{authservice.AllID, authservice.AllID, allOrgTokens}, "", "", true},
-		{"all_apps mismatch", args{authservice.AllID, "0716d801-ee13-4428-b10b-e52c6d989dcc", allOrgTokens}, "", "", true},
-		{"all_orgs exact match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authservice.AllID, allOrgTokens}, "Bearer all_orgs_token", "83f0ed91-6e27-4101-8c44-c4d7e9115767_all", false},
+		{"all_all orgs mismatch", args{authutils.AllApps, authutils.AllOrgs, allOrgTokens}, "", "", true},
+		{"all_apps mismatch", args{authutils.AllApps, "0716d801-ee13-4428-b10b-e52c6d989dcc", allOrgTokens}, "", "", true},
+		{"all_orgs exact match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", authutils.AllOrgs, allOrgTokens}, "Bearer all_orgs_token", "83f0ed91-6e27-4101-8c44-c4d7e9115767_all", false},
 		{"all_orgs specific pair match", args{"83f0ed91-6e27-4101-8c44-c4d7e9115767", "a09d7427-9424-4b51-9aaf-ca376388911e", allOrgTokens}, "Bearer all_orgs_token", "83f0ed91-6e27-4101-8c44-c4d7e9115767_all", false},
 		{"all_orgs specific pair mismatch", args{"6dfdf936-5042-4b93-a82d-220672d8bca1", "a09d7427-9424-4b51-9aaf-ca376388911e", allOrgTokens}, "", "", true},
 
-		{"specific all_all mismatch", args{authservice.AllID, authservice.AllID, specificTokens}, "", "", true},
-		{"specific all apps mismatch", args{authservice.AllID, "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "", "", true},
-		{"specific all orgs mismatch", args{"4f684d01-8a8c-4674-9005-942c16136ab6", authservice.AllID, specificTokens}, "", "", true},
+		{"specific all_all mismatch", args{authutils.AllApps, authutils.AllOrgs, specificTokens}, "", "", true},
+		{"specific all apps mismatch", args{authutils.AllApps, "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "", "", true},
+		{"specific all orgs mismatch", args{"4f684d01-8a8c-4674-9005-942c16136ab6", authutils.AllOrgs, specificTokens}, "", "", true},
 		{"specific app mismatch", args{"6dfdf936-5042-4b93-a82d-220672d8bca1", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "", "", true},
 		{"specific org mismatch", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "a09d7427-9424-4b51-9aaf-ca376388911e", specificTokens}, "", "", true},
 		{"specific exact match", args{"4f684d01-8a8c-4674-9005-942c16136ab6", "8a145f9e-bb5d-4f4c-8af0-a43527c05d16", specificTokens}, "Bearer specific_token", "4f684d01-8a8c-4674-9005-942c16136ab6_8a145f9e-bb5d-4f4c-8af0-a43527c05d16", false},
