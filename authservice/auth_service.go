@@ -1058,6 +1058,19 @@ func (ao AppOrgPair) String() string {
 	return fmt.Sprintf("%s_%s", ao.AppID, ao.OrgID)
 }
 
+// CanAccess returns true if the AppOrgPair grants access to the provided "want" AppOrgPair
+func (ao AppOrgPair) CanAccess(want AppOrgPair) bool {
+	return ao.CanAccessAppOrg(want.AppID, want.OrgID)
+}
+
+// CanAccessAppOrg returns true if the AppOrgPair grants access to the provided "appID" and "orgID"
+func (ao AppOrgPair) CanAccessAppOrg(appID string, orgID string) bool {
+	if (ao.AppID == appID || ao.AppID == authutils.AllApps) && (ao.OrgID == orgID || ao.OrgID == authutils.AllOrgs) {
+		return true
+	}
+	return false
+}
+
 // -------------------- AccessToken --------------------
 
 // AccessToken represents an access token granted by a remote auth service

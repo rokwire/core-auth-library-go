@@ -61,6 +61,10 @@ type Claims struct {
 	UID string `json:"uid,omitempty"` // Unique user identifier for specified "auth_type"
 }
 
+func (c Claims) AppOrg() authservice.AppOrgPair {
+	return authservice.AppOrgPair{AppID: c.AppID, OrgID: c.OrgID}
+}
+
 // TokenAuth contains configurations and helper functions required to validate tokens
 type TokenAuth struct {
 	serviceRegManager   *authservice.ServiceRegManager
