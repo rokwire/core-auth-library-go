@@ -201,7 +201,7 @@ func (s Scope) Grants(want Scope) bool {
 	return true
 }
 
-// Sub returns true if the scope is a sub-scope of the provided "super" scope
+// IsSub returns true if the scope is a sub-scope of the provided "super" scope
 func (s Scope) IsSub(super Scope) bool {
 	if !matchScopeField(s.ServiceID, super.ServiceID, false) {
 		return false
