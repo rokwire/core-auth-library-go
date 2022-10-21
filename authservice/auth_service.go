@@ -33,11 +33,6 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 )
 
-const (
-	// AllID represents all possible options for an ID
-	AllID string = "all"
-)
-
 // -------------------- AuthService --------------------
 
 // AuthService contains the configurations needed to interface with the auth service
@@ -588,17 +583,8 @@ func (s *ServiceAccountManager) AccessTokens() map[AppOrgPair]AccessToken {
 
 // GetCachedAccessToken returns the most restrictive cached token (with corresponding pair) granting access to appID and orgID, if it exists
 func (s *ServiceAccountManager) GetCachedAccessToken(appID string, orgID string) (*AccessToken, *AppOrgPair) {
-	allowedPairs := []AppOrgPair{{AppID: appID, OrgID: orgID}}
-	if appID != AllID || orgID != AllID {
-		if appID != AllID && orgID != AllID {
-			allowedPairs = append(allowedPairs, AppOrgPair{AppID: AllID, OrgID: orgID})
-			allowedPairs = append(allowedPairs, AppOrgPair{AppID: appID, OrgID: AllID})
-		}
-
-		allowedPairs = append(allowedPairs, AppOrgPair{AppID: AllID, OrgID: AllID})
-	}
-
-	for _, allowed := range allowedPairs {
+	pairs := GetAccessPairs(appID, orgID)
+	for _, allowed := range pairs {
 		for _, cached := range s.appOrgPairs {
 			if cached.Equals(allowed) {
 				if item, found := s.accessTokens.Load(allowed); found && item != nil {
@@ -792,6 +778,19 @@ func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPa
 	close(duplicateChan)
 
 	rc <- responses
+}
+
+// GetAccessPairs returns a list of appIDs and a list of orgIDs representing AppOrgPairs giving potential access to the given appID, orgID pair
+func GetAccessPairs(appID string, orgID string) []AppOrgPair {
+	pairs := []AppOrgPair{{AppID: appID, OrgID: orgID}}
+	if appID != authutils.AllApps || orgID != authutils.AllOrgs {
+		if appID != authutils.AllApps && orgID != authutils.AllOrgs {
+			pairs = append(pairs, AppOrgPair{AppID: authutils.AllApps, OrgID: orgID})
+			pairs = append(pairs, AppOrgPair{AppID: appID, OrgID: authutils.AllOrgs})
+		}
+		pairs = append(pairs, AppOrgPair{AppID: authutils.AllApps, OrgID: authutils.AllOrgs})
+	}
+	return pairs
 }
 
 // NewServiceAccountManager creates and configures a new ServiceAccountManager instance
@@ -1057,6 +1056,19 @@ func (ao AppOrgPair) String() string {
 		return ""
 	}
 	return fmt.Sprintf("%s_%s", ao.AppID, ao.OrgID)
+}
+
+// CanAccess returns true if the AppOrgPair grants access to the provided "want" AppOrgPair
+func (ao AppOrgPair) CanAccess(want AppOrgPair) bool {
+	return ao.CanAccessAppOrg(want.AppID, want.OrgID)
+}
+
+// CanAccessAppOrg returns true if the AppOrgPair grants access to the provided "appID" and "orgID"
+func (ao AppOrgPair) CanAccessAppOrg(appID string, orgID string) bool {
+	if (ao.AppID == appID || ao.AppID == authutils.AllApps) && (ao.OrgID == orgID || ao.OrgID == authutils.AllOrgs) {
+		return true
+	}
+	return false
 }
 
 // -------------------- AccessToken --------------------

@@ -137,7 +137,7 @@ func NewCoreService(serviceAccountManager *authservice.ServiceAccountManager, de
 	return &core, nil
 }
 
-//DeletedAccountsConfig represents a configuration for getting deleted accounts from a remote core service
+// DeletedAccountsConfig represents a configuration for getting deleted accounts from a remote core service
 type DeletedAccountsConfig struct {
 	Callback func([]string) error // Function to call once the deleted accounts are received
 	Period   uint                 // How often to request deleted account list in hours (the default is 2)
