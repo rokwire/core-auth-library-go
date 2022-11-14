@@ -264,6 +264,10 @@ func (t *TokenAuth) ValidatePermissionsClaim(claims *Claims, requiredPermissions
 //
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) AuthorizeRequestPermissions(claims *Claims, request *http.Request) error {
+	if t.permissionAuth == nil {
+		return errors.New("permission authorization policy not configured")
+	}
+
 	if claims == nil || claims.Permissions == "" {
 		return errors.New("permissions claim empty")
 	}
@@ -312,6 +316,10 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 //
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) AuthorizeRequestScope(claims *Claims, request *http.Request) error {
+	if t.scopeAuth == nil {
+		return errors.New("scope authorization policy not configured")
+	}
+
 	if claims == nil || claims.Scope == "" {
 		return errors.New("scope claim empty")
 	}

@@ -52,7 +52,7 @@ type Authorization interface {
 
 // CasbinAuthorization is a Casbin implementation of the authorization interface.
 type CasbinAuthorization struct {
-	enforcer *casbin.Enforcer
+	enforcer casbin.Enforcer
 }
 
 // Any will validate that if the casbin enforcer gives access to one or more of the provided values
@@ -84,26 +84,28 @@ func (c *CasbinAuthorization) All(values []string, object string, action string)
 // NewCasbinStringAuthorization returns a new Casbin enforcer with the string model
 func NewCasbinStringAuthorization(policyPath string) *CasbinAuthorization {
 	enforcer, err := casbin.NewEnforcer(basepath+"/authorization_model_string.conf", policyPath)
-	if err != nil {
-		fmt.Printf("NewCasbinStringAuthorization() -> error: %s\n", err.Error())
+	if err != nil || enforcer == nil {
+		fmt.Printf("NewCasbinStringAuthorization() -> error: %v\n", err)
+		return nil
 	}
 
-	return &CasbinAuthorization{enforcer}
+	return &CasbinAuthorization{*enforcer}
 }
 
 // NewCasbinAuthorization returns a new Casbin enforcer
 func NewCasbinAuthorization(modelPath string, policyPath string) *CasbinAuthorization {
 	enforcer, err := casbin.NewEnforcer(modelPath, policyPath)
-	if err != nil {
-		fmt.Printf("NewCasbinAuthorization() -> error: %s\n", err.Error())
+	if err != nil || enforcer == nil {
+		fmt.Printf("NewCasbinAuthorization() -> error: %v\n", err)
+		return nil
 	}
 
-	return &CasbinAuthorization{enforcer}
+	return &CasbinAuthorization{*enforcer}
 }
 
 // CasbinScopeAuthorization is a Casbin implementation of the authorization interface for scope values.
 type CasbinScopeAuthorization struct {
-	enforcer  *casbin.Enforcer
+	enforcer  casbin.Enforcer
 	serviceID string
 }
 
@@ -163,11 +165,12 @@ func (c *CasbinScopeAuthorization) All(values []string, object string, action st
 // NewCasbinScopeAuthorization returns a new casbin enforcer
 func NewCasbinScopeAuthorization(policyPath string, serviceID string) *CasbinScopeAuthorization {
 	enforcer, err := casbin.NewEnforcer(basepath+"/authorization_model_scope.conf", policyPath)
-	if err != nil {
-		fmt.Printf("NewCasbinScopeAuthorization() -> error: %s\n", err.Error())
+	if err != nil || enforcer == nil {
+		fmt.Printf("NewCasbinScopeAuthorization() -> error: %v\n", err)
+		return nil
 	}
 
-	return &CasbinScopeAuthorization{enforcer, serviceID}
+	return &CasbinScopeAuthorization{*enforcer, serviceID}
 }
 
 // -------------------------- Scope --------------------------
