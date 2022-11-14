@@ -33,20 +33,20 @@ type TokenAuthHandler interface {
 
 // TokenAuthHandlers represents the standard token auth handlers
 type TokenAuthHandlers struct {
-	standard      TokenAuthHandler
-	permissions   PermissionsTokenAuthHandler
-	user          UserTokenAuthHandler
-	authenticated AuthenticatedTokenAuthHandler
+	Standard      TokenAuthHandler
+	Permissions   PermissionsTokenAuthHandler
+	User          UserTokenAuthHandler
+	Authenticated AuthenticatedTokenAuthHandler
 }
 
 // NewTokenAuthHandlers creates new auth handlers for a given
-func NewTokenAuthHandlers(auth TokenAuthHandler) (*TokenAuthHandlers, error) {
+func NewTokenAuthHandlers(auth TokenAuthHandler) TokenAuthHandlers {
 	permissionsAuth := NewPermissionsAuth(auth)
 	userAuth := NewUserAuth(auth)
 	authenticatedAuth := NewAuthenticatedAuth(userAuth)
 
-	authWrappers := TokenAuthHandlers{standard: auth, permissions: permissionsAuth, user: userAuth, authenticated: authenticatedAuth}
-	return &authWrappers, nil
+	authWrappers := TokenAuthHandlers{Standard: auth, Permissions: permissionsAuth, User: userAuth, Authenticated: authenticatedAuth}
+	return authWrappers
 }
 
 // StandardAuth entity
@@ -64,8 +64,8 @@ func (a StandardTokenAuthHandler) Check(req *http.Request) (int, *Claims, error)
 	return http.StatusOK, claims, nil
 }
 
-func (a StandardTokenAuthHandler) GetTokenAuth() TokenAuth {
-	return a.tokenAuth
+func (a StandardTokenAuthHandler) GetTokenAuth() *TokenAuth {
+	return &a.tokenAuth
 }
 
 func NewStandardTokenAuthHandler(tokenAuth TokenAuth) StandardTokenAuthHandler {
@@ -92,8 +92,8 @@ func (a ScopeTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
 	return http.StatusOK, claims, nil
 }
 
-func (a ScopeTokenAuthHandler) GetTokenAuth() TokenAuth {
-	return a.tokenAuth
+func (a ScopeTokenAuthHandler) GetTokenAuth() *TokenAuth {
+	return &a.tokenAuth
 }
 
 func NewScopeTokenAuthHandler(tokenAuth TokenAuth) ScopeTokenAuthHandler {
@@ -120,6 +120,10 @@ func (a PermissionsTokenAuthHandler) Check(req *http.Request) (int, *Claims, err
 	return status, claims, err
 }
 
+func (a PermissionsTokenAuthHandler) GetTokenAuth() *TokenAuth {
+	return a.auth.GetTokenAuth()
+}
+
 func NewPermissionsAuth(auth TokenAuthHandler) PermissionsTokenAuthHandler {
 	return PermissionsTokenAuthHandler{auth: auth}
 }
@@ -143,6 +147,10 @@ func (a UserTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
 	return status, claims, err
 }
 
+func (a UserTokenAuthHandler) GetTokenAuth() *TokenAuth {
+	return a.auth.GetTokenAuth()
+}
+
 func NewUserAuth(auth TokenAuthHandler) UserTokenAuthHandler {
 	return UserTokenAuthHandler{auth: auth}
 }
@@ -164,6 +172,10 @@ func (auth AuthenticatedTokenAuthHandler) Check(req *http.Request) (int, *Claims
 	}
 
 	return status, claims, err
+}
+
+func (a AuthenticatedTokenAuthHandler) GetTokenAuth() *TokenAuth {
+	return a.userAuth.GetTokenAuth()
 }
 
 func NewAuthenticatedAuth(userAuth UserTokenAuthHandler) AuthenticatedTokenAuthHandler {
