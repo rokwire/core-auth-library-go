@@ -20,11 +20,6 @@ import (
 	"github.com/rokwire/logging-library-go/logutils"
 )
 
-const (
-	typeCheckPermission logutils.MessageActionType = "checking permission"
-	typeCheckScope      logutils.MessageActionType = "checking scope"
-)
-
 // TokenAuthHandler is an interface for token auth handlers
 type TokenAuthHandler interface {
 	Check(req *http.Request) (int, *Claims, error)
@@ -86,7 +81,7 @@ func (a ScopeTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
 
 	err = a.tokenAuth.AuthorizeRequestScope(claims, req)
 	if err != nil {
-		return http.StatusForbidden, nil, errors.WrapErrorAction(typeCheckScope, logutils.TypeRequest, nil, err)
+		return http.StatusForbidden, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeScope, nil, err)
 	}
 
 	return http.StatusOK, claims, nil
@@ -114,7 +109,7 @@ func (a PermissionsTokenAuthHandler) Check(req *http.Request) (int, *Claims, err
 
 	err = a.auth.GetTokenAuth().AuthorizeRequestPermissions(claims, req)
 	if err != nil {
-		return http.StatusForbidden, nil, errors.WrapErrorAction(typeCheckPermission, logutils.TypeRequest, nil, err)
+		return http.StatusForbidden, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypePermission, nil, err)
 	}
 
 	return status, claims, err
