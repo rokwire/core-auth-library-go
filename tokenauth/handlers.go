@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package tokenauth
 
 import (
@@ -20,37 +21,38 @@ import (
 	"github.com/rokwire/logging-library-go/logutils"
 )
 
-// TokenAuthHandler is an interface for token auth handlers
-type TokenAuthHandler interface {
+// Handler is an interface for token auth handlers
+type Handler interface {
 	Check(req *http.Request) (int, *Claims, error)
 	GetTokenAuth() *TokenAuth
 }
 
-// TokenAuthHandlers represents the standard token auth handlers
-type TokenAuthHandlers struct {
-	Standard      TokenAuthHandler
-	Permissions   PermissionsTokenAuthHandler
-	User          UserTokenAuthHandler
-	Authenticated AuthenticatedTokenAuthHandler
+// Handlers represents the standard token auth handlers
+type Handlers struct {
+	Standard      Handler
+	Permissions   PermissionsHandler
+	User          UserHandler
+	Authenticated AuthenticatedHandler
 }
 
-// NewTokenAuthHandlers creates new auth handlers for a given
-func NewTokenAuthHandlers(auth TokenAuthHandler) TokenAuthHandlers {
-	permissionsAuth := NewPermissionsAuth(auth)
-	userAuth := NewUserAuth(auth)
-	authenticatedAuth := NewAuthenticatedAuth(userAuth)
+// NewHandlers creates new token auth handlers
+func NewHandlers(auth Handler) Handlers {
+	permissionsAuth := NewPermissionsHandler(auth)
+	userAuth := NewUserHandler(auth)
+	authenticatedAuth := NewAuthenticatedHandler(userAuth)
 
-	authWrappers := TokenAuthHandlers{Standard: auth, Permissions: permissionsAuth, User: userAuth, Authenticated: authenticatedAuth}
+	authWrappers := Handlers{Standard: auth, Permissions: permissionsAuth, User: userAuth, Authenticated: authenticatedAuth}
 	return authWrappers
 }
 
-// StandardAuth entity
-// This enforces that the user has a valid token
-type StandardTokenAuthHandler struct {
+// StandardHandler entity
+// This enforces that the token is valid
+type StandardHandler struct {
 	tokenAuth TokenAuth
 }
 
-func (a StandardTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
+// Check checks the token in the provided request
+func (a StandardHandler) Check(req *http.Request) (int, *Claims, error) {
 	claims, err := a.tokenAuth.CheckRequestTokens(req)
 	if err != nil {
 		return http.StatusUnauthorized, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
@@ -59,21 +61,24 @@ func (a StandardTokenAuthHandler) Check(req *http.Request) (int, *Claims, error)
 	return http.StatusOK, claims, nil
 }
 
-func (a StandardTokenAuthHandler) GetTokenAuth() *TokenAuth {
+// GetTokenAuth exposes the TokenAuth for the handler
+func (a StandardHandler) GetTokenAuth() *TokenAuth {
 	return &a.tokenAuth
 }
 
-func NewStandardTokenAuthHandler(tokenAuth TokenAuth) StandardTokenAuthHandler {
-	return StandardTokenAuthHandler{tokenAuth: tokenAuth}
+// NewStandardHandler creates a new StandardHandler
+func NewStandardHandler(tokenAuth TokenAuth) StandardHandler {
+	return StandardHandler{tokenAuth: tokenAuth}
 }
 
-// ScopeTokenAuthHandler entity
+// ScopeHandler entity
 // This enforces that the token has scopes matching the policy
-type ScopeTokenAuthHandler struct {
+type ScopeHandler struct {
 	tokenAuth TokenAuth
 }
 
-func (a ScopeTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
+// Check checks the token in the provided request
+func (a ScopeHandler) Check(req *http.Request) (int, *Claims, error) {
 	claims, err := a.tokenAuth.CheckRequestTokens(req)
 	if err != nil {
 		return http.StatusUnauthorized, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
@@ -87,21 +92,24 @@ func (a ScopeTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
 	return http.StatusOK, claims, nil
 }
 
-func (a ScopeTokenAuthHandler) GetTokenAuth() *TokenAuth {
+// GetTokenAuth exposes the TokenAuth for the handler
+func (a ScopeHandler) GetTokenAuth() *TokenAuth {
 	return &a.tokenAuth
 }
 
-func NewScopeTokenAuthHandler(tokenAuth TokenAuth) ScopeTokenAuthHandler {
-	return ScopeTokenAuthHandler{tokenAuth: tokenAuth}
+// NewScopeHandler creates a new ScopeHandler
+func NewScopeHandler(tokenAuth TokenAuth) ScopeHandler {
+	return ScopeHandler{tokenAuth: tokenAuth}
 }
 
-// PermissionsAuth entity
+// PermissionsHandler entity
 // This enforces that the token has permissions matching the policy
-type PermissionsTokenAuthHandler struct {
-	auth TokenAuthHandler
+type PermissionsHandler struct {
+	auth Handler
 }
 
-func (a PermissionsTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
+// Check checks the token in the provided request
+func (a PermissionsHandler) Check(req *http.Request) (int, *Claims, error) {
 	status, claims, err := a.auth.Check(req)
 	if err != nil || claims == nil {
 		return status, claims, err
@@ -115,21 +123,24 @@ func (a PermissionsTokenAuthHandler) Check(req *http.Request) (int, *Claims, err
 	return status, claims, err
 }
 
-func (a PermissionsTokenAuthHandler) GetTokenAuth() *TokenAuth {
+// GetTokenAuth exposes the TokenAuth for the handler
+func (a PermissionsHandler) GetTokenAuth() *TokenAuth {
 	return a.auth.GetTokenAuth()
 }
 
-func NewPermissionsAuth(auth TokenAuthHandler) PermissionsTokenAuthHandler {
-	return PermissionsTokenAuthHandler{auth: auth}
+// NewPermissionsHandler creates a new PermissionsHandler
+func NewPermissionsHandler(auth Handler) PermissionsHandler {
+	return PermissionsHandler{auth: auth}
 }
 
-// UserAuth entity
+// UserHandler entity
 // This enforces that the token is not anonymous
-type UserTokenAuthHandler struct {
-	auth TokenAuthHandler
+type UserHandler struct {
+	auth Handler
 }
 
-func (a UserTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
+// Check checks the token in the provided request
+func (a UserHandler) Check(req *http.Request) (int, *Claims, error) {
 	status, claims, err := a.auth.Check(req)
 	if err != nil || claims == nil {
 		return status, claims, err
@@ -142,22 +153,25 @@ func (a UserTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
 	return status, claims, err
 }
 
-func (a UserTokenAuthHandler) GetTokenAuth() *TokenAuth {
+// GetTokenAuth exposes the TokenAuth for the handler
+func (a UserHandler) GetTokenAuth() *TokenAuth {
 	return a.auth.GetTokenAuth()
 }
 
-func NewUserAuth(auth TokenAuthHandler) UserTokenAuthHandler {
-	return UserTokenAuthHandler{auth: auth}
+// NewUserHandler creates a new UserHandler
+func NewUserHandler(auth Handler) UserHandler {
+	return UserHandler{auth: auth}
 }
 
-// AuthenticatedAuth entity
+// AuthenticatedHandler entity
 // This enforces that the token was the result of direct user authentication. This should be used to protect sensitive account settings
-type AuthenticatedTokenAuthHandler struct {
-	userAuth UserTokenAuthHandler
+type AuthenticatedHandler struct {
+	userAuth UserHandler
 }
 
-func (auth AuthenticatedTokenAuthHandler) Check(req *http.Request) (int, *Claims, error) {
-	status, claims, err := auth.userAuth.Check(req)
+// Check checks the token in the provided request
+func (a AuthenticatedHandler) Check(req *http.Request) (int, *Claims, error) {
+	status, claims, err := a.userAuth.Check(req)
 	if err != nil || claims == nil {
 		return status, claims, err
 	}
@@ -169,10 +183,12 @@ func (auth AuthenticatedTokenAuthHandler) Check(req *http.Request) (int, *Claims
 	return status, claims, err
 }
 
-func (a AuthenticatedTokenAuthHandler) GetTokenAuth() *TokenAuth {
+// GetTokenAuth exposes the TokenAuth for the handler
+func (a AuthenticatedHandler) GetTokenAuth() *TokenAuth {
 	return a.userAuth.GetTokenAuth()
 }
 
-func NewAuthenticatedAuth(userAuth UserTokenAuthHandler) AuthenticatedTokenAuthHandler {
-	return AuthenticatedTokenAuthHandler{userAuth: userAuth}
+// NewAuthenticatedHandler creates a new AuthenticatedHandler
+func NewAuthenticatedHandler(userAuth UserHandler) AuthenticatedHandler {
+	return AuthenticatedHandler{userAuth: userAuth}
 }

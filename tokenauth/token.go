@@ -61,10 +61,12 @@ type Claims struct {
 	UID string `json:"uid,omitempty"` // Unique user identifier for specified "auth_type"
 }
 
+// AppOrg returns the AppOrgPair for the claims
 func (c Claims) AppOrg() authservice.AppOrgPair {
 	return authservice.AppOrgPair{AppID: c.AppID, OrgID: c.OrgID}
 }
 
+// Scopes returns the scopes from the claims as a slice
 func (c Claims) Scopes() []authorization.Scope {
 	scopes, _ := authorization.ScopesFromStrings(strings.Split(c.Scope, " "), true)
 	return scopes
