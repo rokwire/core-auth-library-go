@@ -3,10 +3,10 @@ module github.com/rokwire/core-auth-library-go/v2
 go 1.18
 
 require (
-	github.com/aws/aws-sdk-go v1.44.137
+	github.com/aws/aws-sdk-go v1.44.138
 	github.com/casbin/casbin/v2 v2.57.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
-	github.com/rokwire/logging-library-go v1.0.3
+	github.com/rokwire/logging-library-go/v2 v2.0.0
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/sync v0.1.0
 	gopkg.in/go-playground/validator.v9 v9.31.0

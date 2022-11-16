@@ -16,7 +16,7 @@ package main
 
 import (
 	"github.com/rokwire/core-auth-library-go/v2/envloader"
-	"github.com/rokwire/logging-library-go/logs"
+	"github.com/rokwire/logging-library-go/v2/logs"
 )
 
 var (
