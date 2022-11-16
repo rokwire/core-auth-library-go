@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-## [2.1.0] - 2022-10-21
+## [2.1.0] - 2022-11-16
 ### Added
 - Define TokenAuthHandlers [#73](https://github.com/rokwire/core-auth-library-go/issues/73)
 
