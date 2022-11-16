@@ -61,10 +61,12 @@ type Claims struct {
 	UID string `json:"uid,omitempty"` // Unique user identifier for specified "auth_type"
 }
 
+// AppOrg returns the AppOrgPair for the claims
 func (c Claims) AppOrg() authservice.AppOrgPair {
 	return authservice.AppOrgPair{AppID: c.AppID, OrgID: c.OrgID}
 }
 
+// Scopes returns the scopes from the claims as a slice
 func (c Claims) Scopes() []authorization.Scope {
 	scopes, _ := authorization.ScopesFromStrings(strings.Split(c.Scope, " "), true)
 	return scopes
@@ -264,6 +266,10 @@ func (t *TokenAuth) ValidatePermissionsClaim(claims *Claims, requiredPermissions
 //
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) AuthorizeRequestPermissions(claims *Claims, request *http.Request) error {
+	if t.permissionAuth == nil {
+		return errors.New("permission authorization policy not configured")
+	}
+
 	if claims == nil || claims.Permissions == "" {
 		return errors.New("permissions claim empty")
 	}
@@ -312,6 +318,10 @@ func (t *TokenAuth) ValidateScopeClaim(claims *Claims, requiredScope string) err
 //
 //	Returns nil on success and error on failure.
 func (t *TokenAuth) AuthorizeRequestScope(claims *Claims, request *http.Request) error {
+	if t.scopeAuth == nil {
+		return errors.New("scope authorization policy not configured")
+	}
+
 	if claims == nil || claims.Scope == "" {
 		return errors.New("scope claim empty")
 	}
