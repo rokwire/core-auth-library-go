@@ -631,6 +631,7 @@ func (s *ServiceAccountManager) checkForRefresh() ([]AppOrgPair, error) {
 		}
 	}
 
+	//TODO: return error on attempt to refresh before maxRefreshFreq has been reached?
 	return newPairs, nil
 }
 
@@ -671,6 +672,11 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 	}
 
 	req.Header.Set("Authorization", token.String())
+	reqBody, err := req.GetBody()
+	if err != nil {
+		retErr := fmt.Errorf("error reading request body: %v", err)
+		return s.handleRequestResponse(async, false, *appOrgPair, nil, retErr, nil, rrc, pc, dc)
+	}
 	resp, err := s.client.Do(req)
 	if err != nil {
 		retErr := fmt.Errorf("error sending request: %v", err)
@@ -686,6 +692,7 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 			return s.handleRequestResponse(async, false, *appOrgPair, nil, err, newPairs, rrc, pc, dc)
 		}
 
+		req.Body = reqBody
 		req.Header.Set("Authorization", token.String())
 		resp, err = s.client.Do(req)
 		if err != nil {
@@ -735,8 +742,17 @@ func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPa
 	// filter out duplicate pairs and launch a goroutine for each unique requested pair
 	for _, pair := range pairs {
 		if !authutils.ContainsString(uniquePairs, pair.String()) {
+			// clone request
+			reqBody, err := req.GetBody()
+			if err != nil {
+				responses[pair] = RequestResponse{TokenPair: pair, Response: nil, Error: fmt.Errorf("error getting request body: %v", err)}
+				continue
+			}
+			clonedReq := req.Clone(context.Background())
+			clonedReq.Body = reqBody
+
 			uniquePairs = append(uniquePairs, pair.String())
-			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, responseChan, pairChan, duplicateChan)
+			go s.makeRequest(clonedReq, pair.AppID, pair.OrgID, responseChan, pairChan, duplicateChan)
 		}
 	}
 
