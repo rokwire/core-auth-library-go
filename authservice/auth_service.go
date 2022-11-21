@@ -527,7 +527,7 @@ func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, [
 		i++
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	s.tokensUpdated = &now
 
 	return tokens, newPairs, nil
@@ -631,7 +631,6 @@ func (s *ServiceAccountManager) checkForRefresh() ([]AppOrgPair, error) {
 		}
 	}
 
-	//TODO: return error on attempt to refresh before maxRefreshFreq has been reached?
 	return newPairs, nil
 }
 
@@ -698,6 +697,11 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 		if err != nil {
 			retErr := fmt.Errorf("error sending request: %v", err)
 			return s.handleRequestResponse(async, false, *refreshedPair, nil, retErr, newPairs, rrc, pc, dc)
+		}
+		if resp.StatusCode == http.StatusUnauthorized {
+			// unauthorized again, so set error containing info about max token refresh frequency
+			retErr := fmt.Errorf("unauthorized after token refresh (max token refresh frequency is set to once every %d minutes, see SetMaxRefreshCacheFreq)", s.maxRefreshCacheFreq)
+			return s.handleRequestResponse(async, false, *refreshedPair, resp, retErr, newPairs, rrc, pc, dc)
 		}
 
 		appOrgPair = refreshedPair
