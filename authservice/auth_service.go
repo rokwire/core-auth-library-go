@@ -670,12 +670,17 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 		}
 	}
 
-	req.Header.Set("Authorization", token.String())
-	reqBody, err := req.GetBody()
-	if err != nil {
-		retErr := fmt.Errorf("error reading request body: %v", err)
-		return s.handleRequestResponse(async, false, *appOrgPair, nil, retErr, nil, rrc, pc, dc)
+	// copy request body in case token refresh is required
+	var reqBody io.ReadCloser
+	if req.Body != nil {
+		reqBody, err = req.GetBody()
+		if err != nil {
+			retErr := fmt.Errorf("error reading request body: %v", err)
+			return s.handleRequestResponse(async, false, *appOrgPair, nil, retErr, nil, rrc, pc, dc)
+		}
 	}
+
+	req.Header.Set("Authorization", token.String())
 	resp, err := s.client.Do(req)
 	if err != nil {
 		retErr := fmt.Errorf("error sending request: %v", err)
@@ -747,13 +752,15 @@ func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPa
 	for _, pair := range pairs {
 		if !authutils.ContainsString(uniquePairs, pair.String()) {
 			// clone request
-			reqBody, err := req.GetBody()
-			if err != nil {
-				responses[pair] = RequestResponse{TokenPair: pair, Response: nil, Error: fmt.Errorf("error getting request body: %v", err)}
-				continue
-			}
 			clonedReq := req.Clone(context.Background())
-			clonedReq.Body = reqBody
+			if req.Body != nil {
+				reqBody, err := req.GetBody()
+				if err != nil {
+					responses[pair] = RequestResponse{TokenPair: pair, Response: nil, Error: fmt.Errorf("error getting request body: %v", err)}
+					continue
+				}
+				clonedReq.Body = reqBody
+			}
 
 			uniquePairs = append(uniquePairs, pair.String())
 			go s.makeRequest(clonedReq, pair.AppID, pair.OrgID, responseChan, pairChan, duplicateChan)
