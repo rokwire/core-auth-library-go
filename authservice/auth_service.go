@@ -527,7 +527,7 @@ func (s *ServiceAccountManager) GetAccessTokens() (map[AppOrgPair]AccessToken, [
 		i++
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	s.tokensUpdated = &now
 
 	return tokens, newPairs, nil
@@ -670,6 +670,16 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 		}
 	}
 
+	// copy request body in case token refresh is required
+	var reqBody io.ReadCloser
+	if req.Body != nil {
+		reqBody, err = req.GetBody()
+		if err != nil {
+			retErr := fmt.Errorf("error reading request body: %v", err)
+			return s.handleRequestResponse(async, false, *appOrgPair, nil, retErr, nil, rrc, pc, dc)
+		}
+	}
+
 	req.Header.Set("Authorization", token.String())
 	resp, err := s.client.Do(req)
 	if err != nil {
@@ -686,11 +696,17 @@ func (s *ServiceAccountManager) makeRequest(req *http.Request, appID string, org
 			return s.handleRequestResponse(async, false, *appOrgPair, nil, err, newPairs, rrc, pc, dc)
 		}
 
+		req.Body = reqBody
 		req.Header.Set("Authorization", token.String())
 		resp, err = s.client.Do(req)
 		if err != nil {
 			retErr := fmt.Errorf("error sending request: %v", err)
 			return s.handleRequestResponse(async, false, *refreshedPair, nil, retErr, newPairs, rrc, pc, dc)
+		}
+		if resp.StatusCode == http.StatusUnauthorized {
+			// unauthorized again, so set error containing info about max token refresh frequency
+			retErr := fmt.Errorf("unauthorized after token refresh (max token refresh frequency is set to once every %d minutes, see SetMaxRefreshCacheFreq)", s.maxRefreshCacheFreq)
+			return s.handleRequestResponse(async, false, *refreshedPair, resp, retErr, newPairs, rrc, pc, dc)
 		}
 
 		appOrgPair = refreshedPair
@@ -735,8 +751,19 @@ func (s *ServiceAccountManager) makeRequests(req *http.Request, pairs []AppOrgPa
 	// filter out duplicate pairs and launch a goroutine for each unique requested pair
 	for _, pair := range pairs {
 		if !authutils.ContainsString(uniquePairs, pair.String()) {
+			// clone request
+			clonedReq := req.Clone(context.Background())
+			if req.Body != nil {
+				reqBody, err := req.GetBody()
+				if err != nil {
+					responses[pair] = RequestResponse{TokenPair: pair, Response: nil, Error: fmt.Errorf("error getting request body: %v", err)}
+					continue
+				}
+				clonedReq.Body = reqBody
+			}
+
 			uniquePairs = append(uniquePairs, pair.String())
-			go s.makeRequest(req.Clone(context.Background()), pair.AppID, pair.OrgID, responseChan, pairChan, duplicateChan)
+			go s.makeRequest(clonedReq, pair.AppID, pair.OrgID, responseChan, pairChan, duplicateChan)
 		}
 	}
 
