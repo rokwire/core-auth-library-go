@@ -2,7 +2,7 @@
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
-// You may obtain u copy of the License at
+// You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
@@ -75,7 +75,7 @@ func (h StandardHandler) GetTokenAuth() *TokenAuth {
 	return &h.tokenAuth
 }
 
-// NewStandardHandler creates u new StandardHandler
+// NewStandardHandler creates a new StandardHandler
 func NewStandardHandler(tokenAuth TokenAuth, claimsCheck func(*Claims, *http.Request) (int, error)) StandardHandler {
 	return StandardHandler{tokenAuth: tokenAuth, claimsCheck: claimsCheck}
 }
