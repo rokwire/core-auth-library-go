@@ -48,58 +48,59 @@ func NewHandlers(auth Handler) Handlers {
 // StandardHandler entity
 // This enforces that the token is valid
 type StandardHandler struct {
-	tokenAuth TokenAuth
+	tokenAuth   TokenAuth
+	claimsCheck func(*Claims, *http.Request) (int, error)
 }
 
 // Check checks the token in the provided request
-func (a StandardHandler) Check(req *http.Request) (int, *Claims, error) {
-	claims, err := a.tokenAuth.CheckRequestTokens(req)
+func (h StandardHandler) Check(req *http.Request) (int, *Claims, error) {
+	claims, err := h.tokenAuth.CheckRequestTokens(req)
 	if err != nil {
 		return http.StatusUnauthorized, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
 	}
 
-	return http.StatusOK, claims, nil
+	status := http.StatusOK
+	if h.claimsCheck != nil {
+		status, err = h.claimsCheck(claims, req)
+		if err != nil {
+			return status, nil, err
+		}
+	}
+
+	return status, claims, nil
 }
 
 // GetTokenAuth exposes the TokenAuth for the handler
-func (a StandardHandler) GetTokenAuth() *TokenAuth {
-	return &a.tokenAuth
+func (h StandardHandler) GetTokenAuth() *TokenAuth {
+	return &h.tokenAuth
 }
 
 // NewStandardHandler creates a new StandardHandler
-func NewStandardHandler(tokenAuth TokenAuth) StandardHandler {
-	return StandardHandler{tokenAuth: tokenAuth}
+func NewStandardHandler(tokenAuth TokenAuth, claimsCheck func(*Claims, *http.Request) (int, error)) StandardHandler {
+	return StandardHandler{tokenAuth: tokenAuth, claimsCheck: claimsCheck}
 }
 
-// ScopeHandler entity
-// This enforces that the token has scopes matching the policy
-type ScopeHandler struct {
-	tokenAuth TokenAuth
-}
+// NewScopeHandler creates a new StandardHandler that checks scopes
+func NewScopeHandler(tokenAuth TokenAuth, claimsCheck func(*Claims, *http.Request) (int, error)) StandardHandler {
+	check := func(claims *Claims, req *http.Request) (int, error) {
+		status := http.StatusOK
+		var err error
+		if claimsCheck != nil {
+			status, err = claimsCheck(claims, req)
+			if err != nil {
+				return status, err
+			}
+		}
 
-// Check checks the token in the provided request
-func (a ScopeHandler) Check(req *http.Request) (int, *Claims, error) {
-	claims, err := a.tokenAuth.CheckRequestTokens(req)
-	if err != nil {
-		return http.StatusUnauthorized, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
+		err = tokenAuth.AuthorizeRequestScope(claims, req)
+		if err != nil {
+			return http.StatusForbidden, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeScope, nil, err)
+		}
+
+		return status, nil
 	}
 
-	err = a.tokenAuth.AuthorizeRequestScope(claims, req)
-	if err != nil {
-		return http.StatusForbidden, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeScope, nil, err)
-	}
-
-	return http.StatusOK, claims, nil
-}
-
-// GetTokenAuth exposes the TokenAuth for the handler
-func (a ScopeHandler) GetTokenAuth() *TokenAuth {
-	return &a.tokenAuth
-}
-
-// NewScopeHandler creates a new ScopeHandler
-func NewScopeHandler(tokenAuth TokenAuth) ScopeHandler {
-	return ScopeHandler{tokenAuth: tokenAuth}
+	return NewStandardHandler(tokenAuth, check)
 }
 
 // PermissionsHandler entity
@@ -109,13 +110,13 @@ type PermissionsHandler struct {
 }
 
 // Check checks the token in the provided request
-func (a PermissionsHandler) Check(req *http.Request) (int, *Claims, error) {
-	status, claims, err := a.auth.Check(req)
+func (h PermissionsHandler) Check(req *http.Request) (int, *Claims, error) {
+	status, claims, err := h.auth.Check(req)
 	if err != nil || claims == nil {
 		return status, claims, err
 	}
 
-	err = a.auth.GetTokenAuth().AuthorizeRequestPermissions(claims, req)
+	err = h.auth.GetTokenAuth().AuthorizeRequestPermissions(claims, req)
 	if err != nil {
 		return http.StatusForbidden, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypePermission, nil, err)
 	}
@@ -124,8 +125,8 @@ func (a PermissionsHandler) Check(req *http.Request) (int, *Claims, error) {
 }
 
 // GetTokenAuth exposes the TokenAuth for the handler
-func (a PermissionsHandler) GetTokenAuth() *TokenAuth {
-	return a.auth.GetTokenAuth()
+func (h PermissionsHandler) GetTokenAuth() *TokenAuth {
+	return h.auth.GetTokenAuth()
 }
 
 // NewPermissionsHandler creates a new PermissionsHandler
@@ -140,8 +141,8 @@ type UserHandler struct {
 }
 
 // Check checks the token in the provided request
-func (a UserHandler) Check(req *http.Request) (int, *Claims, error) {
-	status, claims, err := a.auth.Check(req)
+func (h UserHandler) Check(req *http.Request) (int, *Claims, error) {
+	status, claims, err := h.auth.Check(req)
 	if err != nil || claims == nil {
 		return status, claims, err
 	}
@@ -154,8 +155,8 @@ func (a UserHandler) Check(req *http.Request) (int, *Claims, error) {
 }
 
 // GetTokenAuth exposes the TokenAuth for the handler
-func (a UserHandler) GetTokenAuth() *TokenAuth {
-	return a.auth.GetTokenAuth()
+func (h UserHandler) GetTokenAuth() *TokenAuth {
+	return h.auth.GetTokenAuth()
 }
 
 // NewUserHandler creates a new UserHandler
@@ -170,8 +171,8 @@ type AuthenticatedHandler struct {
 }
 
 // Check checks the token in the provided request
-func (a AuthenticatedHandler) Check(req *http.Request) (int, *Claims, error) {
-	status, claims, err := a.userAuth.Check(req)
+func (h AuthenticatedHandler) Check(req *http.Request) (int, *Claims, error) {
+	status, claims, err := h.userAuth.Check(req)
 	if err != nil || claims == nil {
 		return status, claims, err
 	}
@@ -184,8 +185,8 @@ func (a AuthenticatedHandler) Check(req *http.Request) (int, *Claims, error) {
 }
 
 // GetTokenAuth exposes the TokenAuth for the handler
-func (a AuthenticatedHandler) GetTokenAuth() *TokenAuth {
-	return a.userAuth.GetTokenAuth()
+func (h AuthenticatedHandler) GetTokenAuth() *TokenAuth {
+	return h.userAuth.GetTokenAuth()
 }
 
 // NewAuthenticatedHandler creates a new AuthenticatedHandler

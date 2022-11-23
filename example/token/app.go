@@ -101,7 +101,7 @@ func main() {
 	if err != nil || tokenAuth == nil {
 		log.Fatalf("Error initializing token auth: %v", err)
 	}
-	authHandlers := tokenauth.NewHandlers(tokenauth.NewScopeHandler(*tokenAuth))
+	authHandlers := tokenauth.NewHandlers(tokenauth.NewScopeHandler(*tokenAuth, nil))
 
 	fmt.Println("Setup complete")
 
