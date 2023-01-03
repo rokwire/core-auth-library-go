@@ -38,7 +38,7 @@ import (
 type SignatureAuth struct {
 	serviceRegManager *authservice.ServiceRegManager
 
-	serviceKey *rsa.PrivateKey
+	serviceKey authservice.PrivKey
 }
 
 // Sign generates and returns a signature for the provided message
@@ -48,7 +48,7 @@ func (s *SignatureAuth) Sign(message []byte) (string, error) {
 		return "", fmt.Errorf("error hashing message: %v", err)
 	}
 
-	signature, err := rsa.SignPSS(rand.Reader, s.serviceKey, crypto.SHA256, hash, nil)
+	signature, err := s.serviceKey.Sign(rand.Reader, hash, &rsa.PSSOptions{Hash: crypto.SHA256})
 	if err != nil {
 		return "", fmt.Errorf("error signing message: %v", err)
 	}
@@ -69,7 +69,7 @@ func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, 
 }
 
 // CheckSignature validates the provided message signature from the given public key
-func (s *SignatureAuth) CheckSignature(pubKey *rsa.PublicKey, message []byte, signature string) error {
+func (s *SignatureAuth) CheckSignature(pubKey authservice.PublicKey, message []byte, signature string) error {
 	if pubKey == nil {
 		return errors.New("public key is nil")
 	}
@@ -116,7 +116,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(&s.serviceKey.PublicKey)
+	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(s.serviceKey.Public())
 	if err != nil {
 		return fmt.Errorf("error getting service key fingerprint: %v", err)
 	}
@@ -192,7 +192,7 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 // CheckRequestSignature validates the signature on the provided request
 //
 //	The request must be signed by the private key paired with the provided public key
-func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey *rsa.PublicKey) error {
+func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey authservice.PublicKey) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
@@ -268,7 +268,7 @@ func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey *rsa.PrivateKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey authservice.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
 	if serviceRegManager == nil {
 		return nil, errors.New("service registration manager is missing")
 	}

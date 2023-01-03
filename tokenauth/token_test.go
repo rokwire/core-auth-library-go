@@ -43,7 +43,7 @@ func setupTestTokenAuth(authService *authservice.AuthService, acceptRokwire bool
 	return tokenauth.NewTokenAuth(acceptRokwire, manager, permissionAuth, scopeAuth)
 }
 
-func generateTestToken(claims *tokenauth.Claims, key *rsa.PrivateKey) (string, error) {
+func generateTestToken(claims *tokenauth.Claims, key authservice.PrivateKey) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 	kid, err := authutils.GetKeyFingerprint(&key.PublicKey)
 	if err != nil {

@@ -17,7 +17,7 @@ package authservice
 import (
 	"bytes"
 	"context"
-	"crypto/rsa"
+	"crypto"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -191,7 +191,7 @@ func (s *ServiceRegManager) ValidateServiceRegistration() error {
 }
 
 // ValidateServiceRegistrationKey validates that the implementing service has a valid registration for the provided keypair
-func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *rsa.PrivateKey) error {
+func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey PrivateKey) error {
 	if privKey == nil {
 		return errors.New("provided priv key is nil")
 	}
@@ -201,7 +201,7 @@ func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *rsa.PrivateK
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
-	if service.PubKey.Key.Equal(privKey.PublicKey) {
+	if service.PubKey.Key.Equal(privKey.Public()) {
 		return fmt.Errorf("service pub key does not match for id %s", s.AuthService.ServiceID)
 	}
 
@@ -1145,14 +1145,46 @@ type ServiceReg struct {
 	PubKey           *PubKey `json:"pub_key" bson:"pub_key"`
 }
 
+// -------------------- PrivKey --------------------
+
+// PrivKey represents a private key object including the key and related metadata
+type PrivKey struct {
+	Key    PrivateKey `json:"-" bson:"-"`
+	KeyPem string     `json:"key_pem" bson:"key_pem" validate:"required"`
+}
+
+// LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
+func (p *PrivKey) LoadKeyFromPem() error {
+	if p == nil {
+		return fmt.Errorf("privkey is nil")
+	}
+
+	key, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(p.KeyPem))
+	if err != nil {
+		p.Key = nil
+		return fmt.Errorf("error parsing key string: %v", err)
+	}
+
+	p.Key = key
+
+	return nil
+}
+
+type PrivateKey interface {
+	Public() crypto.PublicKey
+	Equal(x crypto.PrivateKey) bool
+	Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error)
+	Decrypt(rand io.Reader, msg []byte, opts crypto.DecrypterOpts) (plaintext []byte, err error)
+}
+
 // -------------------- PubKey --------------------
 
 // PubKey represents a public key object including the key and related metadata
 type PubKey struct {
-	Key    *rsa.PublicKey `json:"-" bson:"-"`
-	KeyPem string         `json:"key_pem" bson:"key_pem" validate:"required"`
-	Alg    string         `json:"alg" bson:"alg" validate:"required"`
-	KeyID  string         `json:"-" bson:"-"`
+	Key    PublicKey `json:"-" bson:"-"`
+	KeyPem string    `json:"key_pem" bson:"key_pem" validate:"required"`
+	Alg    string    `json:"alg" bson:"alg" validate:"required"`
+	KeyID  string    `json:"-" bson:"-"`
 }
 
 // LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
@@ -1179,4 +1211,9 @@ func (p *PubKey) LoadKeyFromPem() error {
 	p.KeyID = kid
 
 	return nil
+}
+
+type PublicKey interface {
+	Equal(x crypto.PublicKey) bool
+	Size() int
 }

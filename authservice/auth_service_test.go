@@ -15,7 +15,6 @@
 package authservice_test
 
 import (
-	"crypto/rsa"
 	"errors"
 	"reflect"
 	"testing"
@@ -229,7 +228,7 @@ LrSVbitnfQD1AgMBAAE=
 	privKey := testutils.GetSamplePrivKey()
 
 	type args struct {
-		privKey *rsa.PrivateKey
+		privKey authservice.PrivateKey
 	}
 	tests := []struct {
 		name             string
@@ -476,7 +475,7 @@ func TestPubKey_LoadKeyFromPem(t *testing.T) {
 		name      string
 		p         *authservice.PubKey
 		wantErr   bool
-		wantKey   *rsa.PublicKey
+		wantKey   authservice.PublicKey
 		wantKeyID string
 	}{
 		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem()), false, testutils.GetSamplePubKey().Key, testutils.GetSamplePubKeyFingerprint()},

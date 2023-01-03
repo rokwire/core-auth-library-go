@@ -15,7 +15,6 @@
 package authutils_test
 
 import (
-	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -24,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 )
@@ -32,7 +32,7 @@ func TestGetKeyFingerprint(t *testing.T) {
 	key := testutils.GetSamplePubKey()
 
 	type args struct {
-		key *rsa.PublicKey
+		key authservice.PublicKey
 	}
 	tests := []struct {
 		name    string
@@ -150,7 +150,7 @@ func TestGetPubKeyPem(t *testing.T) {
 	sampleKeyPem := testutils.GetSamplePubKeyPem() + "\n"
 
 	type args struct {
-		key *rsa.PublicKey
+		key authservice.PublicKey
 	}
 	tests := []struct {
 		name    string

@@ -15,8 +15,6 @@
 package testutils
 
 import (
-	"crypto/rsa"
-
 	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
@@ -88,7 +86,7 @@ Rv8MYg+8RiGNsPSmC6qTu9ykuRn3a2DF6/vlrZuWlnRnkI6EF91Q
 }
 
 // GetSamplePrivKey returns a sample private key
-func GetSamplePrivKey() *rsa.PrivateKey {
+func GetSamplePrivKey() authservice.PrivateKey {
 	privKey, _ := jwt.ParseRSAPrivateKeyFromPEM([]byte(GetSamplePrivKeyPem()))
 	return privKey
 }

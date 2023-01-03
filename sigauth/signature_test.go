@@ -16,7 +16,6 @@ package sigauth_test
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,11 +37,11 @@ func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mo
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(testutils.GetSamplePrivKey(), manager, true)
+	return sigauth.NewSignatureAuth(authservice.PrivKey{Key: testutils.GetSamplePrivKey()}, manager, true)
 }
 
-func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, privKey *rsa.PrivateKey) (*sigauth.SignatureAuth, error) {
-	if privKey == nil {
+func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, privKey authservice.PrivKey) (*sigauth.SignatureAuth, error) {
+	if privKey.Key == nil {
 		return nil, errors.New("private key is nil")
 	}
 
@@ -99,15 +98,15 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey := testutils.GetSamplePrivKey()
+	privKey := authservice.PrivKey{Key: testutils.GetSamplePrivKey()}
 	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
 	if err != nil {
 		t.Errorf("Error loading sample public key: %v", err)
 	}
 
 	type args struct {
-		privKey *rsa.PrivateKey
-		pubKey  *rsa.PublicKey
+		privKey authservice.PrivKey
+		pubKey  authservice.PublicKey
 		message []byte
 	}
 	tests := []struct {
@@ -212,7 +211,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey := testutils.GetSamplePrivKey()
+	privKey := authservice.PrivKey{Key: testutils.GetSamplePrivKey()}
 	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
 	if err != nil {
 		t.Errorf("Error loading sample public key: %v", err)
@@ -233,8 +232,8 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	type args struct {
 		r       *http.Request
-		privKey *rsa.PrivateKey
-		pubKey  *rsa.PublicKey
+		privKey authservice.PrivKey
+		pubKey  authservice.PublicKey
 	}
 	tests := []struct {
 		name    string

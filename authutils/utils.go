@@ -15,6 +15,7 @@
 package authutils
 
 import (
+	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -56,13 +57,18 @@ func RemoveString(slice []string, val string) ([]string, bool) {
 }
 
 // GetKeyFingerprint returns the fingerprint for a given rsa.PublicKey
-func GetKeyFingerprint(key *rsa.PublicKey) (string, error) {
+func GetKeyFingerprint(key crypto.PublicKey) (string, error) {
 	if key == nil {
 		return "", errors.New("key cannot be nil")
 	}
-	pubPkcs1 := x509.MarshalPKCS1PublicKey(key)
 
-	hash, err := HashSha256(pubPkcs1)
+	pubASN1, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		return "", fmt.Errorf("error marshalling public key: %v", err)
+	}
+	fmt.Println(string(pubASN1))
+
+	hash, err := HashSha256(pubASN1)
 	if err != nil {
 		return "", fmt.Errorf("error hashing key: %v", err)
 	}
