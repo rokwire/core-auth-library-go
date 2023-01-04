@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
@@ -33,14 +32,18 @@ import (
 )
 
 func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
+	privKey, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		return nil, fmt.Errorf("error getting sample private key: %v", err)
+	}
 	manager, err := testutils.SetupTestServiceRegManager(authService, mockLoader)
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(authservice.PrivKey{Key: testutils.GetSamplePrivKey()}, manager, true)
+	return sigauth.NewSignatureAuth(privKey, manager, true)
 }
 
-func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, privKey authservice.PrivKey) (*sigauth.SignatureAuth, error) {
+func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, privKey *authservice.PrivKey) (*sigauth.SignatureAuth, error) {
 	if privKey.Key == nil {
 		return nil, errors.New("private key is nil")
 	}
@@ -98,15 +101,18 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey := authservice.PrivKey{Key: testutils.GetSamplePrivKey()}
-	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
+	privKey, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		t.Errorf("error getting sample private key: %v", err)
+	}
+	pubKey, err := privKey.PubKey()
 	if err != nil {
 		t.Errorf("Error loading sample public key: %v", err)
 	}
 
 	type args struct {
-		privKey authservice.PrivKey
-		pubKey  authservice.PublicKey
+		privKey *authservice.PrivKey
+		pubKey  *authservice.PubKey
 		message []byte
 	}
 	tests := []struct {
@@ -115,7 +121,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "success", args: args{privKey: privKey, pubKey: pubKey, message: []byte("test_message")}, wantErr: false},
-		{name: "nil_pub_key", args: args{privKey: privKey, pubKey: nil, message: []byte("test_message")}, wantErr: true},
+		{name: "nil_pub_key", args: args{privKey: privKey, pubKey: &authservice.PubKey{Key: nil}, message: []byte("test_message")}, wantErr: true},
 		{name: "empty_message", args: args{privKey: privKey, pubKey: pubKey, message: make([]byte, 0)}, wantErr: false},
 	}
 	for _, tt := range tests {
@@ -130,7 +136,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 				t.Errorf("SignatureAuth.Sign() error = %v", err)
 				return
 			}
-			if err := s.CheckSignature(tt.args.pubKey, tt.args.message, signature); (err != nil) != tt.wantErr {
+			if err := s.CheckSignature(tt.args.pubKey.Key, tt.args.message, signature); (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckSignature() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -211,8 +217,11 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey := authservice.PrivKey{Key: testutils.GetSamplePrivKey()}
-	pubKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(testutils.GetSamplePubKeyPem()))
+	privKey, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		t.Errorf("error getting sample private key: %v", err)
+	}
+	pubKey, err := privKey.PubKey()
 	if err != nil {
 		t.Errorf("Error loading sample public key: %v", err)
 	}
@@ -232,8 +241,8 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	type args struct {
 		r       *http.Request
-		privKey authservice.PrivKey
-		pubKey  authservice.PublicKey
+		privKey *authservice.PrivKey
+		pubKey  *authservice.PubKey
 	}
 	tests := []struct {
 		name    string
@@ -241,7 +250,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "sample_keypair", args: args{r: testReq, privKey: privKey, pubKey: pubKey}, wantErr: false},
-		{name: "nil_pub_key", args: args{r: testReq, privKey: privKey, pubKey: nil}, wantErr: true},
+		{name: "nil_pub_key", args: args{r: testReq, privKey: privKey, pubKey: &authservice.PubKey{Key: nil}}, wantErr: true},
 		{name: "nil_request", args: args{r: nilReq, privKey: privKey, pubKey: pubKey}, wantErr: true},
 		{name: "empty_body", args: args{r: testEmptyBody, privKey: privKey, pubKey: pubKey}, wantErr: false},
 	}
@@ -263,7 +272,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
 			}
 
-			err = s.CheckRequestSignature(signedRequest, tt.args.pubKey)
+			err = s.CheckRequestSignature(signedRequest, tt.args.pubKey.Key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 				return

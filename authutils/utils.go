@@ -15,12 +15,7 @@
 package authutils
 
 import (
-	"crypto"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -54,47 +49,6 @@ func RemoveString(slice []string, val string) ([]string, bool) {
 		}
 	}
 	return slice, false
-}
-
-// GetKeyFingerprint returns the fingerprint for a given rsa.PublicKey
-func GetKeyFingerprint(key crypto.PublicKey) (string, error) {
-	if key == nil {
-		return "", errors.New("key cannot be nil")
-	}
-
-	pubASN1, err := x509.MarshalPKIXPublicKey(key)
-	if err != nil {
-		return "", fmt.Errorf("error marshalling public key: %v", err)
-	}
-	fmt.Println(string(pubASN1))
-
-	hash, err := HashSha256(pubASN1)
-	if err != nil {
-		return "", fmt.Errorf("error hashing key: %v", err)
-	}
-
-	return "SHA256:" + base64.StdEncoding.EncodeToString(hash), nil
-}
-
-// GetPubKeyPem returns the PEM encoded public key
-func GetPubKeyPem(key *rsa.PublicKey) (string, error) {
-	if key == nil {
-		return "", errors.New("key cannot be nil")
-	}
-
-	pubASN1, err := x509.MarshalPKIXPublicKey(key)
-	if err != nil {
-		return "", fmt.Errorf("error marshalling public key: %v", err)
-	}
-
-	pemdata := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PUBLIC KEY",
-			Bytes: pubASN1,
-		},
-	)
-
-	return string(pemdata), nil
 }
 
 // HashSha256 returns the SHA256 hash of the input

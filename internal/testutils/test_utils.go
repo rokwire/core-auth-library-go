@@ -15,7 +15,8 @@
 package testutils
 
 import (
-	"github.com/golang-jwt/jwt"
+	"fmt"
+
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
 )
@@ -40,6 +41,7 @@ func GetSamplePubKey() *authservice.PubKey {
 	key := authservice.PubKey{
 		KeyPem: GetSamplePubKeyPem(),
 		Alg:    "RS256",
+		Type:   authservice.RSA,
 	}
 
 	key.LoadKeyFromPem()
@@ -86,9 +88,14 @@ Rv8MYg+8RiGNsPSmC6qTu9ykuRn3a2DF6/vlrZuWlnRnkI6EF91Q
 }
 
 // GetSamplePrivKey returns a sample private key
-func GetSamplePrivKey() authservice.PrivateKey {
-	privKey, _ := jwt.ParseRSAPrivateKeyFromPEM([]byte(GetSamplePrivKeyPem()))
-	return privKey
+func GetSamplePrivKey() (*authservice.PrivKey, error) {
+	privKey := authservice.PrivKey{KeyPem: GetSamplePrivKeyPem(), Type: authservice.RSA}
+	err := privKey.LoadKeyFromPem()
+	if err != nil {
+		return nil, fmt.Errorf("error loading private key from PEM: %v", err)
+	}
+
+	return &privKey, nil
 }
 
 // SetupTestAuthService returns a test AuthService

@@ -23,39 +23,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
-	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 )
-
-func TestGetKeyFingerprint(t *testing.T) {
-	key := testutils.GetSamplePubKey()
-
-	type args struct {
-		key authservice.PublicKey
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		{"returns fingerprint for valid key", args{key.Key}, testutils.GetSamplePubKeyFingerprint(), false},
-		{"errors on nil key", args{nil}, "", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := authutils.GetKeyFingerprint(tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetKeyFingerprint() = %v, error = %v, wantErr %v", got, err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("GetKeyFingerprint() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestHashSha256(t *testing.T) {
 	type args struct {
@@ -140,36 +109,6 @@ func TestRemoveString(t *testing.T) {
 			}
 			if got1 != tt.want1 {
 				t.Errorf("RemoveString() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-}
-
-func TestGetPubKeyPem(t *testing.T) {
-	sampleKey := testutils.GetSamplePubKey().Key
-	sampleKeyPem := testutils.GetSamplePubKeyPem() + "\n"
-
-	type args struct {
-		key authservice.PublicKey
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		{"return error on nil key", args{sampleKey}, sampleKeyPem, false},
-		{"return error on nil key", args{nil}, "", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := authutils.GetPubKeyPem(tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPubKeyPem() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("GetPubKeyPem() = %v, want %v", got, tt.want)
 			}
 		})
 	}

@@ -17,6 +17,8 @@ package sigauth
 import (
 	"bytes"
 	"crypto"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
@@ -38,17 +40,25 @@ import (
 type SignatureAuth struct {
 	serviceRegManager *authservice.ServiceRegManager
 
-	serviceKey authservice.PrivKey
+	serviceKey *authservice.PrivKey
 }
 
 // Sign generates and returns a signature for the provided message
 func (s *SignatureAuth) Sign(message []byte) (string, error) {
-	hash, err := authutils.HashSha256(message)
-	if err != nil {
-		return "", fmt.Errorf("error hashing message: %v", err)
-	}
+	var opts crypto.SignerOpts
+	var err error
 
-	signature, err := s.serviceKey.Sign(rand.Reader, hash, &rsa.PSSOptions{Hash: crypto.SHA256})
+	switch s.serviceKey.Type {
+	case authservice.RSA, authservice.ECDSA:
+		message, err = authutils.HashSha256(message)
+		if err != nil {
+			return "", fmt.Errorf("error hashing message: %v", err)
+		}
+		opts = &rsa.PSSOptions{Hash: crypto.SHA256}
+	case authservice.EDDSA:
+		opts = &rsa.PSSOptions{Hash: 0}
+	}
+	signature, err := s.serviceKey.Key.Sign(rand.Reader, message, opts)
 	if err != nil {
 		return "", fmt.Errorf("error signing message: %v", err)
 	}
@@ -84,8 +94,16 @@ func (s *SignatureAuth) CheckSignature(pubKey authservice.PublicKey, message []b
 		return fmt.Errorf("error hashing message: %v", err)
 	}
 
-	err = rsa.VerifyPSS(pubKey, crypto.SHA256, hash, sigBytes, nil)
-	if err != nil {
+	valid := true
+	switch key := pubKey.(type) {
+	case *rsa.PublicKey:
+		err = rsa.VerifyPSS(key, crypto.SHA256, hash, sigBytes, nil)
+	case *ecdsa.PublicKey:
+		valid = ecdsa.VerifyASN1(key, hash, sigBytes)
+	case ed25519.PublicKey:
+		valid = ed25519.Verify(key, hash, sigBytes)
+	}
+	if err != nil || !valid {
 		return fmt.Errorf("error verifying signature: %v", err)
 	}
 
@@ -116,11 +134,15 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	serviceKeyFingerprint, err := authutils.GetKeyFingerprint(s.serviceKey.Public())
+	pubKey, err := s.serviceKey.PubKey()
+	if err != nil {
+		return fmt.Errorf("error getting pubkey for service key: %v", err)
+	}
+	err = pubKey.LoadKeyFingerprint()
 	if err != nil {
 		return fmt.Errorf("error getting service key fingerprint: %v", err)
 	}
-	sigAuthHeader := SignatureAuthHeader{KeyID: serviceKeyFingerprint, Algorithm: "rsa-sha256", Headers: headers}
+	sigAuthHeader := SignatureAuthHeader{KeyID: pubKey.KeyID, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -268,13 +290,16 @@ func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey authservice.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey *authservice.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+	if serviceKey == nil {
+		return nil, errors.New("service key is missing")
+	}
 	if serviceRegManager == nil {
 		return nil, errors.New("service registration manager is missing")
 	}
 
 	if serviceRegKey {
-		err := serviceRegManager.ValidateServiceRegistrationKey(serviceKey)
+		err := serviceRegManager.ValidateServiceRegistrationKey(serviceKey.Key)
 		if err != nil {
 			return nil, fmt.Errorf("unable to validate service key registration: please contact the auth service system admin to register a public key for your service - %v", err)
 		}

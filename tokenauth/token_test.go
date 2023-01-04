@@ -15,7 +15,6 @@
 package tokenauth_test
 
 import (
-	"crypto/rsa"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -28,9 +27,9 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/tokenauth"
+	"github.com/rokwire/logging-library-go/v2/errors"
 )
 
 func setupTestTokenAuth(authService *authservice.AuthService, acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) (*tokenauth.TokenAuth, error) {
@@ -43,14 +42,21 @@ func setupTestTokenAuth(authService *authservice.AuthService, acceptRokwire bool
 	return tokenauth.NewTokenAuth(acceptRokwire, manager, permissionAuth, scopeAuth)
 }
 
-func generateTestToken(claims *tokenauth.Claims, key authservice.PrivateKey) (string, error) {
+func generateTestToken(claims *tokenauth.Claims, key *authservice.PrivKey) (string, error) {
+	if key == nil {
+		return "", errors.New("private key is missing")
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	kid, err := authutils.GetKeyFingerprint(&key.PublicKey)
+	pubKey, err := key.PubKey()
+	if err != nil {
+		return "", fmt.Errorf("error getting public key: %v", err)
+	}
+	err = pubKey.LoadKeyFingerprint()
 	if err != nil {
 		return "", fmt.Errorf("error computing auth key fingerprint: %v", err)
 	}
-	token.Header["kid"] = kid
-	return token.SignedString(key)
+	token.Header["kid"] = pubKey.KeyID
+	return token.SignedString(key.Key)
 }
 
 func getTestClaims(sub string, aud string, orgID string, purpose string, issuer string, permissions string, scope string, auth_type string, exp int64) *tokenauth.Claims {
@@ -84,9 +90,14 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
+	samplePrivKey, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		t.Errorf("Error getting sample private key: %v", err)
+	}
+
 	// Valid rokwire
 	validClaims := getSampleValidClaims()
-	validToken, err := generateTestToken(validClaims, testutils.GetSamplePrivKey())
+	validToken, err := generateTestToken(validClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing valid token: %v", err)
 	}
@@ -94,13 +105,13 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	// Valid audience
 	validAudClaims := getSampleValidClaims()
 	validAudClaims.Audience = "test"
-	validAudToken, err := generateTestToken(validAudClaims, testutils.GetSamplePrivKey())
+	validAudToken, err := generateTestToken(validAudClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing valid aud token: %v", err)
 	}
 
 	// Expired
-	expiredToken, err := generateTestToken(getSampleExpiredClaims(), testutils.GetSamplePrivKey())
+	expiredToken, err := generateTestToken(getSampleExpiredClaims(), samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing expired token: %v", err)
 	}
@@ -108,7 +119,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	// Invalid issuer
 	invalidIssClaims := getSampleValidClaims()
 	invalidIssClaims.Issuer = "https://auth2.rokwire.com"
-	invalidIssToken, err := generateTestToken(invalidIssClaims, testutils.GetSamplePrivKey())
+	invalidIssToken, err := generateTestToken(invalidIssClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing invalid iss token: %v", err)
 	}
@@ -116,7 +127,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	// Invalid audience
 	invalidAudClaims := getSampleValidClaims()
 	invalidAudClaims.Audience = "test2"
-	invalidAudToken, err := generateTestToken(invalidAudClaims, testutils.GetSamplePrivKey())
+	invalidAudToken, err := generateTestToken(invalidAudClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing invalid aud token: %v", err)
 	}
