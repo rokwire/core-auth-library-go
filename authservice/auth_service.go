@@ -42,8 +42,11 @@ import (
 )
 
 const (
-	RSA   string = "RSA"
+	// RSA represents the RSA keypair type
+	RSA string = "RSA"
+	// ECDSA represents the Elliptic Curve keypair type
 	ECDSA string = "ECDSA"
+	// EDDSA represents the Edwards Curve keypair type
 	EDDSA string = "EDDSA"
 )
 
@@ -1203,6 +1206,9 @@ func (p *PrivKey) LoadPemFromKey() error {
 	if p == nil {
 		return fmt.Errorf("privkey is nil")
 	}
+	if p.KeyPem != "" {
+		return nil
+	}
 
 	privASN1, err := x509.MarshalPKCS8PrivateKey(p.Key)
 	if err != nil {
@@ -1221,6 +1227,7 @@ func (p *PrivKey) LoadPemFromKey() error {
 	return nil
 }
 
+// PubKey returns a PubKey object for p's public key
 func (p *PrivKey) PubKey() (*PubKey, error) {
 	if p == nil {
 		return nil, fmt.Errorf("privkey is nil")
@@ -1234,6 +1241,7 @@ func (p *PrivKey) PubKey() (*PubKey, error) {
 	return &PubKey{Key: pubKey, Type: p.Type}, nil
 }
 
+// PrivateKey represents a set of functions implemented by common private key types
 type PrivateKey interface {
 	Public() crypto.PublicKey
 	Equal(x crypto.PrivateKey) bool
@@ -1330,10 +1338,16 @@ func (p *PubKey) LoadKeyFingerprint() error {
 	return nil
 }
 
+// PublicKey represents a set of functions implemented by common public key types
 type PublicKey interface {
 	Equal(x crypto.PublicKey) bool
 }
 
+// NewAsymmetricKeyPair returns a new keypair of the given keyType
+//
+//	param expected type:
+//	authservice.RSA: int (number of bits)
+//	authservice.ECDSA: elliptic.Curve
 func NewAsymmetricKeyPair(keyType string, param interface{}) (*PrivKey, *PubKey, error) {
 	var private PrivateKey
 	var public PublicKey

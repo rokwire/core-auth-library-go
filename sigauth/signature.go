@@ -102,9 +102,14 @@ func (s *SignatureAuth) CheckSignature(pubKey authservice.PublicKey, message []b
 		valid = ecdsa.VerifyASN1(key, hash, sigBytes)
 	case ed25519.PublicKey:
 		valid = ed25519.Verify(key, hash, sigBytes)
+	default:
+		valid = false
 	}
-	if err != nil || !valid {
+	if err != nil {
 		return fmt.Errorf("error verifying signature: %v", err)
+	}
+	if !valid {
+		return fmt.Errorf("invalid signature")
 	}
 
 	return nil

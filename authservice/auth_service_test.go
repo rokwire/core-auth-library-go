@@ -24,9 +24,8 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 )
 
-func setupPubKeyFromPem(pem string) *authservice.PubKey {
-	//TODO: set type based on type specified in pem string
-	return &authservice.PubKey{KeyPem: pem, Alg: "RS256"}
+func setupPubKeyFromPem(pem string, typeStr string) *authservice.PubKey {
+	return &authservice.PubKey{KeyPem: pem, Alg: "RS256", Type: typeStr}
 }
 
 func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {
@@ -209,7 +208,7 @@ UESf0lL26Qupn0Ha2tbF25cwEBM4ZvO41bKeqozXFOLRXYn4r2ZDahcRfHjF04kp
 LrSVbitnfQD1AgMBAAE=
 -----END RSA PUBLIC KEY-----`
 	pubKey := testutils.GetSamplePubKey()
-	wrongKey := setupPubKeyFromPem(wrongKeyPem)
+	wrongKey := setupPubKeyFromPem(wrongKeyPem, authservice.RSA)
 
 	wrongKey.LoadKeyFromPem()
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
@@ -474,6 +473,107 @@ func TestServiceAccountManager_GetCachedAccessToken(t *testing.T) {
 	}
 }
 
+func TestPrivKey_LoadKeyFromPem(t *testing.T) {
+	sample, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		t.Errorf("error getting sample private key: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		p       *authservice.PrivKey
+		wantErr bool
+		wantKey authservice.PrivateKey
+	}{
+		{"return nil and set Key property on valid pem", &authservice.PrivKey{KeyPem: testutils.GetSamplePrivKeyPem(), Type: authservice.RSA}, false, sample.Key},
+		{"return error on invalid pem", &authservice.PrivKey{KeyPem: "test", Type: authservice.RSA}, true, nil},
+		{"return error on nil privkey", nil, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.p.LoadKeyFromPem(); (err != nil) != tt.wantErr {
+				t.Errorf("PrivKey.LoadKeyFromPem() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantKey == nil {
+				if tt.p != nil && tt.p.Key != nil {
+					t.Errorf("PrivKey.LoadKeyFromPem() key = %v, want nil", tt.p.Key)
+				}
+			} else {
+				if !tt.p.Key.Equal(tt.wantKey) {
+					t.Errorf("PrivKey.LoadKeyFromPem() key = %v, want %v", tt.p.Key, tt.wantKey)
+				}
+			}
+		})
+	}
+}
+
+func TestPrivKey_LoadPemFromKey(t *testing.T) {
+	sampleKey, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		t.Errorf("error getting sample private key: %v", err)
+	}
+	sampleKeyPem := testutils.GetSamplePrivKeyPem()
+
+	type args struct {
+		key *authservice.PrivKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    string
+		wantErr bool
+	}{
+		{"success", args{sampleKey}, sampleKeyPem, false},
+		{"return error on nil key", args{nil}, "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.key.LoadPemFromKey()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PrivKey.LoadPemFromKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.args.key != nil && tt.args.key.KeyPem != tt.want {
+				t.Errorf("PrivKey.LoadPemFromKey() = %v, want %v", tt.args.key.KeyPem, tt.want)
+			}
+		})
+	}
+}
+
+func TestPrivKey_PubKey(t *testing.T) {
+	pubKey := testutils.GetSamplePubKey()
+	privKey, err := testutils.GetSamplePrivKey()
+	if err != nil {
+		t.Errorf("error getting sample private key: %v", err)
+		return
+	}
+
+	type args struct {
+		key *authservice.PrivKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    *authservice.PubKey
+		wantErr bool
+	}{
+		{"returns public key for valid private key", args{privKey}, pubKey, false},
+		{"errors on nil key", args{nil}, nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			public, err := tt.args.key.PubKey()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PrivKey.PubKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if public != nil && tt.want != nil && !public.Key.Equal(tt.want.Key) {
+				t.Errorf("PrivKey.PubKey() = %v, want %v", tt.args.key.Key, tt.want.Key)
+			}
+		})
+	}
+}
+
 func TestPubKey_LoadKeyFromPem(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -482,8 +582,8 @@ func TestPubKey_LoadKeyFromPem(t *testing.T) {
 		wantKey   authservice.PublicKey
 		wantKeyID string
 	}{
-		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem()), false, testutils.GetSamplePubKey().Key, testutils.GetSamplePubKeyFingerprint()},
-		{"return error on invalid pem", setupPubKeyFromPem("test"), true, nil, ""},
+		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem(), authservice.RSA), false, testutils.GetSamplePubKey().Key, testutils.GetSamplePubKeyFingerprint()},
+		{"return error on invalid pem", setupPubKeyFromPem("test", authservice.RSA), true, nil, ""},
 		{"return error on nil pubkey", nil, true, nil, ""},
 	}
 	for _, tt := range tests {
@@ -527,18 +627,18 @@ func TestPubKey_LoadPemFromKey(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{"return error on nil key", args{sampleKey}, sampleKeyPem, false},
-		{"return error on nil key", args{nil}, "", true},
+		{"success", args{sampleKey}, sampleKeyPem, false},
+		{"return error on nil key", args{&authservice.PubKey{Key: nil}}, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.args.key.LoadPemFromKey()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPubKeyPem() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("PubKey.LoadPemFromKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.args.key.KeyPem != tt.want {
-				t.Errorf("GetPubKeyPem() = %v, want %v", tt.args.key.KeyPem, tt.want)
+				t.Errorf("PubKey.LoadPemFromKey() = %v, want %v", tt.args.key.KeyPem, tt.want)
 			}
 		})
 	}
@@ -557,7 +657,7 @@ func TestPubKey_LoadKeyFingerprint(t *testing.T) {
 		wantErr bool
 	}{
 		{"returns fingerprint for valid key", args{key}, testutils.GetSamplePubKeyFingerprint(), false},
-		{"errors on nil key", args{nil}, "", true},
+		{"errors on nil key", args{&authservice.PubKey{Key: nil}}, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

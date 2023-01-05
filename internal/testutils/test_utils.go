@@ -51,7 +51,7 @@ func GetSamplePubKey() *authservice.PubKey {
 
 // GetSamplePubKeyFingerprint returns a sample public key fingerprint
 func GetSamplePubKeyFingerprint() string {
-	return "SHA256:I3HxcO3FpUM6MG7+rCASuePfl92JEcdz2htV7SP0Y20="
+	return "SHA256:8Kxg2cK9x03ofiEevL0hwAoW330xdy4vjD713fLLkzs="
 }
 
 // GetSamplePrivKeyPem returns a sample private key PEM
