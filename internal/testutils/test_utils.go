@@ -15,8 +15,6 @@
 package testutils
 
 import (
-	"fmt"
-
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
 )
@@ -41,7 +39,6 @@ func GetSamplePubKey() *authservice.PubKey {
 	key := authservice.PubKey{
 		KeyPem: GetSamplePubKeyPem(),
 		Alg:    "RS256",
-		Type:   authservice.RSA,
 	}
 
 	key.LoadKeyFromPem()
@@ -59,43 +56,42 @@ func GetSamplePubKeyFingerprint() string {
 //	Matches GetSamplePubKeyPem
 func GetSamplePrivKeyPem() string {
 	return `-----BEGIN RSA PRIVATE KEY-----
-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
+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
+YMXr++Wtm5aWdGeQjoQX3VA=
 -----END RSA PRIVATE KEY-----`
 }
 
 // GetSamplePrivKey returns a sample private key
-func GetSamplePrivKey() (*authservice.PrivKey, error) {
-	privKey := authservice.PrivKey{KeyPem: GetSamplePrivKeyPem(), Type: authservice.RSA}
-	err := privKey.LoadKeyFromPem()
-	if err != nil {
-		return nil, fmt.Errorf("error loading private key from PEM: %v", err)
-	}
+func GetSamplePrivKey() *authservice.PrivKey {
+	privKey := authservice.PrivKey{KeyPem: GetSamplePrivKeyPem()}
 
-	return &privKey, nil
+	privKey.LoadKeyFromPem()
+
+	return &privKey
 }
 
 // SetupTestAuthService returns a test AuthService

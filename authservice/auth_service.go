@@ -18,15 +18,8 @@ import (
 	"bytes"
 	"context"
 	"crypto"
-	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -39,15 +32,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"golang.org/x/sync/syncmap"
 	"gopkg.in/go-playground/validator.v9"
-)
-
-const (
-	// RSA represents the RSA keypair type
-	RSA string = "RSA"
-	// ECDSA represents the Elliptic Curve keypair type
-	ECDSA string = "ECDSA"
-	// EDDSA represents the Edwards Curve keypair type
-	EDDSA string = "EDDSA"
 )
 
 // -------------------- AuthService --------------------
@@ -208,7 +192,7 @@ func (s *ServiceRegManager) ValidateServiceRegistration() error {
 }
 
 // ValidateServiceRegistrationKey validates that the implementing service has a valid registration for the provided keypair
-func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey PrivateKey) error {
+func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey authutils.PrivateKey) error {
 	if privKey == nil {
 		return errors.New("provided priv key is nil")
 	}
@@ -1166,9 +1150,8 @@ type ServiceReg struct {
 
 // PrivKey represents a private key object including the key and related metadata
 type PrivKey struct {
-	Key    PrivateKey `json:"-" bson:"-"`
-	KeyPem string     `json:"key_pem" bson:"key_pem" validate:"required"`
-	Type   string     `json:"type" bson:"type"`
+	Key    authutils.PrivateKey `json:"-" bson:"-"`
+	KeyPem string               `json:"key_pem" bson:"key_pem" validate:"required"`
 }
 
 // LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
@@ -1177,86 +1160,36 @@ func (p *PrivKey) LoadKeyFromPem() error {
 		return fmt.Errorf("privkey is nil")
 	}
 
-	var key PrivateKey
+	var key authutils.PrivateKey
 	var err error
-	switch p.Type {
-	case RSA:
-		key, err = jwt.ParseRSAPrivateKeyFromPEM([]byte(p.KeyPem))
-	case ECDSA:
-		key, err = jwt.ParseECPrivateKeyFromPEM([]byte(p.KeyPem))
-	case EDDSA:
-		var edKey crypto.PrivateKey
-		edKey, err = jwt.ParseEdPrivateKeyFromPEM([]byte(p.KeyPem))
-		key, _ = edKey.(ed25519.PrivateKey)
-	default:
-		return errors.New("unrecognized private key type")
-	}
-	if err != nil {
-		p.Key = nil
-		return fmt.Errorf("error parsing key string: %v", err)
+	if key, err = jwt.ParseRSAPrivateKeyFromPEM([]byte(p.KeyPem)); err != nil {
+		if key, err = jwt.ParseECPrivateKeyFromPEM([]byte(p.KeyPem)); err != nil {
+			var edKey crypto.PrivateKey
+			if edKey, err = jwt.ParseEdPrivateKeyFromPEM([]byte(p.KeyPem)); err != nil {
+				p.Key = nil
+				return fmt.Errorf("error parsing key string: %v", err)
+			}
+
+			var ok bool
+			if key, ok = edKey.(ed25519.PrivateKey); !ok {
+				p.Key = nil
+				return errors.New("edwards curve key type assertion failed")
+			}
+		}
 	}
 
 	p.Key = key
-
 	return nil
-}
-
-// LoadPemFromKey encodes "Key" in PEM format and sets "KeyPem"
-func (p *PrivKey) LoadPemFromKey() error {
-	if p == nil {
-		return fmt.Errorf("privkey is nil")
-	}
-	if p.KeyPem != "" {
-		return nil
-	}
-
-	privASN1, err := x509.MarshalPKCS8PrivateKey(p.Key)
-	if err != nil {
-		p.KeyPem = ""
-		return fmt.Errorf("error marshalling private key: %v", err)
-	}
-
-	pemData := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  fmt.Sprintf("%s PRIVATE KEY", p.Type),
-			Bytes: privASN1,
-		},
-	)
-	p.KeyPem = string(pemData)
-
-	return nil
-}
-
-// PubKey returns a PubKey object for p's public key
-func (p *PrivKey) PubKey() (*PubKey, error) {
-	if p == nil {
-		return nil, fmt.Errorf("privkey is nil")
-	}
-
-	pubKey, ok := p.Key.Public().(PublicKey)
-	if !ok {
-		return nil, errors.New("invalid public key type")
-	}
-
-	return &PubKey{Key: pubKey, Type: p.Type}, nil
-}
-
-// PrivateKey represents a set of functions implemented by common private key types
-type PrivateKey interface {
-	Public() crypto.PublicKey
-	Equal(x crypto.PrivateKey) bool
-	Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error)
 }
 
 // -------------------- PubKey --------------------
 
 // PubKey represents a public key object including the key and related metadata
 type PubKey struct {
-	Key    PublicKey `json:"-" bson:"-"`
-	KeyPem string    `json:"key_pem" bson:"key_pem" validate:"required"`
-	Alg    string    `json:"alg" bson:"alg" validate:"required"`
-	KeyID  string    `json:"-" bson:"-"`
-	Type   string    `json:"type" bson:"type"`
+	Key    authutils.PublicKey `json:"-" bson:"-"`
+	KeyPem string              `json:"key_pem" bson:"key_pem" validate:"required"`
+	Alg    string              `json:"alg" bson:"alg" validate:"required"`
+	KeyID  string              `json:"-" bson:"-"`
 }
 
 // LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
@@ -1265,128 +1198,31 @@ func (p *PubKey) LoadKeyFromPem() error {
 		return fmt.Errorf("pubkey is nil")
 	}
 
-	var key PublicKey
+	var key authutils.PublicKey
 	var err error
-	switch p.Type {
-	case RSA:
-		key, err = jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
-	case ECDSA:
-		key, err = jwt.ParseECPublicKeyFromPEM([]byte(p.KeyPem))
-	case EDDSA:
-		var edKey crypto.PublicKey
-		edKey, err = jwt.ParseEdPublicKeyFromPEM([]byte(p.KeyPem))
-		key, _ = edKey.(ed25519.PublicKey)
-	default:
-		return errors.New("unrecognized public key type")
-	}
-	if err != nil {
-		p.Key = nil
-		p.KeyID = ""
-		return fmt.Errorf("error parsing key string: %v", err)
+	if key, err = jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem)); err != nil {
+		if key, err = jwt.ParseECPublicKeyFromPEM([]byte(p.KeyPem)); err != nil {
+			var edKey crypto.PrivateKey
+			if edKey, err = jwt.ParseEdPublicKeyFromPEM([]byte(p.KeyPem)); err != nil {
+				p.Key = nil
+				p.KeyID = ""
+				return fmt.Errorf("error parsing key string: %v", err)
+			}
+
+			var ok bool
+			if key, ok = edKey.(ed25519.PublicKey); !ok {
+				p.Key = nil
+				p.KeyID = ""
+				return errors.New("edwards curve key type assertion failed")
+			}
+		}
 	}
 
 	p.Key = key
-	err = p.LoadKeyFingerprint()
+	p.KeyID, err = authutils.GetKeyFingerprint(key)
 	if err != nil {
-		p.KeyID = ""
-		return fmt.Errorf("error loading key fingerprint: %v", err)
+		return fmt.Errorf("error getting key fingerprint: %v", err)
 	}
 
 	return nil
-}
-
-// LoadPemFromKey encodes "Key" in PEM format and sets "KeyPem"
-func (p *PubKey) LoadPemFromKey() error {
-	if p == nil {
-		return fmt.Errorf("pubkey is nil")
-	}
-
-	pubASN1, err := x509.MarshalPKIXPublicKey(p.Key)
-	if err != nil {
-		p.KeyPem = ""
-		return fmt.Errorf("error marshalling public key: %v", err)
-	}
-
-	pemData := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  fmt.Sprintf("%s PUBLIC KEY", p.Type),
-			Bytes: pubASN1,
-		},
-	)
-	p.KeyPem = string(pemData)
-
-	return nil
-}
-
-// LoadKeyFingerprint computes the fingerprint for "Key" and sets "KeyID"
-func (p *PubKey) LoadKeyFingerprint() error {
-	if p == nil {
-		return fmt.Errorf("pubkey is nil")
-	}
-
-	pubASN1, err := x509.MarshalPKIXPublicKey(p.Key)
-	if err != nil {
-		return fmt.Errorf("error marshalling public key: %v", err)
-	}
-
-	hash, err := authutils.HashSha256(pubASN1)
-	if err != nil {
-		return fmt.Errorf("error hashing key: %v", err)
-	}
-
-	p.KeyID = "SHA256:" + base64.StdEncoding.EncodeToString(hash)
-	return nil
-}
-
-// PublicKey represents a set of functions implemented by common public key types
-type PublicKey interface {
-	Equal(x crypto.PublicKey) bool
-}
-
-// NewAsymmetricKeyPair returns a new keypair of the given keyType
-//
-//	param expected type:
-//	authservice.RSA: int (number of bits)
-//	authservice.ECDSA: elliptic.Curve
-func NewAsymmetricKeyPair(keyType string, param interface{}) (*PrivKey, *PubKey, error) {
-	var private PrivateKey
-	var public PublicKey
-	var err error
-
-	switch keyType {
-	case RSA:
-		bits, ok := param.(int)
-		if !ok {
-			return nil, nil, errors.New("param has invalid type: expected int")
-		}
-
-		key, err := rsa.GenerateKey(rand.Reader, bits)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error generating rsa private key: %v", err)
-		}
-		private = key
-		public = &key.PublicKey
-	case ECDSA:
-		curve, ok := param.(elliptic.Curve)
-		if !ok {
-			return nil, nil, errors.New("param has invalid type: expected elliptic.Curve")
-		}
-		key, err := ecdsa.GenerateKey(curve, rand.Reader)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error generating ecdsa private key: %v", err)
-		}
-		private = key
-		public = &key.PublicKey
-	case EDDSA:
-		public, private, err = ed25519.GenerateKey(rand.Reader)
-		if err != nil {
-			return nil, nil, fmt.Errorf("error generating eddsa private key: %v", err)
-		}
-	default:
-		return nil, nil, errors.New("unrecognized key type")
-	}
-
-	privKey := PrivKey{Key: private, Type: keyType}
-	pubKey := PubKey{Key: public, Type: keyType}
-	return &privKey, &pubKey, nil
 }

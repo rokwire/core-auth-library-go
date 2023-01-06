@@ -40,7 +40,7 @@ import (
 type SignatureAuth struct {
 	serviceRegManager *authservice.ServiceRegManager
 
-	serviceKey *authservice.PrivKey
+	serviceKey authutils.PrivateKey
 }
 
 // Sign generates and returns a signature for the provided message
@@ -48,17 +48,17 @@ func (s *SignatureAuth) Sign(message []byte) (string, error) {
 	var opts crypto.SignerOpts
 	var err error
 
-	switch s.serviceKey.Type {
-	case authservice.RSA, authservice.ECDSA:
+	switch s.serviceKey.(type) {
+	case *rsa.PrivateKey, *ecdsa.PrivateKey:
 		message, err = authutils.HashSha256(message)
 		if err != nil {
 			return "", fmt.Errorf("error hashing message: %v", err)
 		}
 		opts = &rsa.PSSOptions{Hash: crypto.SHA256}
-	case authservice.EDDSA:
+	case ed25519.PrivateKey:
 		opts = &rsa.PSSOptions{Hash: 0}
 	}
-	signature, err := s.serviceKey.Key.Sign(rand.Reader, message, opts)
+	signature, err := s.serviceKey.Sign(rand.Reader, message, opts)
 	if err != nil {
 		return "", fmt.Errorf("error signing message: %v", err)
 	}
@@ -79,7 +79,7 @@ func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, 
 }
 
 // CheckSignature validates the provided message signature from the given public key
-func (s *SignatureAuth) CheckSignature(pubKey authservice.PublicKey, message []byte, signature string) error {
+func (s *SignatureAuth) CheckSignature(pubKey authutils.PublicKey, message []byte, signature string) error {
 	if pubKey == nil {
 		return errors.New("public key is nil")
 	}
@@ -139,15 +139,15 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	pubKey, err := s.serviceKey.PubKey()
-	if err != nil {
-		return fmt.Errorf("error getting pubkey for service key: %v", err)
+	publicKey, ok := s.serviceKey.Public().(authutils.PublicKey)
+	if !ok {
+		return errors.New("unrecognized service key type")
 	}
-	err = pubKey.LoadKeyFingerprint()
+	keyID, err := authutils.GetKeyFingerprint(publicKey)
 	if err != nil {
 		return fmt.Errorf("error getting service key fingerprint: %v", err)
 	}
-	sigAuthHeader := SignatureAuthHeader{KeyID: pubKey.KeyID, Algorithm: "rsa-sha256", Headers: headers}
+	sigAuthHeader := SignatureAuthHeader{KeyID: keyID, Algorithm: "rsa-sha256", Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -219,12 +219,12 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 // CheckRequestSignature validates the signature on the provided request
 //
 //	The request must be signed by the private key paired with the provided public key
-func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey authservice.PublicKey) error {
+func (s *SignatureAuth) CheckRequestSignature(r *Request, key authutils.PublicKey) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
 
-	if pubKey == nil {
+	if key == nil {
 		return errors.New("public key is nil")
 	}
 
@@ -233,7 +233,7 @@ func (s *SignatureAuth) CheckRequestSignature(r *Request, pubKey authservice.Pub
 		return err
 	}
 
-	err = s.CheckSignature(pubKey, []byte(sigString), sigAuthHeader.Signature)
+	err = s.CheckSignature(key, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return fmt.Errorf("error validating signature: %v", err)
 	}
@@ -295,7 +295,7 @@ func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey *authservice.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey authutils.PrivateKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
 	if serviceKey == nil {
 		return nil, errors.New("service key is missing")
 	}
@@ -304,7 +304,7 @@ func NewSignatureAuth(serviceKey *authservice.PrivKey, serviceRegManager *authse
 	}
 
 	if serviceRegKey {
-		err := serviceRegManager.ValidateServiceRegistrationKey(serviceKey.Key)
+		err := serviceRegManager.ValidateServiceRegistrationKey(serviceKey)
 		if err != nil {
 			return nil, fmt.Errorf("unable to validate service key registration: please contact the auth service system admin to register a public key for your service - %v", err)
 		}
