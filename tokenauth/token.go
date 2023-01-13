@@ -367,30 +367,20 @@ func NewTokenAuth(acceptRokwireTokens bool, serviceRegManager *authservice.Servi
 // Web Clients: Access tokens must be provided in the "rokwire-access-token" cookie
 //
 //	and CSRF tokens must be provided in the "CSRF" header
-func GetRequestTokens(r *http.Request) (string, string, error) {
+func GetRequestTokens(r *http.Request) (string, error) {
 	authorizationHeader := r.Header.Get("Authorization")
-	if authorizationHeader != "" {
-		splitAuthorization := strings.Fields(authorizationHeader)
-		if len(splitAuthorization) != 2 {
-			return "", "", errors.New("invalid authorization header format")
-		}
-		if strings.ToLower(splitAuthorization[0]) != "bearer" {
-			return "", "", errors.New("authorization header missing bearer token")
-		}
-		idToken := splitAuthorization[1]
-
-		return idToken, "", nil
+	if authorizationHeader == "" {
+		return "", errors.New("missing access token")
 	}
 
-	csrfToken := r.Header.Get("CSRF")
-	if csrfToken == "" {
-		return "", "", errors.New("missing authorization and csrf header")
+	splitAuthorization := strings.Fields(authorizationHeader)
+	if len(splitAuthorization) != 2 {
+		return "", errors.New("invalid authorization header format")
 	}
-
-	accessCookie, err := r.Cookie("rokwire-access-token")
-	if err != nil || accessCookie == nil || accessCookie.Value == "" {
-		return "", "", errors.New("missing access token")
+	if strings.ToLower(splitAuthorization[0]) != "bearer" {
+		return "", errors.New("authorization header missing bearer token")
 	}
+	idToken := splitAuthorization[1]
 
-	return accessCookie.Value, csrfToken, nil
+	return idToken, nil
 }
