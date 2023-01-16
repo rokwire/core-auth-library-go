@@ -18,24 +18,47 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
+
+	"github.com/rs/cors"
 )
 
 const (
 	hostPrefix       string = "__Host-"
 	refreshTokenName string = "rokwire-refresh-token"
 	csrfTokenName    string = "rokwire-csrf-token"
+
+	originHeader string = "Origin"
 )
 
-// -------------------------- Helper Functions --------------------------
+// SetupCORS sets up a new CORS handler for router using the given allowedOrigins and customHeaders. Used by building blocks for CSRF protection.
+// TODO: pass in more CORS option params?
+func SetupCORS(allowedOrigins []string, customHeaders []string, router http.Handler) http.Handler {
+	c := cors.New(cors.Options{
+		AllowedOrigins:   allowedOrigins,
+		AllowCredentials: true,
+		AllowedMethods:   []string{"GET", "DELETE", "POST", "PUT"},
+		AllowedHeaders:   append([]string{"X-Requested-With", "Content-Type", "Authorization"}, customHeaders...),
+		ExposedHeaders:   []string{"Content-Type"},
+		MaxAge:           300,
+	})
 
-// GetRequestTokens retrieves tokens from the request headers and/or cookies
-// Mobile Clients/Secure Servers: Access tokens must be provided as a Bearer token
+	return c.Handler(router)
+}
+
+// CheckOrigin verifies that the "Origin" header in r matches requiredOrigin. Used by web applications for CSRF protection.
+func CheckOrigin(r *http.Request, requiredOrigin string) (bool, error) {
+	origin := r.Header.Get(originHeader)
+	if origin == "" {
+		return false, errors.New("missing origin header")
+	}
+
+	return origin == requiredOrigin, nil
+}
+
+// GetRefreshToken retrieves refresh and CSRF tokens from the request headers and/or cookies. The refresh token is returned if the CSRF tokens match.
 //
-//	in the "Authorization" header
-//
-// Web Clients: Access tokens must be provided in the "rokwire-access-token" cookie
-//
-//	and CSRF tokens must be provided in the "CSRF" header
+// Refresh tokens must be provided in the "__Host-rokwire-refresh-token" cookie and CSRF tokens must be provided in the "__Host-rokwire-csrf-token" cookie and "Rokwire-Csrf-Token" header
 func GetRefreshToken(r *http.Request) (string, error) {
 	refreshCookie, err := r.Cookie(hostPrefix + refreshTokenName)
 	if err != nil {
@@ -50,7 +73,7 @@ func GetRefreshToken(r *http.Request) (string, error) {
 		return "", fmt.Errorf("error reading csrf token cookie: %v", err)
 	}
 	if csrfCookie == nil || csrfCookie.Value == "" {
-		return "", errors.New("missing csrf token")
+		return "", errors.New("missing csrf cookie token")
 	}
 
 	csrfToken := r.Header.Get(csrfTokenName)
@@ -58,8 +81,41 @@ func GetRefreshToken(r *http.Request) (string, error) {
 		return "", errors.New("csrf header")
 	}
 	if csrfCookie.Value != csrfToken {
-		return "", 
+		return "", errors.New("csrf cookie token does not match csrf header")
 	}
 
 	return refreshCookie.Value, nil
+}
+
+// NewRefreshCookie returns a new "__Host-rokwire-refresh-token" cookie with the given lifetime and the given token as its value
+// This should be used by web applications to send refresh tokens to a browser
+func NewRefreshCookie(token string, lifetime time.Duration) (*http.Cookie, error) {
+	if token == "" {
+		return nil, errors.New("token is missing")
+	}
+	return &http.Cookie{
+		Name:     hostPrefix + refreshTokenName,
+		Value:    token,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+		Expires:  time.Now().Add(lifetime),
+	}, nil
+}
+
+// NewCSRFCookie returns a new "__Host-rokwire-csrf-token" session cookie with the given token as its value
+// This should be used by web applications to send CSRF tokens to a browser
+func NewCSRFCookie(token string) (*http.Cookie, error) {
+	if token == "" {
+		return nil, errors.New("token is missing")
+	}
+	//Session cookie because MaxAge and Expires are unspecified
+	return &http.Cookie{
+		Name:     hostPrefix + csrfTokenName,
+		Value:    token,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		Path:     "/",
+	}, nil
 }

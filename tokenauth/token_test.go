@@ -207,34 +207,6 @@ func TestTokenAuth_CheckRequestTokens(t *testing.T) {
 	}
 }
 
-func TestTokenAuth_ValidateCsrfTokenClaims(t *testing.T) {
-	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
-
-	type args struct {
-		accessClaims *tokenauth.Claims
-		csrfClaims   *tokenauth.Claims
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tr, err := setupTestTokenAuth(authService, true, nil)
-			if err != nil || tr == nil {
-				t.Errorf("Error initializing test token auth: %v", err)
-				return
-			}
-			if err := tr.ValidateCsrfTokenClaims(tt.args.accessClaims, tt.args.csrfClaims); (err != nil) != tt.wantErr {
-				t.Errorf("TokenAuth.ValidateCsrfTokenClaims() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestTokenAuth_ValidatePermissionsClaim(t *testing.T) {
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 
@@ -291,7 +263,7 @@ func TestTokenAuth_ValidateScopeClaim(t *testing.T) {
 	}
 }
 
-func TestGetRequestTokens(t *testing.T) {
+func TestGetAccessToken(t *testing.T) {
 	type args struct {
 		r *http.Request
 	}
@@ -299,23 +271,19 @@ func TestGetRequestTokens(t *testing.T) {
 		name    string
 		args    args
 		want    string
-		want1   string
 		wantErr bool
 	}{
 		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := tokenauth.GetRequestTokens(tt.args.r)
+			got, err := tokenauth.GetAccessToken(tt.args.r)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("GetRequestTokens() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("TestGetAccessToken() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("GetRequestTokens() got = %v, want %v", got, tt.want)
-			}
-			if got1 != tt.want1 {
-				t.Errorf("GetRequestTokens() got1 = %v, want %v", got1, tt.want1)
+				t.Errorf("TestGetAccessToken() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
