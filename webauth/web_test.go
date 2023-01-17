@@ -23,7 +23,8 @@ import (
 
 func TestGetRefreshToken(t *testing.T) {
 	type args struct {
-		r *http.Request
+		r               *http.Request
+		csrfTokenLength int
 	}
 	tests := []struct {
 		name    string
@@ -35,13 +36,16 @@ func TestGetRefreshToken(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := webauth.GetRefreshToken(tt.args.r)
+			got, csrfCookie, err := webauth.GetRefreshToken(tt.args.r, tt.args.csrfTokenLength)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetRefreshToken() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
 				t.Errorf("GetRefreshToken() got = %v, want %v", got, tt.want)
+			}
+			if csrfCookie.Value == "" {
+				t.Error("GetRefreshToken() missing csrf cookie value")
 			}
 		})
 	}
