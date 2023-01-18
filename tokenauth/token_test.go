@@ -169,7 +169,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	}
 }
 
-func TestTokenAuth_CheckRequestTokens(t *testing.T) {
+func TestTokenAuth_CheckRequestToken(t *testing.T) {
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: nil}
 	authServiceReg := authservice.ServiceReg{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: nil}
@@ -195,13 +195,13 @@ func TestTokenAuth_CheckRequestTokens(t *testing.T) {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
 			}
-			got, err := tr.CheckRequestTokens(tt.args.r)
+			got, err := tr.CheckRequestToken(tt.args.r)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("TokenAuth.CheckRequestTokens() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("TokenAuth.CheckRequestToken() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("TokenAuth.CheckRequestTokens() = %v, want %v", got, tt.want)
+				t.Errorf("TokenAuth.CheckRequestToken() = %v, want %v", got, tt.want)
 			}
 		})
 	}

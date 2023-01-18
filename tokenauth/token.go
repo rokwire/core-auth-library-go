@@ -189,9 +189,9 @@ func (t *TokenAuth) retryCheckToken(token string, purpose string) (*Claims, erro
 	return retryClaims, retryErr
 }
 
-// CheckRequestTokens is a convenience function which retrieves and checks the access token included in a request and returns the claims
+// CheckRequestToken is a convenience function which retrieves and checks the access token included in a request and returns the claims
 // Access tokens must be provided as a Bearer token in the "Authorization" header
-func (t *TokenAuth) CheckRequestTokens(r *http.Request) (*Claims, error) {
+func (t *TokenAuth) CheckRequestToken(r *http.Request) (*Claims, error) {
 	accessToken, err := GetAccessToken(r)
 	if err != nil {
 		return nil, fmt.Errorf("error getting access token: %v", err)
