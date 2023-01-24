@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
@@ -34,7 +35,8 @@ const (
 
 // NOTE: any explicitly set cookie domain must match the calling application's host or be a valid superdomain of that host
 
-// SetupCORS sets up a new CORS handler for router using the given allowedOrigins and customHeaders. Used by building blocks for CSRF protection.
+// SetupCORS sets up a new CORS handler for router using the given allowedOrigins and customHeaders.
+// Used by building blocks to disallow requests from not allowed origins in web browsers.
 //
 // "X-Requested-With", "Content-Type", "Authorization", and "Origin" headers are allowed for cross domain requests by default.
 func SetupCORS(allowedOrigins []string, customHeaders []string, router http.Handler) http.Handler {
@@ -42,7 +44,7 @@ func SetupCORS(allowedOrigins []string, customHeaders []string, router http.Hand
 		AllowedOrigins:   allowedOrigins,
 		AllowCredentials: true,
 		AllowedMethods:   []string{"GET", "DELETE", "POST", "PUT"},
-		AllowedHeaders:   append([]string{"X-Requested-With", "Content-Type", "Authorization"}, customHeaders...),
+		AllowedHeaders:   append([]string{"X-Requested-With", "Content-Type", "Authorization", "Referer"}, customHeaders...),
 		ExposedHeaders:   []string{"Content-Type"},
 		MaxAge:           300,
 	})
@@ -51,10 +53,26 @@ func SetupCORS(allowedOrigins []string, customHeaders []string, router http.Hand
 }
 
 // CheckOrigin verifies that the "Origin" header in r matches requiredOrigin. Used by web applications for CSRF protection.
+//
+// requiredOrigin should be the full origin of the calling application (i.e., <scheme>://<hostname>:<port>).
+// <port> is optional, but the default port for the requested service is used if not given.
 func CheckOrigin(r *http.Request, requiredOrigin string) error {
+	if r == nil {
+		return errors.New("missing request")
+	}
+
 	origin := r.Header.Get(originHeader)
 	if origin == "" {
-		return errors.New("missing origin header")
+		if r.Referer() == "" {
+			return errors.New("missing origin and referer headers")
+		}
+
+		parsedReferer, err := url.Parse(r.Referer())
+		if err != nil {
+			return fmt.Errorf("error parsing referer: %v", err)
+		}
+
+		origin = fmt.Sprintf("%s://%s", parsedReferer.Scheme, parsedReferer.Host)
 	}
 	if origin != requiredOrigin {
 		return errors.New("required origin unsatisfied")
@@ -90,6 +108,10 @@ func CheckCSRFToken(r *http.Request, newTokenLength int) (http.Cookie, error) {
 	newCookie, err := NewCSRFCookie(newTokenLength)
 	if err != nil {
 		return newCookie, fmt.Errorf("error creating new csrf cookie: %v", err)
+	}
+
+	if r == nil {
+		return newCookie, errors.New("missing request")
 	}
 
 	csrfCookie, err := r.Cookie(hostPrefix + csrfTokenName)
