@@ -52,7 +52,7 @@ type Authorization interface {
 
 // CasbinAuthorization is a Casbin implementation of the authorization interface.
 type CasbinAuthorization struct {
-	enforcer casbin.Enforcer
+	enforcer *casbin.Enforcer
 }
 
 // Any will validate that if the casbin enforcer gives access to one or more of the provided values
@@ -89,7 +89,7 @@ func NewCasbinStringAuthorization(policyPath string) *CasbinAuthorization {
 		return nil
 	}
 
-	return &CasbinAuthorization{*enforcer}
+	return &CasbinAuthorization{enforcer}
 }
 
 // NewCasbinAuthorization returns a new Casbin enforcer
@@ -100,12 +100,12 @@ func NewCasbinAuthorization(modelPath string, policyPath string) *CasbinAuthoriz
 		return nil
 	}
 
-	return &CasbinAuthorization{*enforcer}
+	return &CasbinAuthorization{enforcer}
 }
 
 // CasbinScopeAuthorization is a Casbin implementation of the authorization interface for scope values.
 type CasbinScopeAuthorization struct {
-	enforcer  casbin.Enforcer
+	enforcer  *casbin.Enforcer
 	serviceID string
 }
 
@@ -170,7 +170,7 @@ func NewCasbinScopeAuthorization(policyPath string, serviceID string) *CasbinSco
 		return nil
 	}
 
-	return &CasbinScopeAuthorization{*enforcer, serviceID}
+	return &CasbinScopeAuthorization{enforcer, serviceID}
 }
 
 // -------------------------- Scope --------------------------
@@ -222,6 +222,7 @@ func (s Scope) IsSub(super Scope) bool {
 }
 
 // AssociatedResources returns the subset of scope resources that s grants access to or that grant access to s,
+//
 //	and a boolean indicator if a direct asymmetric match is found
 //
 //	Optionally trims the Resource of s from matched scopes' Resources
@@ -262,6 +263,7 @@ func ScopeFromString(scope string) (*Scope, error) {
 }
 
 // ScopesFromStrings creates a list of scope objects from a list of string representations.
+//
 //	If skipInvalid is true, invalid scopes will be skipped, if false an error will be returned
 func ScopesFromStrings(scopeStrings []string, skipInvalid bool) ([]Scope, error) {
 	var scopes []Scope
@@ -380,9 +382,10 @@ func CheckScopesGlobals(scopes []string, serviceID string) bool {
 
 // Returns whether the provided scope fields match each other
 // Inputs:
-//		have (string): scope field to compare against
-//		want (string): scope field to be compared
-//		matchPrefix (bool): If true, uses prefixes to match, if false uses equality
+//
+//	have (string): scope field to compare against
+//	want (string): scope field to be compared
+//	matchPrefix (bool): If true, uses prefixes to match, if false uses equality
 func matchScopeField(have string, want string, matchPrefix bool) bool {
 	if have == want || have == ScopeAll || (matchPrefix && strings.HasPrefix(want, have)) {
 		return true
