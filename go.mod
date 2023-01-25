@@ -7,6 +7,7 @@ require (
 	github.com/casbin/casbin/v2 v2.60.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/rokwire/logging-library-go/v2 v2.2.0
+	github.com/rs/cors v1.8.3
 	github.com/stretchr/testify v1.8.1
 	golang.org/x/sync v0.1.0
 	gopkg.in/go-playground/validator.v9 v9.31.0
@@ -19,7 +20,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
-	github.com/kr/pretty v0.1.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect

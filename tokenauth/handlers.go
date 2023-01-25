@@ -54,7 +54,7 @@ type StandardHandler struct {
 
 // Check checks the token in the provided request
 func (h StandardHandler) Check(req *http.Request) (int, *Claims, error) {
-	claims, err := h.tokenAuth.CheckRequestTokens(req)
+	claims, err := h.tokenAuth.CheckRequestToken(req)
 	if err != nil {
 		return http.StatusUnauthorized, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
 	}
