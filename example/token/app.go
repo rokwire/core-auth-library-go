@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
@@ -58,7 +59,7 @@ func (we WebAdapter) tokenAuthWrapFunc(handler http.HandlerFunc, authorization t
 		if authorization != nil {
 			responseStatus, claims, err := authorization.Check(req)
 			if err != nil {
-				log.Printf("authorization error: %v\n", err)
+				log.Printf("authorization error: %v\n", strings.ReplaceAll(err.Error(), "\n", " "))
 				http.Error(w, err.Error(), responseStatus)
 				return
 			}
