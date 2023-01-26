@@ -40,7 +40,7 @@ type Claims struct {
 	OrgID         string `json:"org_id" validate:"required"`    // Organization ID
 	AppID         string `json:"app_id"`                        // Application ID
 	SessionID     string `json:"session_id"`                    // Session ID
-	Purpose       string `json:"purpose" validate:"required"`   // Token purpose (eg. access, csrf...)
+	Purpose       string `json:"purpose" validate:"required"`   // Token purpose (eg. access...)
 	AuthType      string `json:"auth_type" validate:"required"` // Authentication method (eg. email, phone...)
 	Permissions   string `json:"permissions"`                   // Granted permissions
 	Scope         string `json:"scope"`                         // Granted scope
@@ -189,19 +189,12 @@ func (t *TokenAuth) retryCheckToken(token string, purpose string) (*Claims, erro
 	return retryClaims, retryErr
 }
 
-// CheckRequestTokens is a convenience function which retrieves and checks any tokens included in a request
-// and returns the access token claims
-// Mobile Clients/Secure Servers: Access tokens must be provided as a Bearer token
-//
-//	in the "Authorization" header
-//
-// Web Clients: Access tokens must be provided in the "rokwire-access-token" cookie
-//
-//	and CSRF tokens must be provided in the "CSRF" header
-func (t *TokenAuth) CheckRequestTokens(r *http.Request) (*Claims, error) {
-	accessToken, csrfToken, err := GetRequestTokens(r)
+// CheckRequestToken is a convenience function which retrieves and checks the access token included in a request and returns the claims
+// Access tokens must be provided as a Bearer token in the "Authorization" header
+func (t *TokenAuth) CheckRequestToken(r *http.Request) (*Claims, error) {
+	accessToken, err := GetAccessToken(r)
 	if err != nil {
-		return nil, fmt.Errorf("error getting request tokens: %v", err)
+		return nil, fmt.Errorf("error getting access token: %v", err)
 	}
 
 	accessClaims, err := t.CheckToken(accessToken, "access")
@@ -209,34 +202,7 @@ func (t *TokenAuth) CheckRequestTokens(r *http.Request) (*Claims, error) {
 		return nil, fmt.Errorf("error validating access token: %v", err)
 	}
 
-	if csrfToken != "" {
-		csrfClaims, err := t.CheckToken(csrfToken, "csrf")
-		if err != nil {
-			return nil, fmt.Errorf("error validating csrf token: %v", err)
-		}
-
-		err = t.ValidateCsrfTokenClaims(accessClaims, csrfClaims)
-		if err != nil {
-			return nil, fmt.Errorf("error validating csrf token claims: %v", err)
-		}
-	}
-
 	return accessClaims, nil
-}
-
-// ValidateCsrfTokenClaims will validate that the CSRF token claims appropriately match the access token claims
-//
-//	Returns nil on success and error on failure.
-func (t *TokenAuth) ValidateCsrfTokenClaims(accessClaims *Claims, csrfClaims *Claims) error {
-	if csrfClaims.Subject != accessClaims.Subject {
-		return fmt.Errorf("csrf sub (%s) does not match access sub (%s)", csrfClaims.Subject, accessClaims.Subject)
-	}
-
-	if csrfClaims.OrgID != accessClaims.OrgID {
-		return fmt.Errorf("csrf org_id (%s) does not match access org_id (%s)", csrfClaims.OrgID, accessClaims.OrgID)
-	}
-
-	return nil
 }
 
 // ValidatePermissionsClaim will validate that the provided token claims contain one or more of the required permissions
@@ -359,38 +325,23 @@ func NewTokenAuth(acceptRokwireTokens bool, serviceRegManager *authservice.Servi
 
 // -------------------------- Helper Functions --------------------------
 
-// GetRequestTokens retrieves tokens from the request headers and/or cookies
-// Mobile Clients/Secure Servers: Access tokens must be provided as a Bearer token
+// GetAccessToken retrieves an access token from the request headers
 //
-//	in the "Authorization" header
-//
-// Web Clients: Access tokens must be provided in the "rokwire-access-token" cookie
-//
-//	and CSRF tokens must be provided in the "CSRF" header
-func GetRequestTokens(r *http.Request) (string, string, error) {
+// Access tokens must be provided as a Bearer token in the "Authorization" header
+func GetAccessToken(r *http.Request) (string, error) {
 	authorizationHeader := r.Header.Get("Authorization")
-	if authorizationHeader != "" {
-		splitAuthorization := strings.Fields(authorizationHeader)
-		if len(splitAuthorization) != 2 {
-			return "", "", errors.New("invalid authorization header format")
-		}
-		if strings.ToLower(splitAuthorization[0]) != "bearer" {
-			return "", "", errors.New("authorization header missing bearer token")
-		}
-		idToken := splitAuthorization[1]
-
-		return idToken, "", nil
+	if authorizationHeader == "" {
+		return "", errors.New("missing access token")
 	}
 
-	csrfToken := r.Header.Get("CSRF")
-	if csrfToken == "" {
-		return "", "", errors.New("missing authorization and csrf header")
+	splitAuthorization := strings.Fields(authorizationHeader)
+	if len(splitAuthorization) != 2 {
+		return "", errors.New("invalid authorization header format")
 	}
-
-	accessCookie, err := r.Cookie("rokwire-access-token")
-	if err != nil || accessCookie == nil || accessCookie.Value == "" {
-		return "", "", errors.New("missing access token")
+	if strings.ToLower(splitAuthorization[0]) != "bearer" {
+		return "", errors.New("authorization header missing bearer token")
 	}
+	idToken := splitAuthorization[1]
 
-	return accessCookie.Value, csrfToken, nil
+	return idToken, nil
 }

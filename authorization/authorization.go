@@ -52,7 +52,7 @@ type Authorization interface {
 
 // CasbinAuthorization is a Casbin implementation of the authorization interface.
 type CasbinAuthorization struct {
-	enforcer casbin.Enforcer
+	enforcer *casbin.Enforcer
 }
 
 // Any will validate that if the casbin enforcer gives access to one or more of the provided values
@@ -89,7 +89,7 @@ func NewCasbinStringAuthorization(policyPath string) *CasbinAuthorization {
 		return nil
 	}
 
-	return &CasbinAuthorization{*enforcer}
+	return &CasbinAuthorization{enforcer}
 }
 
 // NewCasbinAuthorization returns a new Casbin enforcer
@@ -100,12 +100,12 @@ func NewCasbinAuthorization(modelPath string, policyPath string) *CasbinAuthoriz
 		return nil
 	}
 
-	return &CasbinAuthorization{*enforcer}
+	return &CasbinAuthorization{enforcer}
 }
 
 // CasbinScopeAuthorization is a Casbin implementation of the authorization interface for scope values.
 type CasbinScopeAuthorization struct {
-	enforcer  casbin.Enforcer
+	enforcer  *casbin.Enforcer
 	serviceID string
 }
 
@@ -170,7 +170,7 @@ func NewCasbinScopeAuthorization(policyPath string, serviceID string) *CasbinSco
 		return nil
 	}
 
-	return &CasbinScopeAuthorization{*enforcer, serviceID}
+	return &CasbinScopeAuthorization{enforcer, serviceID}
 }
 
 // -------------------------- Scope --------------------------

@@ -468,7 +468,7 @@ func ParseSignatureAuthHeader(header string) (*SignatureAuthHeader, error) {
 	for _, param := range strings.Split(header, ",") {
 		parts := strings.SplitN(param, "=", 2)
 		if len(parts[0]) == 0 || len(parts[1]) == 0 {
-			return nil, fmt.Errorf("invalid format for param: %s", param)
+			return nil, errors.New("invalid format for signature header param")
 		}
 
 		key := parts[0]
@@ -476,7 +476,7 @@ func ParseSignatureAuthHeader(header string) (*SignatureAuthHeader, error) {
 
 		err := sigHeader.SetField(key, val)
 		if err != nil {
-			return nil, fmt.Errorf("unable to decode param: %v", err)
+			return nil, fmt.Errorf("unable to decode signature header param: %v", err)
 		}
 	}
 
