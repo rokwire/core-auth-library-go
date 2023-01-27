@@ -16,11 +16,6 @@ package sigauth
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/ecdsa"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -33,6 +28,7 @@ import (
 
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"gopkg.in/go-playground/validator.v9"
 )
 
@@ -40,32 +36,12 @@ import (
 type SignatureAuth struct {
 	serviceRegManager *authservice.ServiceRegManager
 
-	serviceKey authutils.PrivateKey
+	serviceKey *keys.PrivKey
 }
 
 // Sign generates and returns a signature for the provided message
 func (s *SignatureAuth) Sign(message []byte) (string, error) {
-	var opts crypto.SignerOpts
-	var err error
-
-	switch s.serviceKey.(type) {
-	case *rsa.PrivateKey, *ecdsa.PrivateKey:
-		message, err = authutils.HashSha256(message)
-		if err != nil {
-			return "", fmt.Errorf("error hashing message: %v", err)
-		}
-		opts = &rsa.PSSOptions{Hash: crypto.SHA256}
-	case ed25519.PrivateKey:
-		opts = &rsa.PSSOptions{Hash: 0}
-	}
-	signature, err := s.serviceKey.Sign(rand.Reader, message, opts)
-	if err != nil {
-		return "", fmt.Errorf("error signing message: %v", err)
-	}
-
-	sigB64 := base64.StdEncoding.EncodeToString(signature)
-
-	return sigB64, nil
+	return s.serviceKey.Sign(message)
 }
 
 // CheckServiceSignature validates the provided message signature from the given service
@@ -75,44 +51,17 @@ func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, 
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
-	return s.CheckSignature(serviceReg.PubKey.Key, message, signature)
+	return s.CheckSignature(serviceReg.PubKey, message, signature)
 }
 
 // CheckSignature validates the provided message signature from the given public key
-func (s *SignatureAuth) CheckSignature(pubKey authutils.PublicKey, message []byte, signature string) error {
-	if pubKey == nil {
-		return errors.New("public key is nil")
-	}
-
+func (s *SignatureAuth) CheckSignature(pubKey *keys.PubKey, message []byte, signature string) error {
 	sigBytes, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return fmt.Errorf("error decoding signature: %v", err)
 	}
 
-	hash, err := authutils.HashSha256(message)
-	if err != nil {
-		return fmt.Errorf("error hashing message: %v", err)
-	}
-
-	valid := true
-	switch key := pubKey.(type) {
-	case *rsa.PublicKey:
-		err = rsa.VerifyPSS(key, crypto.SHA256, hash, sigBytes, nil)
-	case *ecdsa.PublicKey:
-		valid = ecdsa.VerifyASN1(key, hash, sigBytes)
-	case ed25519.PublicKey:
-		valid = ed25519.Verify(key, hash, sigBytes)
-	default:
-		valid = false
-	}
-	if err != nil {
-		return fmt.Errorf("error verifying signature: %v", err)
-	}
-	if !valid {
-		return fmt.Errorf("invalid signature")
-	}
-
-	return nil
+	return pubKey.Verify(message, sigBytes)
 }
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
@@ -208,7 +157,7 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", fmt.Errorf("request signer fingerprint (%s) does not match any of the required services %v", sigAuthHeader.KeyID, requiredServiceIDs)
 	}
 
-	err = s.CheckSignature(serviceReg.PubKey.Key, []byte(sigString), sigAuthHeader.Signature)
+	err = s.CheckSignature(serviceReg.PubKey, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return "", fmt.Errorf("error validating signature: %v", err)
 	}
@@ -219,13 +168,13 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 // CheckRequestSignature validates the signature on the provided request
 //
 //	The request must be signed by the private key paired with the provided public key
-func (s *SignatureAuth) CheckRequestSignature(r *Request, key authutils.PublicKey) error {
+func (s *SignatureAuth) CheckRequestSignature(r *Request, key *keys.PubKey) error {
 	if r == nil {
 		return errors.New("request is nil")
 	}
 
 	if key == nil {
-		return errors.New("public key is nil")
+		return errors.New("pubkey is nil")
 	}
 
 	sigString, sigAuthHeader, err := s.CheckRequest(r)
@@ -295,7 +244,7 @@ func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey authutils.PrivateKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey *keys.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
 	if serviceKey == nil {
 		return nil, errors.New("service key is missing")
 	}
