@@ -23,7 +23,7 @@ import (
 	"net/http"
 
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/sigauth"
 )
 
@@ -145,7 +145,7 @@ func main() {
 		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
 
-	privKey, _, err := authutils.NewAsymmetricKeyPair(authutils.RSA, 2048)
+	privKey, _, err := keys.NewAsymmetricKeyPair(keys.RSA, 2048)
 	if err != nil {
 		log.Fatalf("Error generating new rsa key pair: %v", err)
 	}

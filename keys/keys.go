@@ -26,6 +26,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
@@ -122,7 +123,9 @@ func (p *PrivKey) Sign(message []byte) (string, error) {
 		return "", fmt.Errorf("privkey is nil")
 	}
 
-	var signature []byte
+	var key privateKey
+	var ok bool
+	var hash crypto.Hash
 	var err error
 	switch p.Alg {
 	case RSA:
@@ -130,31 +133,26 @@ func (p *PrivKey) Sign(message []byte) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("error hashing message: %v", err)
 		}
-		key, ok := p.Key.(*rsa.PrivateKey)
-		if !ok {
-			return "", errors.New("key type does not match algorithm")
-		}
-		signature, err = key.Sign(rand.Reader, message, &rsa.PSSOptions{Hash: crypto.SHA256})
+		key, ok = p.Key.(*rsa.PrivateKey)
+		hash = crypto.SHA256
 	case ECDSA:
 		message, err = authutils.HashSha256(message)
 		if err != nil {
 			return "", fmt.Errorf("error hashing message: %v", err)
 		}
-		key, ok := p.Key.(*ecdsa.PrivateKey)
-		if !ok {
-			return "", errors.New("key type does not match algorithm")
-		}
-		signature, err = key.Sign(rand.Reader, message, &rsa.PSSOptions{Hash: crypto.SHA256})
+		key, ok = p.Key.(*ecdsa.PrivateKey)
+		hash = crypto.SHA256
 	case EDDSA:
 		// edwards curve does not handle hashed messages
-		key, ok := p.Key.(ed25519.PrivateKey)
-		if !ok {
-			return "", errors.New("key type does not match algorithm")
-		}
-		signature, err = key.Sign(rand.Reader, message, &rsa.PSSOptions{Hash: 0})
+		key, ok = p.Key.(ed25519.PrivateKey)
+		hash = 0
 	default:
 		err = errors.New("unsupported algorithm")
 	}
+	if !ok {
+		return "", errors.New("key type does not match algorithm")
+	}
+	signature, err := key.Sign(rand.Reader, message, &rsa.PSSOptions{Hash: hash})
 	if err != nil {
 		return "", fmt.Errorf("error signing message: %v", err)
 	}
@@ -168,28 +166,23 @@ func (p *PrivKey) PubKey() (*PubKey, error) {
 		return nil, fmt.Errorf("privkey is nil")
 	}
 
+	var key privateKey
+	var ok bool
 	public := PubKey{Alg: p.Alg}
 	switch p.Alg {
 	case RSA:
-		key, ok := p.Key.(*rsa.PrivateKey)
-		if !ok {
-			return nil, errors.New("key type does not match algorithm")
-		}
-		public.Key = key.PublicKey
+		key, ok = p.Key.(*rsa.PrivateKey)
 	case ECDSA:
-		key, ok := p.Key.(*ecdsa.PrivateKey)
-		if !ok {
-			return nil, errors.New("key type does not match algorithm")
-		}
-		public.Key = key.PublicKey
+		key, ok = p.Key.(*ecdsa.PrivateKey)
 	case EDDSA:
-		// edwards curve does not handle hashed messages
-		key, ok := p.Key.(ed25519.PrivateKey)
-		if !ok {
-			return nil, errors.New("key type does not match algorithm")
-		}
-		public.Key = key.Public()
+		key, ok = p.Key.(ed25519.PrivateKey)
+	default:
+		return nil, errors.New("unsupported algorithm")
 	}
+	if !ok {
+		return nil, errors.New("key type does not match algorithm")
+	}
+	public.Key = key.Public()
 
 	err := public.Encode()
 	if err != nil {
@@ -201,6 +194,28 @@ func (p *PrivKey) PubKey() (*PubKey, error) {
 	}
 
 	return &public, nil
+}
+
+// Equal determines whether the privkey is equivalent to other
+func (p *PrivKey) Equal(other *PrivKey) bool {
+	if p == nil || other == nil {
+		return p == other
+	}
+
+	switch p.Alg {
+	case RSA, ECDSA, EDDSA:
+		key, ok := p.Key.(privateKey)
+		if !ok {
+			return false
+		}
+		otherKey, ok := other.Key.(privateKey)
+		if !ok {
+			return false
+		}
+		return key.Equal(otherKey) && p.Alg == other.Alg
+	}
+
+	return false
 }
 
 // -------------------- PubKey --------------------
@@ -341,9 +356,22 @@ func (p *PubKey) SetKeyFingerprint() error {
 		return fmt.Errorf("pubkey is nil")
 	}
 
-	pubASN1, err := x509.MarshalPKIXPublicKey(p.Key)
-	if err != nil {
-		return fmt.Errorf("error marshalling public key: %v", err)
+	var pubASN1 []byte
+	var err error
+	switch p.Alg {
+	case RSA:
+		rsaKey, ok := p.Key.(*rsa.PublicKey)
+		if !ok {
+			return errors.New("key type does not match algorithm")
+		}
+		pubASN1 = x509.MarshalPKCS1PublicKey(rsaKey)
+	case ECDSA, EDDSA:
+		pubASN1, err = x509.MarshalPKIXPublicKey(p.Key)
+		if err != nil {
+			return fmt.Errorf("error marshalling public key: %v", err)
+		}
+	default:
+		return errors.New("unsupported algorithm")
 	}
 
 	hash, err := authutils.HashSha256(pubASN1)
@@ -353,6 +381,28 @@ func (p *PubKey) SetKeyFingerprint() error {
 
 	p.KeyID = "SHA256:" + base64.StdEncoding.EncodeToString(hash)
 	return nil
+}
+
+// Equal determines whether the pubkey is equivalent to other
+func (p *PubKey) Equal(other *PubKey) bool {
+	if p == nil || other == nil {
+		return p == other
+	}
+
+	switch p.Alg {
+	case RSA, ECDSA, EDDSA:
+		key, ok := p.Key.(publicKey)
+		if !ok {
+			return false
+		}
+		otherKey, ok := other.Key.(publicKey)
+		if !ok {
+			return false
+		}
+		return key.Equal(otherKey) && p.Alg == other.Alg && p.KeyID == other.KeyID
+	}
+
+	return false
 }
 
 // NewAsymmetricKeyPair returns a new keypair of the given keyType
@@ -402,4 +452,14 @@ func NewAsymmetricKeyPair(algorithm string, param interface{}) (*PrivKey, *PubKe
 	public.Alg = algorithm
 
 	return &private, &public, nil
+}
+
+type privateKey interface {
+	Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error)
+	Public() crypto.PublicKey
+	Equal(x crypto.PrivateKey) bool
+}
+
+type publicKey interface {
+	Equal(x crypto.PublicKey) bool
 }

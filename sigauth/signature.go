@@ -36,7 +36,8 @@ import (
 type SignatureAuth struct {
 	serviceRegManager *authservice.ServiceRegManager
 
-	serviceKey *keys.PrivKey
+	serviceKey    *keys.PrivKey
+	servicePubKey *keys.PubKey
 }
 
 // Sign generates and returns a signature for the provided message
@@ -88,15 +89,14 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
-	publicKey, ok := s.serviceKey.Public().(authutils.PublicKey)
-	if !ok {
-		return errors.New("unrecognized service key type")
+	if s.servicePubKey.KeyID == "" {
+		err = s.servicePubKey.SetKeyFingerprint()
+		if err != nil {
+			return fmt.Errorf("error setting service key fingerprint: %v", err)
+		}
 	}
-	keyID, err := authutils.GetKeyFingerprint(publicKey)
-	if err != nil {
-		return fmt.Errorf("error getting service key fingerprint: %v", err)
-	}
-	sigAuthHeader := SignatureAuthHeader{KeyID: keyID, Algorithm: "rsa-sha256", Headers: headers}
+
+	sigAuthHeader := SignatureAuthHeader{KeyID: s.servicePubKey.KeyID, Algorithm: s.servicePubKey.Alg, Headers: headers}
 
 	sigString, err := BuildSignatureString(signedRequest, headers)
 	if err != nil {
@@ -213,8 +213,8 @@ func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, 
 		return "", nil, fmt.Errorf("error parsing signature authorization header: %v", err)
 	}
 
-	if sigAuthHeader.Algorithm != "rsa-sha256" {
-		return "", nil, fmt.Errorf("signing algorithm (%s) does not match rsa-sha256", sigAuthHeader.Algorithm)
+	if sigAuthHeader.Algorithm != s.servicePubKey.Alg {
+		return "", nil, fmt.Errorf("signing algorithm (%s) does not match %s", sigAuthHeader.Algorithm, s.servicePubKey.Alg)
 	}
 
 	sigString, err := BuildSignatureString(r, sigAuthHeader.Headers)
@@ -259,7 +259,12 @@ func NewSignatureAuth(serviceKey *keys.PrivKey, serviceRegManager *authservice.S
 		}
 	}
 
-	return &SignatureAuth{serviceKey: serviceKey, serviceRegManager: serviceRegManager}, nil
+	servicePubKey, err := serviceKey.PubKey()
+	if err != nil {
+		return nil, fmt.Errorf("error getting pubkey for service key: %v", err)
+	}
+
+	return &SignatureAuth{serviceKey: serviceKey, servicePubKey: servicePubKey, serviceRegManager: serviceRegManager}, nil
 }
 
 // BuildSignatureString builds the string to be signed for the provided request
