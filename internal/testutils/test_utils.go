@@ -19,13 +19,14 @@ import (
 
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 )
 
-// GetSamplePubKeyPem returns a sample public key PEM
+// GetSampleRSAPubKeyPem returns a sample public key PEM
 //
-//	Matches GetSamplePrivKeyPem
-func GetSamplePubKeyPem() string {
+//	Matches GetSampleRSAPrivKeyPem
+func GetSampleRSAPubKeyPem() string {
 	return `-----BEGIN RSA PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq2gWKpPRb2xQRee4OXbg
 KMzGAy8aPcAqgfL8xmi7tozoi917QHL4qi4PHn/7v0K6eAKdq1Vh6dlLmcWbl1Gy
@@ -37,11 +38,11 @@ SwIDAQAB
 -----END RSA PUBLIC KEY-----`
 }
 
-// GetSamplePubKey returns a sample public key
-func GetSamplePubKey() (*keys.PubKey, error) {
+// GetSampleRS256PubKey returns a sample RSA with SHA256 PubKey
+func GetSampleRS256PubKey() (*keys.PubKey, error) {
 	key := keys.PubKey{
-		KeyPem: GetSamplePubKeyPem(),
-		Alg:    keys.RSA,
+		KeyPem: GetSampleRSAPubKeyPem(),
+		Alg:    authutils.RS256,
 	}
 
 	err := key.Decode()
@@ -52,15 +53,15 @@ func GetSamplePubKey() (*keys.PubKey, error) {
 	return &key, nil
 }
 
-// GetSamplePubKeyFingerprint returns a sample public key fingerprint
-func GetSamplePubKeyFingerprint() string {
+// GetSampleRSAPubKeyFingerprint returns a sample RSA public key fingerprint
+func GetSampleRSAPubKeyFingerprint() string {
 	return "SHA256:I3HxcO3FpUM6MG7+rCASuePfl92JEcdz2htV7SP0Y20="
 }
 
-// GetSamplePrivKeyPem returns a sample private key PEM
+// GetSampleRSAPrivKeyPem returns a sample RSA private key PEM
 //
 //	Matches GetSamplePubKeyPem
-func GetSamplePrivKeyPem() string {
+func GetSampleRSAPrivKeyPem() string {
 	return `-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAq2gWKpPRb2xQRee4OXbgKMzGAy8aPcAqgfL8xmi7tozoi917
 QHL4qi4PHn/7v0K6eAKdq1Vh6dlLmcWbl1Gy4IDkf8bDAmUKdezWw6jrnKTW+XZ8
@@ -90,9 +91,9 @@ Rv8MYg+8RiGNsPSmC6qTu9ykuRn3a2DF6/vlrZuWlnRnkI6EF91Q
 -----END RSA PRIVATE KEY-----`
 }
 
-// GetSamplePrivKey returns a sample private key
-func GetSamplePrivKey() (*keys.PrivKey, error) {
-	privKey := keys.PrivKey{KeyPem: GetSamplePrivKeyPem(), Alg: keys.RSA}
+// GetSampleRS256PrivKey returns a sample RSA with SHA256 PrivKey
+func GetSampleRS256PrivKey() (*keys.PrivKey, error) {
+	privKey := keys.PrivKey{KeyPem: GetSampleRSAPrivKeyPem(), Alg: authutils.RS256}
 
 	err := privKey.Decode()
 	if err != nil {
@@ -140,7 +141,7 @@ func SetupTestServiceAccountManager(authService *authservice.AuthService, mockDa
 
 // SetupExampleMockServiceRegLoader returns an example mock ServiceRegLoader
 func SetupExampleMockServiceRegLoader() (*mocks.ServiceRegLoader, error) {
-	samplePubKey, err := GetSamplePubKey()
+	samplePubKey, err := GetSampleRS256PubKey()
 	if err != nil {
 		return nil, fmt.Errorf("error getting sample pubkey: %v", err)
 	}

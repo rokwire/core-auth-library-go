@@ -27,10 +27,10 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/tokenauth"
-	"github.com/rokwire/logging-library-go/v2/errors"
 )
 
 func setupTestTokenAuth(authService *authservice.AuthService, acceptRokwire bool, mockLoader *mocks.ServiceRegLoader) (*tokenauth.TokenAuth, error) {
@@ -41,19 +41,6 @@ func setupTestTokenAuth(authService *authservice.AuthService, acceptRokwire bool
 	permissionAuth := authorization.NewCasbinStringAuthorization("./test_permissions_authorization_policy.csv")
 	scopeAuth := authorization.NewCasbinScopeAuthorization("./test_scope_authorization_policy.csv", "sample")
 	return tokenauth.NewTokenAuth(acceptRokwire, manager, permissionAuth, scopeAuth)
-}
-
-func generateTestToken(claims *tokenauth.Claims, key *keys.PrivKey) (string, error) {
-	if key == nil {
-		return "", errors.New("private key is missing")
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	pubKey, err := key.PubKey()
-	if err != nil {
-		return "", fmt.Errorf("error getting pubkey: %v", err)
-	}
-	token.Header["kid"] = pubKey.KeyID
-	return token.SignedString(key.Key)
 }
 
 func getTestClaims(sub string, aud string, orgID string, purpose string, issuer string, permissions string, scope string, auth_type string, exp int64) *tokenauth.Claims {
@@ -81,9 +68,9 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+	pubKey, err := testutils.GetSampleRS256PubKey()
 	if err != nil {
-		t.Errorf("Error getting sample pubkey: %v", err)
+		t.Errorf("Error getting sample rs526 pubkey: %v", err)
 		return
 	}
 
@@ -93,15 +80,15 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
-	samplePrivKey, err := testutils.GetSamplePrivKey()
+	samplePrivKey, err := testutils.GetSampleRS256PrivKey()
 	if err != nil {
-		t.Errorf("Error getting sample privkey: %v", err)
+		t.Errorf("Error getting sample rs256 privkey: %v", err)
 		return
 	}
 
 	// Valid rokwire
 	validClaims := getSampleValidClaims()
-	validToken, err := generateTestToken(validClaims, samplePrivKey)
+	validToken, err := tokenauth.GenerateSignedToken(validClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing valid token: %v", err)
 	}
@@ -109,13 +96,13 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	// Valid audience
 	validAudClaims := getSampleValidClaims()
 	validAudClaims.Audience = "test"
-	validAudToken, err := generateTestToken(validAudClaims, samplePrivKey)
+	validAudToken, err := tokenauth.GenerateSignedToken(validAudClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing valid aud token: %v", err)
 	}
 
 	// Expired
-	expiredToken, err := generateTestToken(getSampleExpiredClaims(), samplePrivKey)
+	expiredToken, err := tokenauth.GenerateSignedToken(getSampleExpiredClaims(), samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing expired token: %v", err)
 	}
@@ -123,7 +110,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	// Invalid issuer
 	invalidIssClaims := getSampleValidClaims()
 	invalidIssClaims.Issuer = "https://auth2.rokwire.com"
-	invalidIssToken, err := generateTestToken(invalidIssClaims, samplePrivKey)
+	invalidIssToken, err := tokenauth.GenerateSignedToken(invalidIssClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing invalid iss token: %v", err)
 	}
@@ -131,7 +118,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	// Invalid audience
 	invalidAudClaims := getSampleValidClaims()
 	invalidAudClaims.Audience = "test2"
-	invalidAudToken, err := generateTestToken(invalidAudClaims, samplePrivKey)
+	invalidAudToken, err := tokenauth.GenerateSignedToken(invalidAudClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing invalid aud token: %v", err)
 	}
@@ -304,10 +291,50 @@ func TestGetAccessToken(t *testing.T) {
 	}
 }
 
-func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+func TestGenerateSignedToken(t *testing.T) {
+	validClaims := getSampleValidClaims()
+	key, err := testutils.GetSampleRS256PrivKey()
 	if err != nil {
-		t.Errorf("Error getting sample pubkey: %v", err)
+		t.Errorf("Error getting sample RS256 privkey: %v", err)
+		return
+	}
+	badAlgKey := &keys.PrivKey{Key: key.Key, Alg: "test"}
+
+	badKey, _, err := keys.NewAsymmetricKeyPair(authutils.EC256, 0)
+	if err != nil {
+		t.Errorf("Error generating test ec privkey: %v", err)
+		return
+	}
+	badKey.Alg = key.Alg
+
+	type args struct {
+		claims *tokenauth.Claims
+		key    *keys.PrivKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"missing key", args{validClaims, nil}, true},
+		{"unsupported alg", args{validClaims, badAlgKey}, true},
+		{"mismatched alg and key", args{validClaims, badKey}, true},
+		{"success", args{validClaims, key}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := tokenauth.GenerateSignedToken(tt.args.claims, tt.args.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateSignedToken() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
+	pubKey, err := testutils.GetSampleRS256PubKey()
+	if err != nil {
+		t.Errorf("Error getting sample rs256 pubkey: %v", err)
 		return
 	}
 
@@ -351,9 +378,9 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+	pubKey, err := testutils.GetSampleRS256PubKey()
 	if err != nil {
-		t.Errorf("Error getting sample pubkey: %v", err)
+		t.Errorf("Error getting sample rs256 pubkey: %v", err)
 		return
 	}
 

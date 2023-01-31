@@ -15,8 +15,9 @@
 package authutils
 
 import (
+	"crypto"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -29,6 +30,27 @@ const (
 	AllApps string = "all"
 	//AllOrgs indicates that all orgs may be accessed
 	AllOrgs string = "all"
+
+	// RS256 represents a RSA key with SHA-256 signing method
+	RS256 string = "RS256"
+	// RS384 represents a RSA key with SHA-384 signing method
+	RS384 string = "RS384"
+	// RS512 represents a RSA key with SHA-512 signing method
+	RS512 string = "RS512"
+	// PS256 represents a RSA-PSS key with SHA-256 signing method
+	PS256 string = "PS256"
+	// PS384 represents a RSA-PSS key with SHA-384 signing method
+	PS384 string = "PS384"
+	// PS512 represents a RSA-PSS key with SHA-512 signing method
+	PS512 string = "PS512"
+	// EC256 represents an Elliptic Curve with SHA-256 signing method
+	EC256 string = "EC256"
+	// EC384 represents an Elliptic Curve with SHA-384 signing method
+	EC384 string = "EC384"
+	// EC512 represents an Elliptic Curve with SHA-512 signing method
+	EC512 string = "EC512"
+	// EdDSA represents an Edwards Curve signing method
+	EdDSA string = "EdDSA"
 )
 
 // ContainsString returns true if the provided value is in the provided slice
@@ -53,13 +75,18 @@ func RemoveString(slice []string, val string) ([]string, bool) {
 	return slice, false
 }
 
-// HashSha256 returns the SHA256 hash of the input
-func HashSha256(data []byte) ([]byte, error) {
+// Hash returns the hash of the input corresponding to the given algorithm
+func Hash(data []byte, alg string) ([]byte, error) {
 	if data == nil {
 		return nil, fmt.Errorf("cannot hash nil data")
 	}
 
-	hasher := sha256.New()
+	hash := HashFromAlg(alg)
+	if hash == 0 {
+		return nil, fmt.Errorf("unsupported hashing method %s", alg)
+	}
+
+	hasher := hash.New()
 	_, err := hasher.Write(data)
 	if err != nil {
 		return nil, fmt.Errorf("error writing data: %v", err)
@@ -89,6 +116,10 @@ func ReadResponseBody(resp *http.Response) ([]byte, error) {
 
 // GenerateRandomBytes returns securely generated random bytes
 func GenerateRandomBytes(n int) ([]byte, error) {
+	if n < 0 {
+		return nil, errors.New("number of bytes cannot be negative")
+	}
+
 	b := make([]byte, n)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -102,4 +133,46 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 func GenerateRandomString(s int) (string, error) {
 	b, err := GenerateRandomBytes(s)
 	return base64.RawURLEncoding.EncodeToString(b), err
+}
+
+// KeyTypeFromAlg returns a string indicating the key type associated with alg
+func KeyTypeFromAlg(alg string) string {
+	switch alg {
+	case RS256, RS384, RS512, PS256, PS384, PS512:
+		return "RSA"
+	case EC256, EC384, EC512:
+		return "EC"
+	case EdDSA:
+		return "EdDSA"
+	default:
+		return ""
+	}
+}
+
+// HashFromAlg returns a string indicating the hash function associated with alg
+func HashFromAlg(alg string) crypto.Hash {
+	switch alg {
+	case RS256, PS256, EC256:
+		return crypto.SHA256
+	case RS384, PS384, EC384:
+		return crypto.SHA384
+	case RS512, PS512, EC512:
+		return crypto.SHA512
+	default:
+		return 0
+	}
+}
+
+// EllipticCurveFromAlg returns the elliptic curve associated with alg
+func EllipticCurveFromAlg(alg string) elliptic.Curve {
+	switch alg {
+	case EC256:
+		return elliptic.P256()
+	case EC384:
+		return elliptic.P384()
+	case EC512:
+		return elliptic.P521()
+	default:
+		return nil
+	}
 }

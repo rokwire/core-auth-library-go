@@ -208,8 +208,7 @@ func TestAuthService_ValidateServiceRegistrationKey(t *testing.T) {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
 	}
-	_, wrongKey, err := keys.NewAsymmetricKeyPair(keys.RSA, 2048)
-	// err = wrongKey.Decode()
+	_, wrongKey, err := keys.NewAsymmetricKeyPair(authutils.RS256, 2048)
 	if err != nil {
 		t.Errorf("Error generating new pubkey: %v", err)
 		return
