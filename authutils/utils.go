@@ -18,6 +18,7 @@ import (
 	"crypto"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -43,12 +44,12 @@ const (
 	PS384 string = "PS384"
 	// PS512 represents a RSA-PSS key with SHA-512 signing method
 	PS512 string = "PS512"
-	// EC256 represents an Elliptic Curve with SHA-256 signing method
-	EC256 string = "EC256"
-	// EC384 represents an Elliptic Curve with SHA-384 signing method
-	EC384 string = "EC384"
-	// EC512 represents an Elliptic Curve with SHA-512 signing method
-	EC512 string = "EC512"
+	// ES256 represents an Elliptic Curve with SHA-256 signing method
+	ES256 string = "ES256"
+	// ES384 represents an Elliptic Curve with SHA-384 signing method
+	ES384 string = "ES384"
+	// ES512 represents an Elliptic Curve with SHA-512 signing method
+	ES512 string = "ES512"
 	// EdDSA represents an Edwards Curve signing method
 	EdDSA string = "EdDSA"
 )
@@ -75,18 +76,13 @@ func RemoveString(slice []string, val string) ([]string, bool) {
 	return slice, false
 }
 
-// Hash returns the hash of the input corresponding to the given algorithm
-func Hash(data []byte, alg string) ([]byte, error) {
+// HashSha256 returns the SHA256 hash of the input
+func HashSha256(data []byte) ([]byte, error) {
 	if data == nil {
 		return nil, fmt.Errorf("cannot hash nil data")
 	}
 
-	hash := HashFromAlg(alg)
-	if hash == 0 {
-		return nil, fmt.Errorf("unsupported hashing method %s", alg)
-	}
-
-	hasher := hash.New()
+	hasher := sha256.New()
 	_, err := hasher.Write(data)
 	if err != nil {
 		return nil, fmt.Errorf("error writing data: %v", err)
@@ -140,7 +136,7 @@ func KeyTypeFromAlg(alg string) string {
 	switch alg {
 	case RS256, RS384, RS512, PS256, PS384, PS512:
 		return "RSA"
-	case EC256, EC384, EC512:
+	case ES256, ES384, ES512:
 		return "EC"
 	case EdDSA:
 		return "EdDSA"
@@ -152,11 +148,11 @@ func KeyTypeFromAlg(alg string) string {
 // HashFromAlg returns a string indicating the hash function associated with alg
 func HashFromAlg(alg string) crypto.Hash {
 	switch alg {
-	case RS256, PS256, EC256:
+	case RS256, PS256, ES256:
 		return crypto.SHA256
-	case RS384, PS384, EC384:
+	case RS384, PS384, ES384:
 		return crypto.SHA384
-	case RS512, PS512, EC512:
+	case RS512, PS512, ES512:
 		return crypto.SHA512
 	default:
 		return 0
@@ -166,11 +162,11 @@ func HashFromAlg(alg string) crypto.Hash {
 // EllipticCurveFromAlg returns the elliptic curve associated with alg
 func EllipticCurveFromAlg(alg string) elliptic.Curve {
 	switch alg {
-	case EC256:
+	case ES256:
 		return elliptic.P256()
-	case EC384:
+	case ES384:
 		return elliptic.P384()
-	case EC512:
+	case ES512:
 		return elliptic.P521()
 	default:
 		return nil

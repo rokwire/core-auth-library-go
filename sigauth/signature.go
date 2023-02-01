@@ -57,12 +57,7 @@ func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, 
 
 // CheckSignature validates the provided message signature from the given public key
 func (s *SignatureAuth) CheckSignature(pubKey *keys.PubKey, message []byte, signature string) error {
-	sigBytes, err := base64.StdEncoding.DecodeString(signature)
-	if err != nil {
-		return fmt.Errorf("error decoding signature: %v", err)
-	}
-
-	return pubKey.Verify(message, sigBytes)
+	return pubKey.Verify(message, signature)
 }
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
@@ -76,7 +71,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 		return fmt.Errorf("error parsing http request: %v", err)
 	}
 
-	digest, length, err := s.GetRequestDigest(signedRequest.Body)
+	digest, length, err := GetRequestDigest(signedRequest.Body)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -199,7 +194,7 @@ func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, 
 
 	digestHeader := r.GetHeader("Digest")
 
-	digest, _, err := s.GetRequestDigest(r.Body)
+	digest, _, err := GetRequestDigest(r.Body)
 	if err != nil {
 		return "", nil, fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -223,21 +218,6 @@ func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, 
 	}
 
 	return sigString, sigAuthHeader, nil
-}
-
-// GetRequestDigest returns the service key algorithm's hash digest and length of the provided request body
-func (s *SignatureAuth) GetRequestDigest(body []byte) (string, int, error) {
-	if len(body) == 0 {
-		return "", 0, nil
-	}
-
-	hash, err := authutils.Hash(body, s.serviceKey.Alg)
-	if err != nil {
-		return "", 0, fmt.Errorf("error hashing request body: %v", err)
-	}
-
-	hashName := strings.ReplaceAll(authutils.HashFromAlg(s.serviceKey.Alg).String(), "-", "")
-	return fmt.Sprintf("%s=%s", hashName, base64.StdEncoding.EncodeToString(hash)), len(body), nil
 }
 
 // Implement ServiceAuthRequests interface
@@ -318,6 +298,20 @@ func GetRequestLine(r *Request) string {
 	}
 
 	return fmt.Sprintf("%s %s %s", r.Method, r.Path, r.Protocol)
+}
+
+// GetRequestDigest returns the SHA256 digest and length of the provided request body
+func GetRequestDigest(body []byte) (string, int, error) {
+	if len(body) == 0 {
+		return "", 0, nil
+	}
+
+	hash, err := authutils.HashSha256(body)
+	if err != nil {
+		return "", 0, fmt.Errorf("error hashing request body: %v", err)
+	}
+
+	return fmt.Sprintf("SHA256=%s", base64.StdEncoding.EncodeToString(hash)), len(body), nil
 }
 
 // -------------------- Request --------------------

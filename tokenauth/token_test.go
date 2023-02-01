@@ -68,9 +68,9 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {
-	pubKey, err := testutils.GetSampleRS256PubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample rs526 pubkey: %v", err)
+		t.Errorf("Error getting sample pubkey: %v", err)
 		return
 	}
 
@@ -80,9 +80,9 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
-	samplePrivKey, err := testutils.GetSampleRS256PrivKey()
+	samplePrivKey, err := testutils.GetSamplePrivKey(authutils.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample rs256 privkey: %v", err)
+		t.Errorf("Error getting sample privkey: %v", err)
 		return
 	}
 
@@ -293,14 +293,14 @@ func TestGetAccessToken(t *testing.T) {
 
 func TestGenerateSignedToken(t *testing.T) {
 	validClaims := getSampleValidClaims()
-	key, err := testutils.GetSampleRS256PrivKey()
+	key, err := testutils.GetSamplePrivKey(authutils.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample RS256 privkey: %v", err)
+		t.Errorf("Error getting sample privkey: %v", err)
 		return
 	}
 	badAlgKey := &keys.PrivKey{Key: key.Key, Alg: "test"}
 
-	badKey, _, err := keys.NewAsymmetricKeyPair(authutils.EC256, 0)
+	badKey, _, err := keys.NewAsymmetricKeyPair(authutils.ES256, 0)
 	if err != nil {
 		t.Errorf("Error generating test ec privkey: %v", err)
 		return
@@ -332,9 +332,9 @@ func TestGenerateSignedToken(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
-	pubKey, err := testutils.GetSampleRS256PubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample rs256 pubkey: %v", err)
+		t.Errorf("Error getting sample pubkey: %v", err)
 		return
 	}
 
@@ -378,9 +378,9 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
-	pubKey, err := testutils.GetSampleRS256PubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample rs256 pubkey: %v", err)
+		t.Errorf("Error getting sample pubkey: %v", err)
 		return
 	}
 

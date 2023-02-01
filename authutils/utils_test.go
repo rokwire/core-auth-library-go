@@ -28,10 +28,9 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
 )
 
-func TestHash(t *testing.T) {
+func TestHashSha256(t *testing.T) {
 	type args struct {
 		data []byte
-		alg  string
 	}
 	tests := []struct {
 		name    string
@@ -39,18 +38,15 @@ func TestHash(t *testing.T) {
 		wantHex string
 		wantErr bool
 	}{
-		{"found sha256", args{[]byte("This is a test."), authutils.RS256}, "a8a2f6ebe286697c527eb35a58b5539532e9b3ae3b64d4eb0a46fb657b41562c", false},
-		{"empty sha256", args{[]byte{}, authutils.RS256}, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", false},
-		{"found sha384", args{[]byte("This is a test."), authutils.RS384}, "673051fa6c8c2e519ebc0e1690fe82bcc23cdc6674dcd24dbca54114c6f2ad004520b3f949a20a4c526d10b78f0eb71d", false},
-		{"found sha512", args{[]byte("This is a test."), authutils.RS512}, "f3bf9aa70169e4ab5339f20758986538fe6c96d7be3d184a036cde8161105fcf53516428fa096ac56247bb88085b0587d5ec8e56a6807b1af351305b2103d74b", false},
-		{"unsupported alg", args{[]byte("This is a test."), "unsupported"}, "", true},
-		{"nil", args{nil, authutils.RS256}, "", true},
+		{"found", args{[]byte("This is a test.")}, "a8a2f6ebe286697c527eb35a58b5539532e9b3ae3b64d4eb0a46fb657b41562c", false},
+		{"empty", args{[]byte{}}, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", false},
+		{"nil", args{nil}, "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := authutils.Hash(tt.args.data, tt.args.alg)
+			got, err := authutils.HashSha256(tt.args.data)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("Hash() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("HashSha256() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			var want []byte
@@ -61,7 +57,7 @@ func TestHash(t *testing.T) {
 				}
 			}
 			if !reflect.DeepEqual(got, want) {
-				t.Errorf("Hash() = %v, want %v", got, want)
+				t.Errorf("HashSha256() = %v, want %v", got, want)
 			}
 		})
 	}
@@ -189,7 +185,7 @@ func TestKeyTypeFromAlg(t *testing.T) {
 		want string
 	}{
 		{"rs256", args{authutils.RS256}, "RSA"},
-		{"ec512", args{authutils.EC512}, "EC"},
+		{"es512", args{authutils.ES512}, "EC"},
 		{"eddsa", args{authutils.EdDSA}, "EdDSA"},
 		{"unsupported", args{"test"}, ""},
 	}
@@ -213,8 +209,8 @@ func TestHashFromAlg(t *testing.T) {
 		want crypto.Hash
 	}{
 		{"rs256", args{authutils.RS256}, crypto.SHA256},
-		{"ec384", args{authutils.EC384}, crypto.SHA384},
-		{"ec512", args{authutils.EC512}, crypto.SHA512},
+		{"es384", args{authutils.ES384}, crypto.SHA384},
+		{"es512", args{authutils.ES512}, crypto.SHA512},
 		{"unsupported", args{authutils.EdDSA}, 0},
 	}
 	for _, tt := range tests {
@@ -236,9 +232,9 @@ func TestEllipticCurveFromAlg(t *testing.T) {
 		args args
 		want elliptic.Curve
 	}{
-		{"ec256", args{authutils.EC256}, elliptic.P256()},
-		{"ec384", args{authutils.EC384}, elliptic.P384()},
-		{"ec512", args{authutils.EC512}, elliptic.P521()},
+		{"es256", args{authutils.ES256}, elliptic.P256()},
+		{"es384", args{authutils.ES384}, elliptic.P384()},
+		{"es512", args{authutils.ES512}, elliptic.P521()},
 		{"unsupported", args{authutils.RS384}, nil},
 	}
 	for _, tt := range tests {

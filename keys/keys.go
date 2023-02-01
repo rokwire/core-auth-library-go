@@ -26,13 +26,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
 )
 
 const (
+	keyTypeRSA string = "RSA"
+	keyTypeEC  string = "EC"
+	keyTypeEd  string = "EdDSA"
+
 	errUnsupportedAlg   string = "unsupported algorithm"
 	errMismatchedKeyAlg string = "key type does not match algorithm"
 )
@@ -54,11 +57,11 @@ func (p *PrivKey) Decode() error {
 
 	var err error
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		p.Key, err = jwt.ParseRSAPrivateKeyFromPEM([]byte(p.KeyPem))
-	case "EC":
+	case keyTypeEC:
 		p.Key, err = jwt.ParseECPrivateKeyFromPEM([]byte(p.KeyPem))
-	case "Ed":
+	case keyTypeEd:
 		p.Key, err = jwt.ParseEdPrivateKeyFromPEM([]byte(p.KeyPem))
 	default:
 		return errors.New(errUnsupportedAlg)
@@ -79,13 +82,13 @@ func (p *PrivKey) Encode() error {
 	var privASN1 []byte
 	var err error
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		key, ok := p.Key.(*rsa.PrivateKey)
 		if !ok {
 			return errors.New(errMismatchedKeyAlg)
 		}
 		privASN1 = x509.MarshalPKCS1PrivateKey(key)
-	case "EC", "Ed":
+	case keyTypeEC, keyTypeEd:
 		privASN1, err = x509.MarshalPKCS8PrivateKey(p.Key)
 		if err != nil {
 			return fmt.Errorf("error marshalling private key: %v", err)
@@ -111,7 +114,7 @@ func (p *PrivKey) Decrypt(data []byte, label []byte) (string, error) {
 	}
 
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		key, ok := p.Key.(*rsa.PrivateKey)
 		if !ok {
 			return "", errors.New(errMismatchedKeyAlg)
@@ -146,7 +149,7 @@ func (p *PrivKey) Sign(message []byte) (string, error) {
 		return "", fmt.Errorf("error signing message: %v", err)
 	}
 
-	return base64.StdEncoding.EncodeToString([]byte(signature)), nil
+	return signature, nil
 }
 
 // PubKey returns the public key representation corresponding to the private key
@@ -159,11 +162,11 @@ func (p *PrivKey) PubKey() (*PubKey, error) {
 	var ok bool
 	public := PubKey{Alg: p.Alg}
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		key, ok = p.Key.(*rsa.PrivateKey)
-	case "EC":
+	case keyTypeEC:
 		key, ok = p.Key.(*ecdsa.PrivateKey)
-	case "Ed":
+	case keyTypeEd:
 		key, ok = p.Key.(ed25519.PrivateKey)
 	default:
 		return nil, errors.New(errUnsupportedAlg)
@@ -220,11 +223,11 @@ func (p *PubKey) Decode() error {
 
 	var err error
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		p.Key, err = jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
-	case "EC":
+	case keyTypeEC:
 		p.Key, err = jwt.ParseECPublicKeyFromPEM([]byte(p.KeyPem))
-	case "Ed":
+	case keyTypeEd:
 		p.Key, err = jwt.ParseEdPublicKeyFromPEM([]byte(p.KeyPem))
 	default:
 		return errors.New(errUnsupportedAlg)
@@ -263,34 +266,34 @@ func (p *PubKey) Encode() error {
 }
 
 // Encrypt uses "Key" to encrypt data
-func (p *PubKey) Encrypt(data []byte, label []byte) (string, error) {
+func (p *PubKey) Encrypt(data []byte, label []byte) ([]byte, error) {
 	if p == nil {
-		return "", fmt.Errorf("pubkey is nil")
+		return nil, fmt.Errorf("pubkey is nil")
 	}
 
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		key, ok := p.Key.(*rsa.PublicKey)
 		if !ok {
-			return "", errors.New(errMismatchedKeyAlg)
+			return nil, errors.New(errMismatchedKeyAlg)
 		}
 
 		hash := authutils.HashFromAlg(p.Alg)
 		if hash == 0 {
-			return "", fmt.Errorf("unsupported hashing method %s", p.Alg)
+			return nil, fmt.Errorf("unsupported hashing method %s", p.Alg)
 		}
 		cipherText, err := rsa.EncryptOAEP(hash.New(), rand.Reader, key, data, label)
 		if err != nil {
-			return "", fmt.Errorf("error encrypting data with RSA public key: %v", err)
+			return nil, fmt.Errorf("error encrypting data with RSA public key: %v", err)
 		}
-		return string(cipherText), nil
+		return cipherText, nil
 	}
 
-	return "", errors.New("encryption is unsupported for algorithm " + p.Alg)
+	return nil, errors.New("encryption is unsupported for algorithm " + p.Alg)
 }
 
 // Verify verifies that signature matches message by using "Key"
-func (p *PubKey) Verify(message []byte, signature []byte) error {
+func (p *PubKey) Verify(message []byte, signature string) error {
 	if p == nil {
 		return fmt.Errorf("pubkey is nil")
 	}
@@ -299,7 +302,7 @@ func (p *PubKey) Verify(message []byte, signature []byte) error {
 	if sigMethod == nil {
 		return errors.New(errUnsupportedAlg)
 	}
-	err := sigMethod.Verify(string(message), string(signature), p.Key)
+	err := sigMethod.Verify(string(message), signature, p.Key)
 	if err != nil {
 		return fmt.Errorf("error verifying signature: %v", err)
 	}
@@ -316,13 +319,13 @@ func (p *PubKey) SetKeyFingerprint() error {
 	var pubASN1 []byte
 	var err error
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA":
+	case keyTypeRSA:
 		rsaKey, ok := p.Key.(*rsa.PublicKey)
 		if !ok {
 			return errors.New(errMismatchedKeyAlg)
 		}
 		pubASN1 = x509.MarshalPKCS1PublicKey(rsaKey)
-	case "EC", "Ed":
+	case keyTypeEC, keyTypeEd:
 		pubASN1, err = x509.MarshalPKIXPublicKey(p.Key)
 		if err != nil {
 			return fmt.Errorf("error marshalling public key: %v", err)
@@ -331,12 +334,12 @@ func (p *PubKey) SetKeyFingerprint() error {
 		return errors.New(errUnsupportedAlg)
 	}
 
-	hash, err := authutils.Hash(pubASN1, p.Alg)
+	hash, err := authutils.HashSha256(pubASN1)
 	if err != nil {
 		return fmt.Errorf("error hashing key: %v", err)
 	}
 
-	p.KeyID = fmt.Sprintf("%s:%s", strings.ReplaceAll(authutils.HashFromAlg(p.Alg).String(), "-", ""), base64.StdEncoding.EncodeToString(hash))
+	p.KeyID = fmt.Sprintf("SHA256:%s", base64.StdEncoding.EncodeToString(hash))
 	return nil
 }
 
@@ -347,7 +350,7 @@ func (p *PubKey) Equal(other *PubKey) bool {
 	}
 
 	switch authutils.KeyTypeFromAlg(p.Alg) {
-	case "RSA", "EC", "Ed":
+	case keyTypeRSA, keyTypeEC, keyTypeEd:
 		key, ok := p.Key.(publicKey)
 		if !ok {
 			return false
@@ -373,14 +376,14 @@ func NewAsymmetricKeyPair(alg string, bits int) (*PrivKey, *PubKey, error) {
 	var err error
 
 	switch authutils.KeyTypeFromAlg(alg) {
-	case "RSA":
+	case keyTypeRSA:
 		key, err := rsa.GenerateKey(rand.Reader, bits)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error generating RSA private key: %v", err)
 		}
 		private.Key = key
 		public.Key = key.PublicKey
-	case "EC":
+	case keyTypeEC:
 		key, err := ecdsa.GenerateKey(authutils.EllipticCurveFromAlg(alg), rand.Reader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error generating EC private key: %v", err)

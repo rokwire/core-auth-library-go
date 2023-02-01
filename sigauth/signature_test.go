@@ -34,7 +34,7 @@ import (
 )
 
 func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
-	privKey, err := testutils.GetSamplePrivKey()
+	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
 	if err != nil {
 		return nil, fmt.Errorf("error getting sample privkey: %v", err)
 	}
@@ -58,7 +58,7 @@ func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, moc
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -103,7 +103,7 @@ func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -115,7 +115,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey, err := testutils.GetSamplePrivKey()
+	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -155,7 +155,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -228,7 +228,7 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -240,7 +240,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey, err := testutils.GetSamplePrivKey()
+	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -374,19 +374,7 @@ func TestGetRequestLine(t *testing.T) {
 }
 
 func TestGetRequestDigest(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey()
-	if err != nil {
-		t.Errorf("Error getting sample pubkey: %v", err)
-		return
-	}
-
-	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
-	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
-	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
-
-	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
-
-	privKey, err := testutils.GetSamplePrivKey()
+	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -418,13 +406,7 @@ func TestGetRequestDigest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s, err := setupTestSignatureAuthWithPrivKey(authService, mockLoader, tt.args.privKey)
-			if err != nil || s == nil {
-				t.Errorf("Error initializing test signature auth: %v", err)
-				return
-			}
-
-			gotDigest, gotLength, err := s.GetRequestDigest(tt.args.body)
+			gotDigest, gotLength, err := sigauth.GetRequestDigest(tt.args.body)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetRequestDigest() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -461,7 +443,7 @@ func TestSignatureAuthHeader_SetField(t *testing.T) {
 
 func TestSignatureAuthHeader_Build(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
-	sampleFingerprint := testutils.GetSamplePubKeyFingerprint()
+	sampleFingerprint := testutils.GetSamplePubKeyFingerprint("RSA")
 	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: authutils.RS256, Headers: headers, Signature: "test_signature"}
 	headerWithExtension := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: authutils.RS256, Extensions: "test_extensions", Signature: "test_signature"}
 
@@ -491,7 +473,7 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 
 func TestParseSignatureAuthHeader(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
-	sampleFingerprint := testutils.GetSamplePubKeyFingerprint()
+	sampleFingerprint := testutils.GetSamplePubKeyFingerprint("RSA")
 	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: authutils.RS256, Headers: headers, Signature: "test_signature=="}
 
 	type args struct {
