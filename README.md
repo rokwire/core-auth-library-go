@@ -70,6 +70,18 @@ Follow the steps below to upgrade to the associated version of this library. Not
 
 #### Unreleased
 ##### Breaking changes
+###### authservice
+* `ServiceRegManager.ValidateServiceRegistrationKey` now takes a `*keys.PrivKey` as an argument instead of `*rsa.PrivateKey`.
+* `PubKey` has been moved into the new `keys` package.
+
+###### authutils
+* `GetKeyFingerprint` has been removed and now exists as `SetKeyFingerprint` as a function on `keys.PubKey`.
+* `GetPubKeyPem` has been removed and now exists as `Encode` as a function on `keys.PubKey`.
+
+###### sigauth
+* `SignatureAuth.CheckSignature` now takes a `*keys.PubKey` as an argument instead of `*rsa.PublicKey`.
+* `SignatureAuth.CheckRequestSignature` now takes a `*keys.PubKey` as an argument instead of `*rsa.PublicKey`.
+
 ###### tokenauth
 * `TokenAuth.ValidateCsrfTokenClaims` has been removed, as the tokenauth package is no longer used to handle CSRF tokens, and these tokens are now opaque.
 * `TokenAuth.GetRequestTokens` has been renamed to `TokenAuth.GetAccessToken` and now only returns an access token found in the `Authorization` header of a request.
@@ -147,6 +159,9 @@ The `NewEnvLoader()` function can be used to automatically select and create the
 
 ### `authutils`
 The `authutils` package contains constants and standard utilities shared by the other packages.
+
+### `keys`
+The `keys` package contains constants and generalized public key and private key wrapper types that are used by other packaages.
 
 ## Usage
 To get started, take a look at the `example/` directory.
