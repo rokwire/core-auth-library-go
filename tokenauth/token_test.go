@@ -27,7 +27,6 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/tokenauth"
@@ -68,7 +67,7 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -80,7 +79,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
-	samplePrivKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	samplePrivKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -293,14 +292,14 @@ func TestGetAccessToken(t *testing.T) {
 
 func TestGenerateSignedToken(t *testing.T) {
 	validClaims := getSampleValidClaims()
-	key, err := testutils.GetSamplePrivKey(authutils.RS256)
+	key, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
 	}
 	badAlgKey := &keys.PrivKey{Key: key.Key, Alg: "test"}
 
-	badKey, _, err := keys.NewAsymmetricKeyPair(authutils.ES256, 0)
+	badKey, _, err := keys.NewAsymmetricKeyPair(keys.ES256, 0)
 	if err != nil {
 		t.Errorf("Error generating test ec privkey: %v", err)
 		return
@@ -332,7 +331,7 @@ func TestGenerateSignedToken(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -378,7 +377,7 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 }
 
 func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return

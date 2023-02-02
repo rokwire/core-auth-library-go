@@ -30,7 +30,7 @@ func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {
 }
 
 func TestServiceRegManager_GetServiceReg(t *testing.T) {
-	authPubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	authPubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -76,7 +76,7 @@ func TestServiceRegManager_GetServiceReg(t *testing.T) {
 }
 
 func TestServiceRegManager_GetServiceRegWithPubKey(t *testing.T) {
-	authPubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	authPubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -203,12 +203,12 @@ func TestServiceRegManager_ValidateServiceRegistration(t *testing.T) {
 }
 
 func TestAuthService_ValidateServiceRegistrationKey(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
 	}
-	_, wrongKey, err := keys.NewAsymmetricKeyPair(authutils.RS256, 2048)
+	_, wrongKey, err := keys.NewAsymmetricKeyPair(keys.RS256, 2048)
 	if err != nil {
 		t.Errorf("Error generating new pubkey: %v", err)
 		return
@@ -228,7 +228,7 @@ func TestAuthService_ValidateServiceRegistrationKey(t *testing.T) {
 
 	subscribed := []string{"auth"}
 
-	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return

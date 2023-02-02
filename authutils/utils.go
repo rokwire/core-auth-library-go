@@ -15,8 +15,6 @@
 package authutils
 
 import (
-	"crypto"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -31,27 +29,6 @@ const (
 	AllApps string = "all"
 	//AllOrgs indicates that all orgs may be accessed
 	AllOrgs string = "all"
-
-	// RS256 represents a RSA key with SHA-256 signing method
-	RS256 string = "RS256"
-	// RS384 represents a RSA key with SHA-384 signing method
-	RS384 string = "RS384"
-	// RS512 represents a RSA key with SHA-512 signing method
-	RS512 string = "RS512"
-	// PS256 represents a RSA-PSS key with SHA-256 signing method
-	PS256 string = "PS256"
-	// PS384 represents a RSA-PSS key with SHA-384 signing method
-	PS384 string = "PS384"
-	// PS512 represents a RSA-PSS key with SHA-512 signing method
-	PS512 string = "PS512"
-	// ES256 represents an Elliptic Curve with SHA-256 signing method
-	ES256 string = "ES256"
-	// ES384 represents an Elliptic Curve with SHA-384 signing method
-	ES384 string = "ES384"
-	// ES512 represents an Elliptic Curve with SHA-512 signing method
-	ES512 string = "ES512"
-	// EdDSA represents an Edwards Curve signing method
-	EdDSA string = "EdDSA"
 )
 
 // ContainsString returns true if the provided value is in the provided slice
@@ -129,46 +106,4 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 func GenerateRandomString(s int) (string, error) {
 	b, err := GenerateRandomBytes(s)
 	return base64.RawURLEncoding.EncodeToString(b), err
-}
-
-// KeyTypeFromAlg returns a string indicating the key type associated with alg
-func KeyTypeFromAlg(alg string) string {
-	switch alg {
-	case RS256, RS384, RS512, PS256, PS384, PS512:
-		return "RSA"
-	case ES256, ES384, ES512:
-		return "EC"
-	case EdDSA:
-		return "EdDSA"
-	default:
-		return ""
-	}
-}
-
-// HashFromAlg returns a string indicating the hash function associated with alg
-func HashFromAlg(alg string) crypto.Hash {
-	switch alg {
-	case RS256, PS256, ES256:
-		return crypto.SHA256
-	case RS384, PS384, ES384:
-		return crypto.SHA384
-	case RS512, PS512, ES512:
-		return crypto.SHA512
-	default:
-		return 0
-	}
-}
-
-// EllipticCurveFromAlg returns the elliptic curve associated with alg
-func EllipticCurveFromAlg(alg string) elliptic.Curve {
-	switch alg {
-	case ES256:
-		return elliptic.P256()
-	case ES384:
-		return elliptic.P384()
-	case ES512:
-		return elliptic.P521()
-	default:
-		return nil
-	}
 }

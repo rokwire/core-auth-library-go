@@ -18,27 +18,26 @@ import (
 	"encoding/base64"
 	"testing"
 
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 )
 
 func setupPubKeyFromPem(pem string) *keys.PubKey {
-	return &keys.PubKey{KeyPem: pem, Alg: authutils.RS256}
+	return &keys.PubKey{KeyPem: pem, Alg: keys.RS256}
 }
 
 func TestPrivKey_Encode(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePrivKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec privkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePrivKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePrivKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa privkey: %v", err)
 		return
@@ -74,7 +73,7 @@ func TestPrivKey_Encode(t *testing.T) {
 }
 
 func TestPrivKey_Decode(t *testing.T) {
-	privKey, err := testutils.GetSamplePrivKey(authutils.RS384)
+	privKey, err := testutils.GetSamplePrivKey(keys.RS384)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -89,8 +88,8 @@ func TestPrivKey_Decode(t *testing.T) {
 		wantErr bool
 		wantKey *keys.PrivKey
 	}{
-		{"return nil and set Key property on valid pem", args{&keys.PrivKey{KeyPem: testutils.GetSampleRSAPrivKeyPem(), Alg: authutils.RS384}}, false, privKey},
-		{"return error on invalid pem", args{&keys.PrivKey{KeyPem: "test", Alg: authutils.RS384}}, true, nil},
+		{"return nil and set Key property on valid pem", args{&keys.PrivKey{KeyPem: testutils.GetSampleRSAPrivKeyPem(), Alg: keys.RS384}}, false, privKey},
+		{"return error on invalid pem", args{&keys.PrivKey{KeyPem: "test", Alg: keys.RS384}}, true, nil},
 		{"return error on invalid alg", args{&keys.PrivKey{KeyPem: "test", Alg: "test"}}, true, nil},
 		{"return error on nil privkey", args{nil}, true, nil},
 	}
@@ -108,17 +107,17 @@ func TestPrivKey_Decode(t *testing.T) {
 }
 
 func TestPrivKey_Decrypt(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS512)
+	rsaKey, err := testutils.GetSamplePrivKey(keys.RS512)
 	if err != nil {
 		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePrivKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec privkey: %v", err)
 		return
 	}
-	badRSAKey := &keys.PrivKey{Alg: authutils.RS512, Key: ecKey.Key}
+	badRSAKey := &keys.PrivKey{Alg: keys.RS512, Key: ecKey.Key}
 
 	labeledCipherText := "ASiO2g5jWb5AuHPKGk5nVy8wRPFL3g6pm8BywGAJg3Gd880OWXBCbsnober4Lg4+RKOPyPo/JUZiFrN2cgbNc+TEJwyFWBhi/vaYPStIY4ulZM8QS7TrkG9bkcjIeUH3oVI4gbjD7nUgAl3guY0X3FfZfe5JngPkHrzYM5cvlM1vIHLJ0cc83FBDzpwD+7U8AWFhu9GeYgQhPdgPSV77wDR6gTgjgN03SxzUAM4V4h4wrfcCM9hHsdnmkfqh/A2ZEi/bsSNXzt6Fe+Du+yAUxxxulFBCksabJoWfxcMdGH8pJhU4uf32wHeTg5DNhJ2K/JKz0Rl83rOs7T6C8/uE6w=="
 	unlabeledCipherText := "WtFV0Q4j7Z5gx4M6TygT2jkZw3mKXyL7W72TZIQH9ftDP/3ZlU2RYXm2G0Z8deMeRgAs8bQGlb18c1wKI/jchoiGEib1Fi8091ehsbyJkAEhdUH1NVHkhnBMS/GwFId5MaiHgs9XX6erWghfsQbf+6wIkpvme72GpCqeuEVSh8SAY2HK6uNUTV9h/oNOU9uz6fxTMs3yPO6jHgGhxzmEl+RDPjp9Bl3JgBMyJYBlNH5a99ZkfGCVGlayLEO6pmMLKEwHj96o87XhYT6kGrdgETBNmNLlve69NBH+fgskUH+1vkr2AXfT13dAnjXHQofFXF/B0YBmXtbbyXY9tfKACQ=="
@@ -160,17 +159,17 @@ func TestPrivKey_Decrypt(t *testing.T) {
 }
 
 func TestPrivKey_Sign(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePrivKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec privkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePrivKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePrivKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa privkey: %v", err)
 		return
@@ -209,36 +208,36 @@ func TestPrivKey_Sign(t *testing.T) {
 }
 
 func TestPrivKey_PubKey(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePrivKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec privkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePrivKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePrivKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa privkey: %v", err)
 		return
 	}
 
-	badRSAKey := &keys.PrivKey{Key: edKey.Key, Alg: authutils.RS256}
+	badRSAKey := &keys.PrivKey{Key: edKey.Key, Alg: keys.RS256}
 	unsupportedAlgKey := &keys.PrivKey{Key: edKey.Key, Alg: "test"}
 
-	rsaPubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	rsaPubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecPubKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	ecPubKey, err := testutils.GetSamplePubKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec pubkey: %v", err)
 		return
 	}
-	edPubKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	edPubKey, err := testutils.GetSamplePubKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa pubkey: %v", err)
 		return
@@ -275,22 +274,22 @@ func TestPrivKey_PubKey(t *testing.T) {
 }
 
 func TestPrivKey_Equal(t *testing.T) {
-	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	rsaKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample ec privkey: %v", err)
+		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	ecKey2, err := testutils.GetSamplePrivKey(authutils.ES256)
+	rsaKey2, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample ec privkey: %v", err)
+		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	ecKey3, err := testutils.GetSamplePrivKey(authutils.ES512)
+	rsaKey3, err := testutils.GetSamplePrivKey(keys.RS384)
 	if err != nil {
-		t.Errorf("Error getting sample ec privkey: %v", err)
+		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePrivKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePrivKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa privkey: %v", err)
 		return
@@ -306,11 +305,11 @@ func TestPrivKey_Equal(t *testing.T) {
 		args args
 		want bool
 	}{
-		{"success ec keys", args{ecKey, ecKey2}, true},
-		{"error ec key alg", args{ecKey, ecKey3}, false},
-		{"error key types", args{ecKey2, edKey}, false},
+		{"success rsa keys", args{rsaKey, rsaKey2}, true},
+		{"error rsa key alg", args{rsaKey, rsaKey3}, false},
+		{"error key types", args{rsaKey2, edKey}, false},
 		{"error nil key", args{nil, edKey}, false},
-		{"error nil other key", args{ecKey, nil}, false},
+		{"error nil other key", args{rsaKey, nil}, false},
 		{"error unknown key type", args{badKey, badKey}, false},
 		{"success nil keys", args{nil, nil}, true},
 	}
@@ -325,17 +324,17 @@ func TestPrivKey_Equal(t *testing.T) {
 }
 
 func TestPubKey_Encode(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePubKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec pubkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePubKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa pubkey: %v", err)
 		return
@@ -370,7 +369,7 @@ func TestPubKey_Encode(t *testing.T) {
 }
 
 func TestPubKey_Decode(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS384)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS384)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -385,8 +384,8 @@ func TestPubKey_Decode(t *testing.T) {
 		wantErr bool
 		wantKey *keys.PubKey
 	}{
-		{"return nil and set Key property on valid pem", args{&keys.PubKey{KeyPem: testutils.GetSampleRSAPubKeyPem(), Alg: authutils.RS384}}, false, pubKey},
-		{"return error on invalid pem", args{&keys.PubKey{KeyPem: "test", Alg: authutils.RS384}}, true, nil},
+		{"return nil and set Key property on valid pem", args{&keys.PubKey{KeyPem: testutils.GetSampleRSAPubKeyPem(), Alg: keys.RS384}}, false, pubKey},
+		{"return error on invalid pem", args{&keys.PubKey{KeyPem: "test", Alg: keys.RS384}}, true, nil},
 		{"return error on invalid alg", args{&keys.PubKey{KeyPem: "test", Alg: "test"}}, true, nil},
 		{"return error on nil privkey", args{nil}, true, nil},
 	}
@@ -404,17 +403,17 @@ func TestPubKey_Decode(t *testing.T) {
 }
 
 func TestPubKey_Encrypt(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePubKey(authutils.RS512)
+	rsaKey, err := testutils.GetSamplePubKey(keys.RS512)
 	if err != nil {
 		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePubKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec pubkey: %v", err)
 		return
 	}
-	badRSAKey := &keys.PubKey{Alg: authutils.RS512, Key: ecKey.Key}
+	badRSAKey := &keys.PubKey{Alg: keys.RS512, Key: ecKey.Key}
 
 	type args struct {
 		key     *keys.PubKey
@@ -447,17 +446,17 @@ func TestPubKey_Encrypt(t *testing.T) {
 }
 
 func TestPubKey_Verify(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePubKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec pubkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePubKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa pubkey: %v", err)
 		return
@@ -489,23 +488,23 @@ func TestPubKey_Verify(t *testing.T) {
 }
 
 func TestPubKey_SetKeyFingerprint(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	ecKey, err := testutils.GetSamplePubKey(keys.ES256)
 	if err != nil {
 		t.Errorf("Error getting sample ec pubkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePubKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa pubkey: %v", err)
 		return
 	}
 
-	badRSAKey := &keys.PubKey{Key: edKey.Key, Alg: authutils.RS256}
+	badRSAKey := &keys.PubKey{Key: edKey.Key, Alg: keys.RS256}
 	unsupportedAlgKey := &keys.PubKey{Key: edKey.Key, Alg: "test"}
 
 	type args struct {
@@ -539,22 +538,22 @@ func TestPubKey_SetKeyFingerprint(t *testing.T) {
 }
 
 func TestPubKey_Equal(t *testing.T) {
-	ecKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	rsaKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample ec pubkey: %v", err)
+		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecKey2, err := testutils.GetSamplePubKey(authutils.ES256)
+	rsaKey2, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
-		t.Errorf("Error getting sample ec pubkey: %v", err)
+		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	ecKey3, err := testutils.GetSamplePubKey(authutils.ES512)
+	rsaKey3, err := testutils.GetSamplePubKey(keys.RS384)
 	if err != nil {
-		t.Errorf("Error getting sample ec pubkey: %v", err)
+		t.Errorf("Error getting sample rsa pubkey: %v", err)
 		return
 	}
-	edKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	edKey, err := testutils.GetSamplePubKey(keys.EdDSA)
 	if err != nil {
 		t.Errorf("Error getting sample eddsa pubkey: %v", err)
 		return
@@ -570,11 +569,11 @@ func TestPubKey_Equal(t *testing.T) {
 		args args
 		want bool
 	}{
-		{"success ec keys", args{ecKey, ecKey2}, true},
-		{"error ec key alg", args{ecKey, ecKey3}, false},
-		{"error key types", args{ecKey2, edKey}, false},
+		{"success rsa keys", args{rsaKey, rsaKey2}, true},
+		{"error rsa key alg", args{rsaKey, rsaKey3}, false},
+		{"error key types", args{rsaKey2, edKey}, false},
 		{"error nil key", args{nil, edKey}, false},
-		{"error nil other key", args{ecKey, nil}, false},
+		{"error nil other key", args{rsaKey, nil}, false},
 		{"error unknown key type", args{badKey, badKey}, false},
 		{"success nil keys", args{nil, nil}, true},
 	}
@@ -598,11 +597,11 @@ func TestNewAsymmetricKeyPair(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{"generate rsa pair", args{keyType: authutils.RS256, bits: 2048}, false},
-		{"generate es256 pair", args{keyType: authutils.ES256}, false},
-		{"generate es384 pair", args{keyType: authutils.ES384}, false},
-		{"generate es512 pair", args{keyType: authutils.ES512}, false},
-		{"generate edwards curve pair", args{keyType: authutils.EdDSA}, false},
+		{"generate rsa pair", args{keyType: keys.RS256, bits: 2048}, false},
+		{"generate es256 pair", args{keyType: keys.ES256}, false},
+		{"generate es384 pair", args{keyType: keys.ES384}, false},
+		{"generate es512 pair", args{keyType: keys.ES512}, false},
+		{"generate edwards curve pair", args{keyType: keys.EdDSA}, false},
 		{"error on unrecognized key type", args{keyType: "test"}, true},
 	}
 	for _, tt := range tests {

@@ -19,7 +19,6 @@ import (
 
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 )
 
@@ -60,12 +59,12 @@ MCowBQYDK2VwAyEAtlAhVIrYwUQUzRb/BiiwPLX8N4brzA+xl3n0VdxqrU8=
 // GetSamplePubKey returns a sample PubKey
 func GetSamplePubKey(alg string) (*keys.PubKey, error) {
 	key := keys.PubKey{Alg: alg}
-	switch authutils.KeyTypeFromAlg(alg) {
-	case "RSA":
+	switch alg {
+	case keys.RS256, keys.RS384, keys.RS512, keys.PS256, keys.PS384, keys.PS512:
 		key.KeyPem = GetSampleRSAPubKeyPem()
-	case "EC":
+	case keys.ES256:
 		key.KeyPem = GetSampleES256PubKeyPem()
-	case "EdDSA":
+	case keys.EdDSA:
 		key.KeyPem = GetSampleEdPubKeyPem()
 	default:
 		return nil, fmt.Errorf("unsupported algorithm %s", alg)
@@ -82,11 +81,11 @@ func GetSamplePubKey(alg string) (*keys.PubKey, error) {
 // GetSamplePubKeyFingerprint returns a sample RSA public key fingerprint
 func GetSamplePubKeyFingerprint(keyType string) string {
 	switch keyType {
-	case "RSA":
+	case keys.KeyTypeRSA:
 		return "SHA256:I3HxcO3FpUM6MG7+rCASuePfl92JEcdz2htV7SP0Y20="
-	case "EC":
+	case keys.KeyTypeEC:
 		return "SHA256:+cXb9HRXd4/9aDaUUz6sEeZALYQUanD1II7IsO+eSVw="
-	case "EdDSA":
+	case keys.KeyTypeEdDSA:
 		return "SHA256:D71hsVhSaq3v6SjAISLH24whiI1Ka1wR1IBQoPSfjI4="
 	default:
 		return ""
@@ -149,12 +148,12 @@ MC4CAQAwBQYDK2VwBCIEIDYv4zWzHL+ta4KYtqGPrxeTUeIRjDsUaN0DPNIHFeQ8
 // GetSamplePrivKey returns a sample PrivKey
 func GetSamplePrivKey(alg string) (*keys.PrivKey, error) {
 	privKey := keys.PrivKey{Alg: alg}
-	switch authutils.KeyTypeFromAlg(alg) {
-	case "RSA":
+	switch alg {
+	case keys.RS256, keys.RS384, keys.RS512, keys.PS256, keys.PS384, keys.PS512:
 		privKey.KeyPem = GetSampleRSAPrivKeyPem()
-	case "EC":
+	case keys.ES256:
 		privKey.KeyPem = GetSampleES256PrivKeyPem()
-	case "EdDSA":
+	case keys.EdDSA:
 		privKey.KeyPem = GetSampleEdPrivKeyPem()
 	default:
 		return nil, fmt.Errorf("unsupported algorithm %s", alg)
@@ -206,7 +205,7 @@ func SetupTestServiceAccountManager(authService *authservice.AuthService, mockDa
 
 // SetupExampleMockServiceRegLoader returns an example mock ServiceRegLoader
 func SetupExampleMockServiceRegLoader() (*mocks.ServiceRegLoader, error) {
-	samplePubKey, err := GetSamplePubKey(authutils.RS256)
+	samplePubKey, err := GetSamplePubKey(keys.RS256)
 	if err != nil {
 		return nil, fmt.Errorf("error getting sample pubkey: %v", err)
 	}

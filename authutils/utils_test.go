@@ -15,8 +15,6 @@
 package authutils_test
 
 import (
-	"crypto"
-	"crypto/elliptic"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -170,78 +168,6 @@ func TestGenerateRandomBytes(t *testing.T) {
 			}
 			if !tt.wantErr && len(got) != tt.wantLen {
 				t.Errorf("GenerateRandomBytes() = %v, want %v", len(got), tt.wantLen)
-			}
-		})
-	}
-}
-
-func TestKeyTypeFromAlg(t *testing.T) {
-	type args struct {
-		alg string
-	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{"rs256", args{authutils.RS256}, "RSA"},
-		{"es512", args{authutils.ES512}, "EC"},
-		{"eddsa", args{authutils.EdDSA}, "EdDSA"},
-		{"unsupported", args{"test"}, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := authutils.KeyTypeFromAlg(tt.args.alg)
-			if got != tt.want {
-				t.Errorf("KeyTypeFromAlg() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestHashFromAlg(t *testing.T) {
-	type args struct {
-		alg string
-	}
-	tests := []struct {
-		name string
-		args args
-		want crypto.Hash
-	}{
-		{"rs256", args{authutils.RS256}, crypto.SHA256},
-		{"es384", args{authutils.ES384}, crypto.SHA384},
-		{"es512", args{authutils.ES512}, crypto.SHA512},
-		{"unsupported", args{authutils.EdDSA}, 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := authutils.HashFromAlg(tt.args.alg)
-			if got != tt.want {
-				t.Errorf("HashFromAlg() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestEllipticCurveFromAlg(t *testing.T) {
-	type args struct {
-		alg string
-	}
-	tests := []struct {
-		name string
-		args args
-		want elliptic.Curve
-	}{
-		{"es256", args{authutils.ES256}, elliptic.P256()},
-		{"es384", args{authutils.ES384}, elliptic.P384()},
-		{"es512", args{authutils.ES512}, elliptic.P521()},
-		{"unsupported", args{authutils.RS384}, nil},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := authutils.EllipticCurveFromAlg(tt.args.alg)
-			if got != tt.want {
-				t.Errorf("EllipticCurveFromAlg() = %v, want %v", got, tt.want)
 			}
 		})
 	}

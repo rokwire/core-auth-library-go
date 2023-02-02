@@ -27,14 +27,13 @@ import (
 
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/sigauth"
 )
 
 func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader) (*sigauth.SignatureAuth, error) {
-	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		return nil, fmt.Errorf("error getting sample privkey: %v", err)
 	}
@@ -58,7 +57,7 @@ func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, moc
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -103,7 +102,7 @@ func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -115,7 +114,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -155,7 +154,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -228,7 +227,7 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 }
 
 func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -240,7 +239,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 
 	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
 
-	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -374,7 +373,7 @@ func TestGetRequestLine(t *testing.T) {
 }
 
 func TestGetRequestDigest(t *testing.T) {
-	privKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -429,7 +428,7 @@ func TestSignatureAuthHeader_SetField(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{name: "set_algorithm", s: &sigauth.SignatureAuthHeader{}, args: args{field: "algorithm", value: authutils.RS256}, wantErr: false},
+		{name: "set_algorithm", s: &sigauth.SignatureAuthHeader{}, args: args{field: "algorithm", value: keys.RS256}, wantErr: false},
 		{name: "set_fail", s: &sigauth.SignatureAuthHeader{}, args: args{field: "will_fail", value: "test_value"}, wantErr: true},
 	}
 	for _, tt := range tests {
@@ -444,8 +443,8 @@ func TestSignatureAuthHeader_SetField(t *testing.T) {
 func TestSignatureAuthHeader_Build(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 	sampleFingerprint := testutils.GetSamplePubKeyFingerprint("RSA")
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: authutils.RS256, Headers: headers, Signature: "test_signature"}
-	headerWithExtension := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: authutils.RS256, Extensions: "test_extensions", Signature: "test_signature"}
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: keys.RS256, Headers: headers, Signature: "test_signature"}
+	headerWithExtension := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: keys.RS256, Extensions: "test_extensions", Signature: "test_signature"}
 
 	tests := []struct {
 		name    string
@@ -453,9 +452,9 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "success", s: &sigAuthHeader, want: fmt.Sprintf(`Signature keyId="%s",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, authutils.RS256), wantErr: false},
+		{name: "success", s: &sigAuthHeader, want: fmt.Sprintf(`Signature keyId="%s",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, keys.RS256), wantErr: false},
 		{name: "missing_fields", s: &sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Signature: "test_aignature"}, want: "", wantErr: true},
-		{name: "use_extensions", s: &headerWithExtension, want: fmt.Sprintf(`Signature keyId="%s",algorithm="%s",extensions="test_extensions",signature="test_signature"`, sampleFingerprint, authutils.RS256), wantErr: false},
+		{name: "use_extensions", s: &headerWithExtension, want: fmt.Sprintf(`Signature keyId="%s",algorithm="%s",extensions="test_extensions",signature="test_signature"`, sampleFingerprint, keys.RS256), wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -474,7 +473,7 @@ func TestSignatureAuthHeader_Build(t *testing.T) {
 func TestParseSignatureAuthHeader(t *testing.T) {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 	sampleFingerprint := testutils.GetSamplePubKeyFingerprint("RSA")
-	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: authutils.RS256, Headers: headers, Signature: "test_signature=="}
+	sigAuthHeader := sigauth.SignatureAuthHeader{KeyID: sampleFingerprint, Algorithm: keys.RS256, Headers: headers, Signature: "test_signature=="}
 
 	type args struct {
 		header string
@@ -485,11 +484,11 @@ func TestParseSignatureAuthHeader(t *testing.T) {
 		want    *sigauth.SignatureAuthHeader
 		wantErr bool
 	}{
-		{name: "success", args: args{header: fmt.Sprintf(`Signature keyId="%s",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature=="`, sampleFingerprint, authutils.RS256)}, want: &sigAuthHeader, wantErr: false},
-		{name: "invalid_format", args: args{header: fmt.Sprintf(`keyId="%s",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, authutils.RS256)}, want: nil, wantErr: true},
-		{name: "invalid_param_format", args: args{header: fmt.Sprintf(`Signature keyId=,algorithm="%s",extensions=="test_extensions",signature="test_signature"`, authutils.RS256)}, want: nil, wantErr: true},
-		{name: "extra_field", args: args{header: fmt.Sprintf(`Signature keyId="%s",extraHeader="test",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, authutils.RS256)}, want: nil, wantErr: true},
-		{name: "multiple_comma", args: args{header: fmt.Sprintf(`Signature keyId="%s",,algorithm="%s",,headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, authutils.RS256)}, want: nil, wantErr: true},
+		{name: "success", args: args{header: fmt.Sprintf(`Signature keyId="%s",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature=="`, sampleFingerprint, keys.RS256)}, want: &sigAuthHeader, wantErr: false},
+		{name: "invalid_format", args: args{header: fmt.Sprintf(`keyId="%s",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, keys.RS256)}, want: nil, wantErr: true},
+		{name: "invalid_param_format", args: args{header: fmt.Sprintf(`Signature keyId=,algorithm="%s",extensions=="test_extensions",signature="test_signature"`, keys.RS256)}, want: nil, wantErr: true},
+		{name: "extra_field", args: args{header: fmt.Sprintf(`Signature keyId="%s",extraHeader="test",algorithm="%s",headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, keys.RS256)}, want: nil, wantErr: true},
+		{name: "multiple_comma", args: args{header: fmt.Sprintf(`Signature keyId="%s",,algorithm="%s",,headers="request-line host date digest content-length",signature="test_signature"`, sampleFingerprint, keys.RS256)}, want: nil, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
