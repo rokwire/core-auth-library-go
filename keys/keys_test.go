@@ -16,7 +16,6 @@ package keys_test
 
 import (
 	"encoding/base64"
-	"fmt"
 	"testing"
 
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
@@ -57,6 +56,7 @@ func TestPrivKey_Encode(t *testing.T) {
 		{"success rsa", args{rsaKey}, testutils.GetSampleRSAPrivKeyPem() + "\n", false},
 		{"success ec", args{ecKey}, testutils.GetSampleES256PrivKeyPem() + "\n", false},
 		{"success eddsa", args{edKey}, testutils.GetSampleEdPrivKeyPem() + "\n", false},
+		{"success eddsa", args{&keys.PrivKey{Key: ecKey.Key, Alg: "test"}}, "", true},
 		{"return error on nil key", args{nil}, "", true},
 	}
 	for _, tt := range tests {
@@ -73,43 +73,42 @@ func TestPrivKey_Encode(t *testing.T) {
 	}
 }
 
-// func TestPrivKey_Decode(t *testing.T) {
-// 	privKey, err := testutils.GetSamplePrivKey()
-// 	if err != nil {
-// 		t.Errorf("Error getting sample privkey: %v", err)
-// 		return
-// 	}
+func TestPrivKey_Decode(t *testing.T) {
+	privKey, err := testutils.GetSamplePrivKey(authutils.RS384)
+	if err != nil {
+		t.Errorf("Error getting sample privkey: %v", err)
+		return
+	}
 
-// 	tests := []struct {
-// 		name    string
-// 		p       *keys.PrivKey
-// 		wantErr bool
-// 		wantKey *keys.PrivKey
-// 	}{
-// 		{"return nil and set Key property on valid pem", &keys.PrivKey{KeyPem: testutils.GetSamplePrivKeyPem()}, false, privKey},
-// 		{"return error on invalid pem", &keys.PrivKey{KeyPem: "test"}, true, nil},
-// 		{"return error on nil privkey", nil, true, nil},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			if err := tt.p.Decode(); (err != nil) != tt.wantErr {
-// 				t.Errorf("PrivKey.Decode() error = %v, wantErr %v", err, tt.wantErr)
-// 			}
-// 			if tt.wantKey == nil {
-// 				if tt.p != nil && tt.p.Key != nil {
-// 					t.Errorf("PrivKey.Decode() key = %v, want nil", tt.p.Key)
-// 				}
-// 			} else {
-// 				if !tt.p.Equal(tt.wantKey) {
-// 					t.Errorf("PrivKey.Decode() key = %v, want %v", tt.p.Key, tt.wantKey)
-// 				}
-// 			}
-// 		})
-// 	}
-// }
+	type args struct {
+		key *keys.PrivKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+		wantKey *keys.PrivKey
+	}{
+		{"return nil and set Key property on valid pem", args{&keys.PrivKey{KeyPem: testutils.GetSampleRSAPrivKeyPem(), Alg: authutils.RS384}}, false, privKey},
+		{"return error on invalid pem", args{&keys.PrivKey{KeyPem: "test", Alg: authutils.RS384}}, true, nil},
+		{"return error on invalid alg", args{&keys.PrivKey{KeyPem: "test", Alg: "test"}}, true, nil},
+		{"return error on nil privkey", args{nil}, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.args.key.Decode(); (err != nil) != tt.wantErr {
+				t.Errorf("PrivKey.Decode() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !tt.args.key.Equal(tt.wantKey) {
+				t.Errorf("PrivKey.Decode() key = %v, want %v", tt.args.key.Key, tt.wantKey)
+			}
+		})
+	}
+}
 
 func TestPrivKey_Decrypt(t *testing.T) {
-	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS512)
 	if err != nil {
 		t.Errorf("Error getting sample rsa privkey: %v", err)
 		return
@@ -202,38 +201,125 @@ func TestPrivKey_Sign(t *testing.T) {
 				t.Errorf("PrivKey.Sign() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			fmt.Println(got)
 			if !tt.wantErr && len(got) == 0 {
-				t.Errorf("PubKey.Encrypt() empty")
+				t.Errorf("PrivKey.Sign() empty")
 			}
 		})
 	}
 }
 
 func TestPrivKey_PubKey(t *testing.T) {
+	rsaKey, err := testutils.GetSamplePrivKey(authutils.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample rsa privkey: %v", err)
+		return
+	}
+	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	if err != nil {
+		t.Errorf("Error getting sample ec privkey: %v", err)
+		return
+	}
+	edKey, err := testutils.GetSamplePrivKey(authutils.EdDSA)
+	if err != nil {
+		t.Errorf("Error getting sample eddsa privkey: %v", err)
+		return
+	}
+
+	badRSAKey := &keys.PrivKey{Key: edKey.Key, Alg: authutils.RS256}
+	unsupportedAlgKey := &keys.PrivKey{Key: edKey.Key, Alg: "test"}
+
+	rsaPubKey, err := testutils.GetSamplePubKey(authutils.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample rsa pubkey: %v", err)
+		return
+	}
+	ecPubKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	if err != nil {
+		t.Errorf("Error getting sample ec pubkey: %v", err)
+		return
+	}
+	edPubKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	if err != nil {
+		t.Errorf("Error getting sample eddsa pubkey: %v", err)
+		return
+	}
+
+	type args struct {
+		key *keys.PrivKey
+	}
 	tests := []struct {
 		name    string
-		p       *keys.PrivKey
+		args    args
+		wantKey *keys.PubKey
 		wantErr bool
-		wantKey *keys.PrivKey
-	}{}
+	}{
+		{"success rsa key", args{rsaKey}, rsaPubKey, false},
+		{"success ec key", args{ecKey}, ecPubKey, false},
+		{"success eddsa key", args{edKey}, edPubKey, false},
+		{"error unsupported alg", args{unsupportedAlgKey}, nil, true},
+		{"error mismatched key alg", args{badRSAKey}, nil, true},
+		{"error on nil key", args{nil}, nil, true},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
+			got, err := tt.args.key.PubKey()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PrivKey.PubKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !got.Equal(tt.wantKey) {
+				t.Errorf("PrivKey.PubKey() = %v, want %v", got, tt.wantKey)
+			}
 		})
 	}
 }
 
 func TestPrivKey_Equal(t *testing.T) {
+	ecKey, err := testutils.GetSamplePrivKey(authutils.ES256)
+	if err != nil {
+		t.Errorf("Error getting sample ec privkey: %v", err)
+		return
+	}
+	ecKey2, err := testutils.GetSamplePrivKey(authutils.ES256)
+	if err != nil {
+		t.Errorf("Error getting sample ec privkey: %v", err)
+		return
+	}
+	ecKey3, err := testutils.GetSamplePrivKey(authutils.ES512)
+	if err != nil {
+		t.Errorf("Error getting sample ec privkey: %v", err)
+		return
+	}
+	edKey, err := testutils.GetSamplePrivKey(authutils.EdDSA)
+	if err != nil {
+		t.Errorf("Error getting sample eddsa privkey: %v", err)
+		return
+	}
+	badKey := &keys.PrivKey{Key: edKey, Alg: "test"}
+
+	type args struct {
+		key   *keys.PrivKey
+		other *keys.PrivKey
+	}
 	tests := []struct {
-		name    string
-		p       *keys.PrivKey
-		wantErr bool
-		wantKey *keys.PrivKey
-	}{}
+		name string
+		args args
+		want bool
+	}{
+		{"success ec keys", args{ecKey, ecKey2}, true},
+		{"error ec key alg", args{ecKey, ecKey3}, false},
+		{"error key types", args{ecKey2, edKey}, false},
+		{"error nil key", args{nil, edKey}, false},
+		{"error nil other key", args{ecKey, nil}, false},
+		{"error unknown key type", args{badKey, badKey}, false},
+		{"success nil keys", args{nil, nil}, true},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
+			got := tt.args.key.Equal(tt.args.other)
+			if got != tt.want {
+				t.Errorf("PrivKey.Equal() = %v, wantErr %v", got, tt.want)
+			}
 		})
 	}
 }
@@ -283,51 +369,39 @@ func TestPubKey_Encode(t *testing.T) {
 	}
 }
 
-// func TestPubKey_Decode(t *testing.T) {
-// 	pubKey, err := testutils.GetSamplePubKey()
-// 	if err != nil {
-// 		t.Errorf("Error getting sample pubkey: %v", err)
-// 		return
-// 	}
+func TestPubKey_Decode(t *testing.T) {
+	pubKey, err := testutils.GetSamplePubKey(authutils.RS384)
+	if err != nil {
+		t.Errorf("Error getting sample pubkey: %v", err)
+		return
+	}
 
-// 	tests := []struct {
-// 		name      string
-// 		p         *keys.PubKey
-// 		wantErr   bool
-// 		wantKey   *keys.PubKey
-// 		wantKeyID string
-// 	}{
-// 		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem()), false, pubKey, testutils.GetSamplePubKeyFingerprint()},
-// 		{"return error on invalid pem", setupPubKeyFromPem("test"), true, nil, ""},
-// 		{"return error on nil pubkey", nil, true, nil, ""},
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			if err := tt.p.Decode(); (err != nil) != tt.wantErr {
-// 				t.Errorf("PubKey.Decode() error = %v, wantErr %v", err, tt.wantErr)
-// 			}
-// 			if tt.wantKey == nil {
-// 				if tt.p != nil && tt.p.Key != nil {
-// 					t.Errorf("PubKey.Decode() key = %v, want nil", tt.p.Key)
-// 				}
-// 			} else {
-// 				if !tt.p.Equal(tt.wantKey) {
-// 					t.Errorf("PubKey.Decode() key = %v, want %v", tt.p.Key, tt.wantKey)
-// 				}
-// 			}
-// 			if tt.p == nil {
-// 				if tt.wantKeyID != "" {
-// 					t.Errorf("PubKey.Decode() kid = nil, want %v", tt.wantKeyID)
-// 				} else {
-// 					return
-// 				}
-// 			}
-// 			if tt.p.KeyID != tt.wantKeyID {
-// 				t.Errorf("PubKey.Decode() kid = %v, want %v", tt.p.KeyID, tt.wantKeyID)
-// 			}
-// 		})
-// 	}
-// }
+	type args struct {
+		key *keys.PubKey
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+		wantKey *keys.PubKey
+	}{
+		{"return nil and set Key property on valid pem", args{&keys.PubKey{KeyPem: testutils.GetSampleRSAPubKeyPem(), Alg: authutils.RS384}}, false, pubKey},
+		{"return error on invalid pem", args{&keys.PubKey{KeyPem: "test", Alg: authutils.RS384}}, true, nil},
+		{"return error on invalid alg", args{&keys.PubKey{KeyPem: "test", Alg: "test"}}, true, nil},
+		{"return error on nil privkey", args{nil}, true, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.args.key.Decode(); (err != nil) != tt.wantErr {
+				t.Errorf("PubKey.Decode() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !tt.args.key.Equal(tt.wantKey) {
+				t.Errorf("PubKey.Decode() key = %v, want %v", tt.args.key.Key, tt.wantKey)
+			}
+		})
+	}
+}
 
 func TestPubKey_Encrypt(t *testing.T) {
 	rsaKey, err := testutils.GetSamplePubKey(authutils.RS512)
@@ -365,7 +439,6 @@ func TestPubKey_Encrypt(t *testing.T) {
 				t.Errorf("PubKey.Encrypt() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			fmt.Println(base64.StdEncoding.EncodeToString(got))
 			if !tt.wantErr && len(got) == 0 {
 				t.Errorf("PubKey.Encrypt() empty")
 			}
@@ -466,15 +539,51 @@ func TestPubKey_SetKeyFingerprint(t *testing.T) {
 }
 
 func TestPubKey_Equal(t *testing.T) {
+	ecKey, err := testutils.GetSamplePubKey(authutils.ES256)
+	if err != nil {
+		t.Errorf("Error getting sample ec pubkey: %v", err)
+		return
+	}
+	ecKey2, err := testutils.GetSamplePubKey(authutils.ES256)
+	if err != nil {
+		t.Errorf("Error getting sample ec pubkey: %v", err)
+		return
+	}
+	ecKey3, err := testutils.GetSamplePubKey(authutils.ES512)
+	if err != nil {
+		t.Errorf("Error getting sample ec pubkey: %v", err)
+		return
+	}
+	edKey, err := testutils.GetSamplePubKey(authutils.EdDSA)
+	if err != nil {
+		t.Errorf("Error getting sample eddsa pubkey: %v", err)
+		return
+	}
+	badKey := &keys.PubKey{Key: edKey, Alg: "test"}
+
+	type args struct {
+		key   *keys.PubKey
+		other *keys.PubKey
+	}
 	tests := []struct {
-		name    string
-		p       *keys.PrivKey
-		wantErr bool
-		wantKey *keys.PrivKey
-	}{}
+		name string
+		args args
+		want bool
+	}{
+		{"success ec keys", args{ecKey, ecKey2}, true},
+		{"error ec key alg", args{ecKey, ecKey3}, false},
+		{"error key types", args{ecKey2, edKey}, false},
+		{"error nil key", args{nil, edKey}, false},
+		{"error nil other key", args{ecKey, nil}, false},
+		{"error unknown key type", args{badKey, badKey}, false},
+		{"success nil keys", args{nil, nil}, true},
+	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
+			got := tt.args.key.Equal(tt.args.other)
+			if got != tt.want {
+				t.Errorf("PubKey.Equal() = %v, wantErr %v", got, tt.want)
+			}
 		})
 	}
 }
