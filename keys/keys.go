@@ -205,7 +205,7 @@ func (p *PrivKey) Encode() error {
 	return nil
 }
 
-// computePubKey computes and sets the public key representation corresponding to the private key
+// ComputePubKey computes and sets the public key representation corresponding to the private key
 func (p *PrivKey) ComputePubKey() error {
 	if p == nil {
 		return fmt.Errorf("privkey is nil")
@@ -238,7 +238,7 @@ func (p *PrivKey) ComputePubKey() error {
 	return nil
 }
 
-// NewPubKey creates a new PubKey with the provided algorithm and PEM
+// NewPrivKey creates a new PrivKey with the provided algorithm and PEM
 func NewPrivKey(alg string, keyPEM string) (*PrivKey, error) {
 	key := PrivKey{Alg: alg, KeyPem: keyPEM}
 	err := key.Decode()

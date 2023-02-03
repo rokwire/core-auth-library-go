@@ -37,7 +37,7 @@ import (
 const (
 	// SHA256 represents a SHA256 hash
 	SHA256 string = "SHA256"
-	// SHA256 represents a legacy SHA256 hash
+	// SHA256Legacy represents a legacy SHA256 hash
 	SHA256Legacy string = "SHA-256" // TODO: Remove once all dependents have been upgraded
 )
 
