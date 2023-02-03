@@ -207,7 +207,7 @@ func TestPrivKey_Sign(t *testing.T) {
 	}
 }
 
-func TestPrivKey_PubKey(t *testing.T) {
+func TestPrivKey_ComputePubKey(t *testing.T) {
 	rsaKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa privkey: %v", err)
@@ -261,13 +261,13 @@ func TestPrivKey_PubKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.args.key.PubKey()
+			err := tt.args.key.ComputePubKey()
 			if (err != nil) != tt.wantErr {
-				t.Errorf("PrivKey.PubKey() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("PrivKey.ComputePubKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && !got.Equal(tt.wantKey) {
-				t.Errorf("PrivKey.PubKey() = %v, want %v", got, tt.wantKey)
+			if !tt.wantErr && !tt.args.key.PubKey.Equal(tt.wantKey) {
+				t.Errorf("PrivKey.ComputePubKey() = %v, want %v", tt.args.key.PubKey, tt.wantKey)
 			}
 		})
 	}
@@ -487,7 +487,7 @@ func TestPubKey_Verify(t *testing.T) {
 	}
 }
 
-func TestPubKey_SetKeyFingerprint(t *testing.T) {
+func TestPubKey_ComputeKeyFingerprint(t *testing.T) {
 	rsaKey, err := testutils.GetSamplePubKey(keys.RS256)
 	if err != nil {
 		t.Errorf("Error getting sample rsa pubkey: %v", err)
@@ -525,7 +525,7 @@ func TestPubKey_SetKeyFingerprint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.args.key.SetKeyFingerprint()
+			err := tt.args.key.ComputeKeyFingerprint()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("PubKey.SetKeyFingerprint() = %v, error = %v, wantErr %v", tt.args.key.KeyID, err, tt.wantErr)
 				return

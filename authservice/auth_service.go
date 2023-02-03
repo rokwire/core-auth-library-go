@@ -200,11 +200,14 @@ func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *keys.PrivKey
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
-	public, err := privKey.PubKey()
-	if err != nil {
-		return fmt.Errorf("error getting pubkey for privkey: %v", err)
+	if privKey.PubKey == nil {
+		err := privKey.ComputePubKey()
+		if err != nil {
+			return fmt.Errorf("error computing pubkey: %v", err)
+		}
 	}
-	if !service.PubKey.Equal(public) {
+
+	if !service.PubKey.Equal(privKey.PubKey) {
 		return fmt.Errorf("service pub key does not match for id %s", s.AuthService.ServiceID)
 	}
 

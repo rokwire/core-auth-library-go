@@ -16,6 +16,8 @@ package sigauth
 
 import (
 	"bytes"
+	"crypto"
+	"crypto/rsa"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -32,12 +34,21 @@ import (
 	"gopkg.in/go-playground/validator.v9"
 )
 
+const (
+	// SHA256 represents a SHA256 hash
+	SHA256 string = "SHA256"
+	// SHA256 represents a legacy SHA256 hash
+	SHA256Legacy string = "SHA-256" // TODO: Remove once all dependents have been upgraded
+)
+
 // SignatureAuth contains configurations and helper functions required to validate signatures
 type SignatureAuth struct {
 	serviceRegManager *authservice.ServiceRegManager
 
 	serviceKey    *keys.PrivKey
 	servicePubKey *keys.PubKey
+
+	supportLegacy bool // TODO: Remove once all dependents have been upgraded
 }
 
 // Sign generates and returns a signature for the provided message
@@ -57,7 +68,40 @@ func (s *SignatureAuth) CheckServiceSignature(serviceID string, message []byte, 
 
 // CheckSignature validates the provided message signature from the given public key
 func (s *SignatureAuth) CheckSignature(pubKey *keys.PubKey, message []byte, signature string) error {
-	return pubKey.Verify(message, signature)
+	err := pubKey.Verify(message, signature)
+	if err != nil && s.supportLegacy {
+		return s.LegacyCheckSignature(pubKey, message, signature)
+	}
+	return err
+}
+
+// LegacyCheckSignature validates the provided message signature from the given public key
+func (s *SignatureAuth) LegacyCheckSignature(pubKey *keys.PubKey, message []byte, signature string) error {
+	if pubKey == nil {
+		return errors.New("public key is nil")
+	}
+
+	sigBytes, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return fmt.Errorf("error decoding signature: %v", err)
+	}
+
+	hash, err := authutils.HashSha256(message)
+	if err != nil {
+		return fmt.Errorf("error hashing message: %v", err)
+	}
+
+	key, ok := pubKey.Key.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("error casting pub key as rsa pub key: %v", err)
+	}
+
+	err = rsa.VerifyPSS(key, crypto.SHA256, hash, sigBytes, nil)
+	if err != nil {
+		return fmt.Errorf("error verifying signature: %v", err)
+	}
+
+	return nil
 }
 
 // SignRequest signs and modifies the provided request with the necessary signature parameters
@@ -71,7 +115,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 		return fmt.Errorf("error parsing http request: %v", err)
 	}
 
-	digest, length, err := GetRequestDigest(signedRequest.Body)
+	digest, length, err := GetRequestDigest(signedRequest.Body, SHA256)
 	if err != nil {
 		return fmt.Errorf("unable to build request digest: %v", err)
 	}
@@ -85,7 +129,7 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 	headers := []string{"request-line", "host", "date", "digest", "content-length"}
 
 	if s.servicePubKey.KeyID == "" {
-		err = s.servicePubKey.SetKeyFingerprint()
+		err = s.servicePubKey.ComputeKeyFingerprint()
 		if err != nil {
 			return fmt.Errorf("error setting service key fingerprint: %v", err)
 		}
@@ -111,7 +155,6 @@ func (s *SignatureAuth) SignRequest(r *http.Request) error {
 	}
 
 	r.Header.Set("Authorization", authHeader)
-
 	return nil
 }
 
@@ -192,15 +235,25 @@ func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, 
 		return "", nil, errors.New("request missing authorization header")
 	}
 
-	digestHeader := r.GetHeader("Digest")
+	if len(r.Body) > 0 {
+		digestHeader := r.GetHeader("Digest")
+		digestHeaderParts := strings.SplitN(digestHeader, "=", 2)
+		if len(digestHeaderParts) != 2 {
+			return "", nil, errors.New("invalid request digest header")
+		}
 
-	digest, _, err := GetRequestDigest(r.Body)
-	if err != nil {
-		return "", nil, fmt.Errorf("unable to build request digest: %v", err)
-	}
+		digest, _, err := GetRequestDigest(r.Body, digestHeaderParts[0])
+		if err != nil {
+			return "", nil, fmt.Errorf("unable to build request digest: %v", err)
+		}
+		digestParts := strings.SplitN(digest, "=", 2)
+		if len(digestParts) != 2 {
+			return "", nil, errors.New("invalid request digest")
+		}
 
-	if digest != digestHeader {
-		return "", nil, errors.New("message digest does not match digest header")
+		if digestParts[1] != digestHeaderParts[1] {
+			return "", nil, errors.New("message digest does not match digest header")
+		}
 	}
 
 	sigAuthHeader, err := ParseSignatureAuthHeader(authHeader)
@@ -208,7 +261,7 @@ func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, 
 		return "", nil, fmt.Errorf("error parsing signature authorization header: %v", err)
 	}
 
-	if sigAuthHeader.Algorithm != s.servicePubKey.Alg {
+	if sigAuthHeader.Algorithm != s.servicePubKey.Alg && (!s.supportLegacy || sigAuthHeader.Algorithm != "rsa-sha256") {
 		return "", nil, fmt.Errorf("signing algorithm (%s) does not match %s", sigAuthHeader.Algorithm, s.servicePubKey.Alg)
 	}
 
@@ -239,7 +292,7 @@ func (s *SignatureAuth) ModifyRequest(req *http.Request) error {
 }
 
 // NewSignatureAuth creates and configures a new SignatureAuth instance
-func NewSignatureAuth(serviceKey *keys.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool) (*SignatureAuth, error) {
+func NewSignatureAuth(serviceKey *keys.PrivKey, serviceRegManager *authservice.ServiceRegManager, serviceRegKey bool, supportLegacy bool) (*SignatureAuth, error) {
 	if serviceKey == nil {
 		return nil, errors.New("service key is missing")
 	}
@@ -254,12 +307,14 @@ func NewSignatureAuth(serviceKey *keys.PrivKey, serviceRegManager *authservice.S
 		}
 	}
 
-	servicePubKey, err := serviceKey.PubKey()
-	if err != nil {
-		return nil, fmt.Errorf("error getting pubkey for service key: %v", err)
+	if serviceKey.PubKey == nil {
+		err := serviceKey.ComputePubKey()
+		if err != nil {
+			return nil, fmt.Errorf("error getting pubkey for service key: %v", err)
+		}
 	}
 
-	return &SignatureAuth{serviceKey: serviceKey, servicePubKey: servicePubKey, serviceRegManager: serviceRegManager}, nil
+	return &SignatureAuth{serviceKey: serviceKey, servicePubKey: serviceKey.PubKey, serviceRegManager: serviceRegManager, supportLegacy: supportLegacy}, nil
 }
 
 // BuildSignatureString builds the string to be signed for the provided request
@@ -300,18 +355,25 @@ func GetRequestLine(r *Request) string {
 	return fmt.Sprintf("%s %s %s", r.Method, r.Path, r.Protocol)
 }
 
-// GetRequestDigest returns the SHA256 digest and length of the provided request body
-func GetRequestDigest(body []byte) (string, int, error) {
+// GetRequestDigest returns the digest and length of the provided request body using the specified algorithm
+func GetRequestDigest(body []byte, alg string) (string, int, error) {
 	if len(body) == 0 {
 		return "", 0, nil
 	}
 
-	hash, err := authutils.HashSha256(body)
-	if err != nil {
-		return "", 0, fmt.Errorf("error hashing request body: %v", err)
+	var hash []byte
+	var err error
+	switch alg {
+	case SHA256, SHA256Legacy:
+		hash, err = authutils.HashSha256(body)
+		if err != nil {
+			return "", 0, fmt.Errorf("error hashing request body: %v", err)
+		}
+	default:
+		return "", 0, fmt.Errorf("unsupported digest alg: %s", alg)
 	}
 
-	return fmt.Sprintf("SHA256=%s", base64.StdEncoding.EncodeToString(hash)), len(body), nil
+	return fmt.Sprintf("%s=%s", alg, base64.StdEncoding.EncodeToString(hash)), len(body), nil
 }
 
 // -------------------- Request --------------------

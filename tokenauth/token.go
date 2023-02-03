@@ -358,11 +358,13 @@ func GenerateSignedToken(claims *Claims, key *keys.PrivKey) (string, error) {
 		return "", fmt.Errorf("unsupported signing method for %s", key.Alg)
 	}
 	token := jwt.NewWithClaims(sigMethod, claims)
-	pubKey, err := key.PubKey()
-	if err != nil {
-		return "", fmt.Errorf("error getting pubkey: %v", err)
+	if key.PubKey == nil {
+		err := key.ComputePubKey()
+		if err != nil {
+			return "", fmt.Errorf("error computing pubkey: %v", err)
+		}
 	}
 
-	token.Header["kid"] = pubKey.KeyID
+	token.Header["kid"] = key.PubKey.KeyID
 	return token.SignedString(key.Key)
 }

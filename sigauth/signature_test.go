@@ -41,7 +41,7 @@ func setupTestSignatureAuth(authService *authservice.AuthService, mockLoader *mo
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(privKey, manager, true)
+	return sigauth.NewSignatureAuth(privKey, manager, true, true)
 }
 
 func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, mockLoader *mocks.ServiceRegLoader, key *keys.PrivKey) (*sigauth.SignatureAuth, error) {
@@ -53,7 +53,7 @@ func setupTestSignatureAuthWithPrivKey(authService *authservice.AuthService, moc
 	if err != nil {
 		return nil, fmt.Errorf("error setting up test auth service: %v", err)
 	}
-	return sigauth.NewSignatureAuth(key, manager, true)
+	return sigauth.NewSignatureAuth(key, manager, true, true)
 }
 
 func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
@@ -373,12 +373,6 @@ func TestGetRequestLine(t *testing.T) {
 }
 
 func TestGetRequestDigest(t *testing.T) {
-	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
-	if err != nil {
-		t.Errorf("Error getting sample privkey: %v", err)
-		return
-	}
-
 	params := map[string]interface{}{
 		"data": "test_data",
 		"map": map[string]int{
@@ -389,8 +383,8 @@ func TestGetRequestDigest(t *testing.T) {
 	data, _ := json.Marshal(params)
 
 	type args struct {
-		body    []byte
-		privKey *keys.PrivKey
+		body []byte
+		alg  string
 	}
 	tests := []struct {
 		name       string
@@ -399,13 +393,15 @@ func TestGetRequestDigest(t *testing.T) {
 		wantLength int
 		wantErr    bool
 	}{
-		{name: "success", args: args{body: data, privKey: privKey}, wantDigest: "SHA256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantLength: len(data), wantErr: false},
-		{name: "empty_body", args: args{body: make([]byte, 0), privKey: privKey}, wantDigest: "", wantLength: 0, wantErr: false},
-		{name: "nil_body", args: args{body: nil, privKey: privKey}, wantDigest: "", wantLength: 0, wantErr: false},
+		{name: "success", args: args{body: data, alg: sigauth.SHA256}, wantDigest: "SHA256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantLength: len(data), wantErr: false},
+		{name: "success_legacy", args: args{body: data, alg: sigauth.SHA256Legacy}, wantDigest: "SHA-256=OEbyxI+bLFvC3nD0cs4BcWAabvZsLFUdK1GBQrbyrzk=", wantLength: len(data), wantErr: false},
+		{name: "empty_body", args: args{body: make([]byte, 0), alg: sigauth.SHA256}, wantDigest: "", wantLength: 0, wantErr: false},
+		{name: "nil_body", args: args{body: nil, alg: sigauth.SHA256}, wantDigest: "", wantLength: 0, wantErr: false},
+		{name: "unsupported_alg", args: args{body: nil, alg: "test"}, wantDigest: "", wantLength: 0, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotDigest, gotLength, err := sigauth.GetRequestDigest(tt.args.body)
+			gotDigest, gotLength, err := sigauth.GetRequestDigest(tt.args.body, tt.args.alg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetRequestDigest() error = %v, wantErr %v", err, tt.wantErr)
 				return

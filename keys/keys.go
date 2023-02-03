@@ -72,6 +72,69 @@ type PrivKey struct {
 	Key    interface{} `json:"-" bson:"-"`
 	KeyPem string      `json:"key_pem" bson:"key_pem" validate:"required"`
 	Alg    string      `json:"alg" bson:"alg" validate:"required"`
+	PubKey *PubKey     `json:"-" bson:"-"`
+}
+
+// Decrypt decrypts data using "key"
+func (p *PrivKey) Decrypt(data []byte, label []byte) (string, error) {
+	if p == nil {
+		return "", fmt.Errorf("privkey is nil")
+	}
+
+	switch keyTypeFromAlg(p.Alg) {
+	case KeyTypeRSA:
+		key, ok := p.Key.(*rsa.PrivateKey)
+		if !ok {
+			return "", errors.New(errMismatchedKeyAlg)
+		}
+
+		hash := hashFromAlg(p.Alg)
+		if hash == 0 {
+			return "", fmt.Errorf("unsupported hashing method %s", p.Alg)
+		}
+		cipherText, err := rsa.DecryptOAEP(hash.New(), rand.Reader, key, data, label)
+		if err != nil {
+			return "", fmt.Errorf("error decrypting data with RSA private key: %v", err)
+		}
+		return string(cipherText), nil
+	}
+
+	return "", errors.New("decryption is unsupported for algorithm " + p.Alg)
+}
+
+// Sign uses "key" to sign message
+func (p *PrivKey) Sign(message []byte) (string, error) {
+	if p == nil {
+		return "", fmt.Errorf("privkey is nil")
+	}
+
+	sigMethod := jwt.GetSigningMethod(p.Alg)
+	if sigMethod == nil {
+		return "", errors.New(errUnsupportedAlg)
+	}
+	signature, err := sigMethod.Sign(string(message), p.Key)
+	if err != nil {
+		return "", fmt.Errorf("error signing message: %v", err)
+	}
+
+	return signature, nil
+}
+
+// Equal determines whether the privkey is equivalent to other
+func (p *PrivKey) Equal(other *PrivKey) bool {
+	if p == nil || other == nil {
+		return p == other
+	}
+
+	key, ok := p.Key.(privateKey)
+	if !ok {
+		return false
+	}
+	otherKey, ok := other.Key.(privateKey)
+	if !ok {
+		return false
+	}
+	return key.Equal(otherKey) && p.Alg == other.Alg
 }
 
 // Decode sets the "Key" by decoding "KeyPem"
@@ -93,6 +156,11 @@ func (p *PrivKey) Decode() error {
 	}
 	if err != nil {
 		return fmt.Errorf("error parsing key string: %v", err)
+	}
+
+	err = p.ComputePubKey()
+	if err != nil {
+		return fmt.Errorf("error computing pubkey: %v", err)
 	}
 
 	return nil
@@ -129,58 +197,18 @@ func (p *PrivKey) Encode() error {
 		},
 	))
 
+	err = p.ComputePubKey()
+	if err != nil {
+		return fmt.Errorf("error computing pubkey: %v", err)
+	}
+
 	return nil
 }
 
-// Decrypt decrypts data using "Key"
-func (p *PrivKey) Decrypt(data []byte, label []byte) (string, error) {
+// computePubKey computes and sets the public key representation corresponding to the private key
+func (p *PrivKey) ComputePubKey() error {
 	if p == nil {
-		return "", fmt.Errorf("privkey is nil")
-	}
-
-	switch keyTypeFromAlg(p.Alg) {
-	case KeyTypeRSA:
-		key, ok := p.Key.(*rsa.PrivateKey)
-		if !ok {
-			return "", errors.New(errMismatchedKeyAlg)
-		}
-
-		hash := hashFromAlg(p.Alg)
-		if hash == 0 {
-			return "", fmt.Errorf("unsupported hashing method %s", p.Alg)
-		}
-		cipherText, err := rsa.DecryptOAEP(hash.New(), rand.Reader, key, data, label)
-		if err != nil {
-			return "", fmt.Errorf("error decrypting data with RSA private key: %v", err)
-		}
-		return string(cipherText), nil
-	}
-
-	return "", errors.New("decryption is unsupported for algorithm " + p.Alg)
-}
-
-// Sign uses "Key" to sign message
-func (p *PrivKey) Sign(message []byte) (string, error) {
-	if p == nil {
-		return "", fmt.Errorf("privkey is nil")
-	}
-
-	sigMethod := jwt.GetSigningMethod(p.Alg)
-	if sigMethod == nil {
-		return "", errors.New(errUnsupportedAlg)
-	}
-	signature, err := sigMethod.Sign(string(message), p.Key)
-	if err != nil {
-		return "", fmt.Errorf("error signing message: %v", err)
-	}
-
-	return signature, nil
-}
-
-// PubKey returns the public key representation corresponding to the private key
-func (p *PrivKey) PubKey() (*PubKey, error) {
-	if p == nil {
-		return nil, fmt.Errorf("privkey is nil")
+		return fmt.Errorf("privkey is nil")
 	}
 
 	var key privateKey
@@ -194,40 +222,30 @@ func (p *PrivKey) PubKey() (*PubKey, error) {
 	case KeyTypeEdDSA:
 		key, ok = p.Key.(ed25519.PrivateKey)
 	default:
-		return nil, errors.New(errUnsupportedAlg)
+		return errors.New(errUnsupportedAlg)
 	}
 	if !ok {
-		return nil, errors.New(errMismatchedKeyAlg)
+		return errors.New(errMismatchedKeyAlg)
 	}
 	public.Key = key.Public()
 
 	err := public.Encode()
 	if err != nil {
-		return nil, fmt.Errorf("error encoding public key in PEM form: %v", err)
-	}
-	err = public.SetKeyFingerprint()
-	if err != nil {
-		return nil, fmt.Errorf("error setting public key fingerprint: %v", err)
+		return fmt.Errorf("error encoding public key in PEM form: %v", err)
 	}
 
-	return &public, nil
+	p.PubKey = &public
+	return nil
 }
 
-// Equal determines whether the privkey is equivalent to other
-func (p *PrivKey) Equal(other *PrivKey) bool {
-	if p == nil || other == nil {
-		return p == other
+// NewPubKey creates a new PubKey with the provided algorithm and PEM
+func NewPrivKey(alg string, keyPEM string) (*PrivKey, error) {
+	key := PrivKey{Alg: alg, KeyPem: keyPEM}
+	err := key.Decode()
+	if err != nil {
+		return nil, err
 	}
-
-	key, ok := p.Key.(privateKey)
-	if !ok {
-		return false
-	}
-	otherKey, ok := other.Key.(privateKey)
-	if !ok {
-		return false
-	}
-	return key.Equal(otherKey) && p.Alg == other.Alg
+	return &key, nil
 }
 
 // -------------------- PubKey --------------------
@@ -238,56 +256,6 @@ type PubKey struct {
 	KeyPem string      `json:"key_pem" bson:"key_pem" validate:"required"`
 	Alg    string      `json:"alg" bson:"alg" validate:"required"`
 	KeyID  string      `json:"-" bson:"-"`
-}
-
-// Decode sets the "Key" by decoding "KeyPem" and sets the "KeyID"
-func (p *PubKey) Decode() error {
-	if p == nil {
-		return fmt.Errorf("pubkey is nil")
-	}
-
-	var err error
-	switch keyTypeFromAlg(p.Alg) {
-	case KeyTypeRSA:
-		p.Key, err = jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
-	case KeyTypeEC:
-		p.Key, err = jwt.ParseECPublicKeyFromPEM([]byte(p.KeyPem))
-	case KeyTypeEdDSA:
-		p.Key, err = jwt.ParseEdPublicKeyFromPEM([]byte(p.KeyPem))
-	default:
-		return errors.New(errUnsupportedAlg)
-	}
-	if err != nil {
-		return fmt.Errorf("error parsing key string: %v", err)
-	}
-
-	err = p.SetKeyFingerprint()
-	if err != nil {
-		return fmt.Errorf("error setting key fingerprint: %v", err)
-	}
-
-	return nil
-}
-
-// Encode sets the "KeyPem" by encoding "Key" in PEM form
-func (p *PubKey) Encode() error {
-	if p == nil {
-		return fmt.Errorf("pubkey is nil")
-	}
-
-	pubASN1, err := x509.MarshalPKIXPublicKey(p.Key)
-	if err != nil {
-		return fmt.Errorf("error marshalling public key: %v", err)
-	}
-
-	p.KeyPem = string(pem.EncodeToMemory(
-		&pem.Block{
-			Type:  fmt.Sprintf("%s PUBLIC KEY", keyTypeFromAlg(p.Alg)),
-			Bytes: pubASN1,
-		},
-	))
-
-	return nil
 }
 
 // Encrypt uses "Key" to encrypt data
@@ -335,8 +303,85 @@ func (p *PubKey) Verify(message []byte, signature string) error {
 	return nil
 }
 
-// SetKeyFingerprint sets the "KeyID"
-func (p *PubKey) SetKeyFingerprint() error {
+// Equal determines whether the pubkey is equivalent to other
+func (p *PubKey) Equal(other *PubKey) bool {
+	if p == nil || other == nil {
+		return p == other
+	}
+
+	switch keyTypeFromAlg(p.Alg) {
+	case KeyTypeRSA, KeyTypeEC, KeyTypeEdDSA:
+		key, ok := p.Key.(publicKey)
+		if !ok {
+			return false
+		}
+		otherKey, ok := other.Key.(publicKey)
+		if !ok {
+			return false
+		}
+		return key.Equal(otherKey) && p.Alg == other.Alg && p.KeyID == other.KeyID
+	}
+
+	return false
+}
+
+// Decode sets the "Key" by decoding "KeyPem" and sets the "KeyID"
+func (p *PubKey) Decode() error {
+	if p == nil {
+		return fmt.Errorf("pubkey is nil")
+	}
+
+	var err error
+	switch keyTypeFromAlg(p.Alg) {
+	case KeyTypeRSA:
+		p.Key, err = jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
+	case KeyTypeEC:
+		p.Key, err = jwt.ParseECPublicKeyFromPEM([]byte(p.KeyPem))
+	case KeyTypeEdDSA:
+		p.Key, err = jwt.ParseEdPublicKeyFromPEM([]byte(p.KeyPem))
+	default:
+		return errors.New(errUnsupportedAlg)
+	}
+	if err != nil {
+		return fmt.Errorf("error parsing key string: %v", err)
+	}
+
+	err = p.ComputeKeyFingerprint()
+	if err != nil {
+		return fmt.Errorf("error computing key fingerprint: %v", err)
+	}
+
+	return nil
+}
+
+// Encode sets the "KeyPem" by encoding "Key" in PEM form and sets the "KeyID"
+func (p *PubKey) Encode() error {
+	if p == nil {
+		return fmt.Errorf("pubkey is nil")
+	}
+
+	pubASN1, err := x509.MarshalPKIXPublicKey(p.Key)
+	if err != nil {
+		return fmt.Errorf("error marshalling public key: %v", err)
+	}
+
+	p.KeyPem = string(pem.EncodeToMemory(
+		&pem.Block{
+			Type:  fmt.Sprintf("%s PUBLIC KEY", keyTypeFromAlg(p.Alg)),
+			Bytes: pubASN1,
+		},
+	))
+
+	err = p.ComputeKeyFingerprint()
+	if err != nil {
+		return fmt.Errorf("error computing key fingerprint: %v", err)
+	}
+
+	return nil
+}
+
+// ComputeKeyFingerprint computes and sets the "KeyID"
+func (p *PubKey) ComputeKeyFingerprint() error {
 	if p == nil {
 		return fmt.Errorf("pubkey is nil")
 	}
@@ -368,26 +413,14 @@ func (p *PubKey) SetKeyFingerprint() error {
 	return nil
 }
 
-// Equal determines whether the pubkey is equivalent to other
-func (p *PubKey) Equal(other *PubKey) bool {
-	if p == nil || other == nil {
-		return p == other
+// NewPubKey creates a new PubKey with the provided algorithm and PEM
+func NewPubKey(alg string, keyPEM string) (*PubKey, error) {
+	key := PubKey{Alg: alg, KeyPem: keyPEM}
+	err := key.Decode()
+	if err != nil {
+		return nil, err
 	}
-
-	switch keyTypeFromAlg(p.Alg) {
-	case KeyTypeRSA, KeyTypeEC, KeyTypeEdDSA:
-		key, ok := p.Key.(publicKey)
-		if !ok {
-			return false
-		}
-		otherKey, ok := other.Key.(publicKey)
-		if !ok {
-			return false
-		}
-		return key.Equal(otherKey) && p.Alg == other.Alg && p.KeyID == other.KeyID
-	}
-
-	return false
+	return &key, nil
 }
 
 // -------------------------- Helper Functions --------------------------
@@ -396,8 +429,8 @@ func (p *PubKey) Equal(other *PubKey) bool {
 //
 // bits is only used when generating RSA keys
 func NewAsymmetricKeyPair(alg string, bits int) (*PrivKey, *PubKey, error) {
-	var private PrivKey
-	var public PubKey
+	private := PrivKey{Alg: alg}
+
 	var err error
 
 	switch keyTypeFromAlg(alg) {
@@ -407,16 +440,14 @@ func NewAsymmetricKeyPair(alg string, bits int) (*PrivKey, *PubKey, error) {
 			return nil, nil, fmt.Errorf("error generating RSA private key: %v", err)
 		}
 		private.Key = key
-		public.Key = key.PublicKey
 	case KeyTypeEC:
 		key, err := ecdsa.GenerateKey(ellipticCurveFromAlg(alg), rand.Reader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error generating EC private key: %v", err)
 		}
 		private.Key = key
-		public.Key = key.PublicKey
-	case "EdDSA":
-		public.Key, private.Key, err = ed25519.GenerateKey(rand.Reader)
+	case KeyTypeEdDSA:
+		_, private.Key, err = ed25519.GenerateKey(rand.Reader)
 		if err != nil {
 			return nil, nil, fmt.Errorf("error generating EdDSA private key: %v", err)
 		}
@@ -424,21 +455,23 @@ func NewAsymmetricKeyPair(alg string, bits int) (*PrivKey, *PubKey, error) {
 		return nil, nil, errors.New("unrecognized key type")
 	}
 
-	private.Alg = alg
-	public.Alg = alg
+	err = private.Encode()
+	if err != nil {
+		return nil, nil, fmt.Errorf("error encoding priv key: %v", err)
+	}
 
-	return &private, &public, nil
+	return &private, private.PubKey, nil
 }
 
-// keyTypeFromAlg returns a string indicating the key type associated with alg
+// keyTypeFromAlg returns a string indicating the key type associated with Alg
 func keyTypeFromAlg(alg string) string {
 	switch alg {
 	case RS256, RS384, RS512, PS256, PS384, PS512:
-		return "RSA"
+		return KeyTypeRSA
 	case ES256, ES384, ES512:
-		return "EC"
+		return KeyTypeEC
 	case EdDSA:
-		return "EdDSA"
+		return KeyTypeEdDSA
 	default:
 		return ""
 	}
