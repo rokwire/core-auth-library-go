@@ -55,7 +55,7 @@ func TestPrivKey_Encode(t *testing.T) {
 		{"success rsa", args{rsaKey}, testutils.GetSampleRSAPrivKeyPem() + "\n", false},
 		{"success ec", args{ecKey}, testutils.GetSampleES256PrivKeyPem() + "\n", false},
 		{"success eddsa", args{edKey}, testutils.GetSampleEdPrivKeyPem() + "\n", false},
-		{"success eddsa", args{&keys.PrivKey{Key: ecKey.Key, Alg: "test"}}, "", true},
+		{"error unsupported alg", args{&keys.PrivKey{Key: ecKey.Key, Alg: "test"}}, "", true},
 		{"return error on nil key", args{nil}, "", true},
 	}
 	for _, tt := range tests {
