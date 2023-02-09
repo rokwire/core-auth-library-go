@@ -289,12 +289,83 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 			signedRequest, err := sigauth.ParseHTTPRequest(tt.args.r)
 			if err != nil && !tt.wantErr {
 				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
+				return
 			}
 
 			err = s.CheckRequestSignature(signedRequest, tt.args.pubKey)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("SignatureAuth.CheckRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSignatureAuth_CheckParsedRequestSignature(t *testing.T) {
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample pubkey: %v", err)
+		return
+	}
+
+	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
+	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
+	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
+
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	s, err := setupTestSignatureAuth(authService, mockLoader)
+	if err != nil || s == nil {
+		t.Errorf("Error initializing test signature auth: %v", err)
+		return
+	}
+
+	var nilReq *http.Request
+
+	params := map[string]interface{}{
+		"data": "test_data",
+	}
+	data, _ := json.Marshal(params)
+
+	testReq, _ := http.NewRequest(http.MethodGet, "http://test.rokwire.com/test", bytes.NewReader(data))
+	testReq.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	testReq.Header.Set("Content-Length", strconv.Itoa(len(data)))
+
+	testEmptyBody, _ := http.NewRequest(http.MethodGet, "http://test.rokwire.com/test", nil)
+
+	type args struct {
+		r *http.Request
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{name: "nil_request", args: args{r: nilReq}, wantErr: true},
+		{name: "success", args: args{r: testReq}, wantErr: false},
+		{name: "empty_body", args: args{r: testEmptyBody}, wantErr: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err = s.SignRequest(tt.args.r)
+			if err != nil && !tt.wantErr {
+				t.Errorf("SignatureAuth.SignRequest() error = %v", err)
 				return
+			}
+
+			signedRequest, err := sigauth.ParseHTTPRequest(tt.args.r)
+			if err != nil && !tt.wantErr {
+				t.Errorf("sigauth.ParseHTTPRequest() error = %v", err)
+				return
+			}
+
+			sigString, sigAuthHeader, err := s.ParseRequestSignature(signedRequest)
+			if err != nil && !tt.wantErr {
+				t.Errorf("SignatureAuth.ParseRequestSignature() error = %v", err)
+				return
+			}
+
+			err = s.CheckParsedRequestSignature(sigString, sigAuthHeader, pubKey)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("SignatureAuth.CheckParsedRequestSignature() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

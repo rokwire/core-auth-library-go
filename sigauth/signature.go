@@ -168,7 +168,7 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 		return "", errors.New("request is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.CheckRequest(r)
+	sigString, sigAuthHeader, err := s.ParseRequestSignature(r)
 	if err != nil {
 		return "", err
 	}
@@ -205,22 +205,37 @@ func (s *SignatureAuth) CheckRequestServiceSignature(r *Request, requiredService
 
 // CheckRequestSignature validates the signature on the provided request
 //
-//	The request must be signed by the private key paired with the provided public key
+// The request must be signed by the private key paired with the provided public key
 func (s *SignatureAuth) CheckRequestSignature(r *Request, key *keys.PubKey) error {
 	if r == nil {
 		return errors.New("request is nil")
+	}
+
+	sigString, sigAuthHeader, err := s.ParseRequestSignature(r)
+	if err != nil {
+		return err
+	}
+
+	return s.CheckParsedRequestSignature(sigString, sigAuthHeader, key)
+}
+
+// CheckParsedRequestSignature validates the signature on the provided parsed elements of a signed request
+//
+// The request must be signed by the private key paired with the provided public key
+func (s *SignatureAuth) CheckParsedRequestSignature(sigString string, sigAuthHeader *SignatureAuthHeader, key *keys.PubKey) error {
+	if sigAuthHeader == nil {
+		return errors.New("signature auth header is nil")
 	}
 
 	if key == nil {
 		return errors.New("pubkey is nil")
 	}
 
-	sigString, sigAuthHeader, err := s.CheckRequest(r)
-	if err != nil {
-		return err
+	if sigAuthHeader.Algorithm != key.Alg && (!s.supportLegacy || sigAuthHeader.Algorithm != "rsa-sha256") {
+		return fmt.Errorf("signing algorithm (%s) does not match %s", sigAuthHeader.Algorithm, s.servicePubKey.Alg)
 	}
 
-	err = s.CheckSignature(key, []byte(sigString), sigAuthHeader.Signature)
+	err := s.CheckSignature(key, []byte(sigString), sigAuthHeader.Signature)
 	if err != nil {
 		return fmt.Errorf("error validating signature: %v", err)
 	}
@@ -228,8 +243,12 @@ func (s *SignatureAuth) CheckRequestSignature(r *Request, key *keys.PubKey) erro
 	return nil
 }
 
-// CheckRequest checks the request's digest and returns its signature string and parsed header
-func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, error) {
+// ParseRequestSignature checks the request's digest and returns its signature string and parsed header
+func (s *SignatureAuth) ParseRequestSignature(r *Request) (string, *SignatureAuthHeader, error) {
+	if r == nil {
+		return "", nil, errors.New("request is nil")
+	}
+
 	authHeader := r.GetHeader("Authorization")
 	if authHeader == "" {
 		return "", nil, errors.New("request missing authorization header")
@@ -259,10 +278,6 @@ func (s *SignatureAuth) CheckRequest(r *Request) (string, *SignatureAuthHeader, 
 	sigAuthHeader, err := ParseSignatureAuthHeader(authHeader)
 	if err != nil {
 		return "", nil, fmt.Errorf("error parsing signature authorization header: %v", err)
-	}
-
-	if sigAuthHeader.Algorithm != s.servicePubKey.Alg && (!s.supportLegacy || sigAuthHeader.Algorithm != "rsa-sha256") {
-		return "", nil, fmt.Errorf("signing algorithm (%s) does not match %s", sigAuthHeader.Algorithm, s.servicePubKey.Alg)
 	}
 
 	sigString, err := BuildSignatureString(r, sigAuthHeader.Headers)

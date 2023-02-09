@@ -82,6 +82,7 @@ Follow the steps below to upgrade to the associated version of this library. Not
 * `SignatureAuth.CheckSignature` now takes a `*keys.PubKey` as an argument instead of `*rsa.PublicKey`.
 * `SignatureAuth.CheckRequestSignature` now takes a `*keys.PubKey` as an argument instead of `*rsa.PublicKey`.
 * `GetRequestDigest` now takes an `alg string` argument to specify which hash algorithm to use to compute the digest
+* The `SignatureAuthHeader` algorithm check has been removed from `CheckRequest`, which has also been renamed to `ParseRequestSignature`. This better reflects that the function should be used to parse HTTP requests. The algorithm check has been moved to `CheckParsedRequestSignature`.
 
 ###### tokenauth
 * `TokenAuth.ValidateCsrfTokenClaims` has been removed, as the tokenauth package is no longer used to handle CSRF tokens, and these tokens are now opaque.
