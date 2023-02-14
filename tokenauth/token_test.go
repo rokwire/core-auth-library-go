@@ -77,6 +77,43 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 		"https://auth.rokwire.com", "example_permission", "all:all:all", "email", exp.Unix())
 }
 
+func TestClaims_CanAccess(t *testing.T) {
+	systemClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", System: true}
+	adminClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", System: false}
+
+	type args struct {
+		claims *tokenauth.Claims
+		appID  string
+		orgID  string
+		system bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"success on system access all_all", args{&systemClaims, authutils.AllApps, authutils.AllOrgs, true}, false},
+		{"success on system access all_org", args{&systemClaims, authutils.AllApps, "org1", false}, false},
+		{"success on system access app_all", args{&systemClaims, "app1", authutils.AllOrgs, true}, false},
+		{"success on system access app_org", args{&systemClaims, "app1", "org1", true}, false},
+		{"error on access other app_org", args{&systemClaims, "app1", "org2", true}, true},
+
+		{"error on admin access all_all", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, true}, true},
+		{"success on admin access all_org", args{&adminClaims, authutils.AllApps, "org1", false}, false},
+		{"error on admin access app_all", args{&adminClaims, "app1", authutils.AllOrgs, true}, true},
+		{"success on admin access app_org", args{&adminClaims, "app1", "org1", false}, false},
+		{"error on access system resource", args{&adminClaims, "app1", "org1", true}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.claims.CanAccess(tt.args.appID, tt.args.orgID, tt.args.system)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Claims.CanAccess() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTokenAuth_CheckToken(t *testing.T) {
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: nil}
