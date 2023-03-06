@@ -27,6 +27,7 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/tokenauth"
