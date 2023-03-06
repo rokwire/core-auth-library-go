@@ -15,7 +15,6 @@
 package authservice_test
 
 import (
-	"crypto/rsa"
 	"errors"
 	"reflect"
 	"testing"
@@ -23,18 +22,20 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
+	"github.com/rokwire/core-auth-library-go/v2/keys"
 )
-
-func setupPubKeyFromPem(pem string) *authservice.PubKey {
-	return &authservice.PubKey{KeyPem: pem, Alg: "RS256"}
-}
 
 func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {
 	return authservice.NewServiceRegSubscriptions([]string{"auth", "test"})
 }
 
 func TestServiceRegManager_GetServiceReg(t *testing.T) {
-	authPubKey := testutils.GetSamplePubKey()
+	authPubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample pubkey: %v", err)
+		return
+	}
+
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
 	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", authPubKey}
@@ -75,7 +76,12 @@ func TestServiceRegManager_GetServiceReg(t *testing.T) {
 }
 
 func TestServiceRegManager_GetServiceRegWithPubKey(t *testing.T) {
-	authPubKey := testutils.GetSamplePubKey()
+	authPubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample pubkey: %v", err)
+		return
+	}
+
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
 	authServiceReg := authservice.ServiceReg{"auth", "6050ec62-d552-4fed-b11f-15a01bb1afc1", "https://auth.rokwire.com", authPubKey}
@@ -197,21 +203,17 @@ func TestServiceRegManager_ValidateServiceRegistration(t *testing.T) {
 }
 
 func TestAuthService_ValidateServiceRegistrationKey(t *testing.T) {
-	wrongKeyPem := `-----BEGIN RSA PUBLIC KEY-----
-MIIBigKCAYEA2RftabNugtaQNtJzLeKS5sy3RUH5nmP2ul0ULm/iiv2n7dQZyczk
-/456/8BXRsoObDAAZBGf2JjpDItJa/v3d2qyPCwEYRUnzvnNdOV74IIraR/msa2W
-NksvHRBujetp9spfdfLvULm8J7sPmCnoRR9icajSye9qNcjx7uuBzTosQmefpIWw
-yOV2q/+dAQKe4ADkLMFRzMBt6z9mOZk+7AxLL0dxCDBufqStUpskPzDFj5VjZ8Pm
-MBViPm2VHlXc2oyhTpvt86rdZ19jXTl+WdFGZO+o0Wo08YzUoCot7MZ1LwiHLXF/
-Rs/dqTeDxXncn8SEReSzr03lUY8HdyRceflQdJjxZA3KP4BZ8Bqb0mhN3gXLIdFv
-j/2oLs8yGD2fd7GxTVu+cnHRrZleYvsOWHPNBDW3lwHZr2cdPE60oIx9culbZwl4
-UESf0lL26Qupn0Ha2tbF25cwEBM4ZvO41bKeqozXFOLRXYn4r2ZDahcRfHjF04kp
-LrSVbitnfQD1AgMBAAE=
------END RSA PUBLIC KEY-----`
-	pubKey := testutils.GetSamplePubKey()
-	wrongKey := setupPubKeyFromPem(wrongKeyPem)
+	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample pubkey: %v", err)
+		return
+	}
+	_, wrongKey, err := keys.NewAsymmetricKeyPair(keys.RS256, 2048)
+	if err != nil {
+		t.Errorf("Error generating new pubkey: %v", err)
+		return
+	}
 
-	wrongKey.LoadKeyFromPem()
 	authService := testutils.SetupTestAuthService("test", "https://test.rokwire.com")
 	testServiceReg := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, pubKey}
 	testServiceRegNoKey := authservice.ServiceReg{authService.ServiceID, "dec8d277-b775-47a2-b7b0-ce8482871b67", authService.ServiceHost, nil}
@@ -226,10 +228,14 @@ LrSVbitnfQD1AgMBAAE=
 
 	subscribed := []string{"auth"}
 
-	privKey := testutils.GetSamplePrivKey()
+	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample privkey: %v", err)
+		return
+	}
 
 	type args struct {
-		privKey *rsa.PrivateKey
+		privKey *keys.PrivKey
 	}
 	tests := []struct {
 		name             string
@@ -466,46 +472,6 @@ func TestServiceAccountManager_GetCachedAccessToken(t *testing.T) {
 				t.Errorf("ServiceAccountManager.GetCachedAccessToken() pair = %s, wantErr %v", pair.String(), tt.wantErr)
 			} else if !tt.wantErr && (pair.String() != tt.wantPair) {
 				t.Errorf("ServiceAccountManager.GetCachedAccessToken() pair = %s, want %s", pair.String(), tt.wantPair)
-			}
-		})
-	}
-}
-
-func TestPubKey_LoadKeyFromPem(t *testing.T) {
-	tests := []struct {
-		name      string
-		p         *authservice.PubKey
-		wantErr   bool
-		wantKey   *rsa.PublicKey
-		wantKeyID string
-	}{
-		{"return nil and set Key, Kid property on valid pem", setupPubKeyFromPem(testutils.GetSamplePubKeyPem()), false, testutils.GetSamplePubKey().Key, testutils.GetSamplePubKeyFingerprint()},
-		{"return error on invalid pem", setupPubKeyFromPem("test"), true, nil, ""},
-		{"return error on nil pubkey", nil, true, nil, ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.p.LoadKeyFromPem(); (err != nil) != tt.wantErr {
-				t.Errorf("PubKey.LoadKeyFromPem() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantKey == nil {
-				if tt.p != nil && tt.p.Key != nil {
-					t.Errorf("PubKey.LoadKeyFromPem() key = %v, want nil", tt.p.Key)
-				}
-			} else {
-				if !tt.p.Key.Equal(tt.wantKey) {
-					t.Errorf("PubKey.LoadKeyFromPem() key = %v, want %v", tt.p.Key, tt.wantKey)
-				}
-			}
-			if tt.p == nil {
-				if tt.wantKeyID != "" {
-					t.Errorf("PubKey.LoadKeyFromPem() kid = nil, want %v", tt.wantKeyID)
-				} else {
-					return
-				}
-			}
-			if tt.p.KeyID != tt.wantKeyID {
-				t.Errorf("PubKey.LoadKeyFromPem() kid = %v, want %v", tt.p.KeyID, tt.wantKeyID)
 			}
 		})
 	}

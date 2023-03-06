@@ -15,7 +15,6 @@
 package authutils_test
 
 import (
-	"crypto/rsa"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -25,37 +24,7 @@ import (
 	"testing"
 
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
-	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 )
-
-func TestGetKeyFingerprint(t *testing.T) {
-	key := testutils.GetSamplePubKey()
-
-	type args struct {
-		key *rsa.PublicKey
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		{"returns fingerprint for valid key", args{key.Key}, testutils.GetSamplePubKeyFingerprint(), false},
-		{"errors on nil key", args{nil}, "", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := authutils.GetKeyFingerprint(tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetKeyFingerprint() = %v, error = %v, wantErr %v", got, err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("GetKeyFingerprint() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestHashSha256(t *testing.T) {
 	type args struct {
@@ -145,36 +114,6 @@ func TestRemoveString(t *testing.T) {
 	}
 }
 
-func TestGetPubKeyPem(t *testing.T) {
-	sampleKey := testutils.GetSamplePubKey().Key
-	sampleKeyPem := testutils.GetSamplePubKeyPem() + "\n"
-
-	type args struct {
-		key *rsa.PublicKey
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    string
-		wantErr bool
-	}{
-		{"return error on nil key", args{sampleKey}, sampleKeyPem, false},
-		{"return error on nil key", args{nil}, "", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := authutils.GetPubKeyPem(tt.args.key)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetPubKeyPem() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("GetPubKeyPem() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestReadResponseBody(t *testing.T) {
 	unauthorized := &http.Response{StatusCode: http.StatusUnauthorized, Status: fmt.Sprintf("%d %s", http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized)), Body: io.NopCloser(strings.NewReader("test"))}
 	ok := &http.Response{StatusCode: http.StatusOK, Status: fmt.Sprintf("%d %s", http.StatusOK, http.StatusText(http.StatusOK)), Body: io.NopCloser(strings.NewReader("test"))}
@@ -201,6 +140,34 @@ func TestReadResponseBody(t *testing.T) {
 			}
 			if string(got) != string(tt.want) {
 				t.Errorf("ReadResponseBody() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGenerateRandomBytes(t *testing.T) {
+	type args struct {
+		n int
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantLen int
+		wantErr bool
+	}{
+		{"success", args{32}, 32, false},
+		{"zero length", args{0}, 0, false},
+		{"negative length", args{-1}, 0, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := authutils.GenerateRandomBytes(tt.args.n)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateRandomBytes() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && len(got) != tt.wantLen {
+				t.Errorf("GenerateRandomBytes() = %v, want %v", len(got), tt.wantLen)
 			}
 		})
 	}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
+	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/sigauth"
 )
 
@@ -145,12 +146,16 @@ func main() {
 		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
 
-	privKey := testutils.GetSamplePrivKey()
+	// TODO: Replace sample key PEM with service private key from configs (eg. environment variable)
+	keyPem := testutils.GetSampleRSAPrivKeyPem()
 
-	// TODO: Load service private key
+	privKey, err := keys.NewPrivKey(keys.RS256, keyPem)
+	if err != nil {
+		log.Fatalf("Error loading private key: %v", err)
+	}
 
 	// Instantiate SignatureAuth instance to perform token validation
-	signatureAuth, err := sigauth.NewSignatureAuth(privKey, serviceRegManager, false)
+	signatureAuth, err := sigauth.NewSignatureAuth(privKey, serviceRegManager, false, false)
 	if err != nil {
 		log.Fatalf("Error initializing signature auth: %v", err)
 	}
