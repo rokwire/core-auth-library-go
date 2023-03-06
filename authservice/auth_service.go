@@ -17,7 +17,6 @@ package authservice
 import (
 	"bytes"
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang-jwt/jwt"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"golang.org/x/sync/syncmap"
 	"gopkg.in/go-playground/validator.v9"
 )
@@ -121,7 +120,7 @@ func (s *ServiceRegManager) GetServiceRegWithPubKey(id string) (*ServiceReg, err
 	}
 
 	if serviceReg.PubKey.Key == nil {
-		err = serviceReg.PubKey.LoadKeyFromPem()
+		err = serviceReg.PubKey.Decode()
 		if err != nil || serviceReg.PubKey.Key == nil {
 			return nil, fmt.Errorf("service pub key is invalid for id %s: %v", id, err)
 		}
@@ -191,7 +190,7 @@ func (s *ServiceRegManager) ValidateServiceRegistration() error {
 }
 
 // ValidateServiceRegistrationKey validates that the implementing service has a valid registration for the provided keypair
-func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *rsa.PrivateKey) error {
+func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *keys.PrivKey) error {
 	if privKey == nil {
 		return errors.New("provided priv key is nil")
 	}
@@ -201,7 +200,14 @@ func (s *ServiceRegManager) ValidateServiceRegistrationKey(privKey *rsa.PrivateK
 		return fmt.Errorf("failed to retrieve service pub key: %v", err)
 	}
 
-	if service.PubKey.Key.Equal(privKey.PublicKey) {
+	if privKey.PubKey == nil {
+		err := privKey.ComputePubKey()
+		if err != nil {
+			return fmt.Errorf("error computing pubkey: %v", err)
+		}
+	}
+
+	if !service.PubKey.Equal(privKey.PubKey) {
 		return fmt.Errorf("service pub key does not match for id %s", s.AuthService.ServiceID)
 	}
 
@@ -393,7 +399,7 @@ func (r *RemoteServiceRegLoaderImpl) LoadServices() ([]ServiceReg, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error validating service data: %v", err)
 		}
-		service.PubKey.LoadKeyFromPem()
+		service.PubKey.Decode()
 	}
 
 	return services, nil
@@ -1139,44 +1145,8 @@ func (rr RequestResponse) IsZero() bool {
 
 // ServiceReg represents a service registration record
 type ServiceReg struct {
-	ServiceID        string  `json:"service_id" bson:"service_id" validate:"required"`
-	ServiceAccountID string  `json:"service_account_id" bson:"service_account_id"`
-	Host             string  `json:"host" bson:"host" validate:"required"`
-	PubKey           *PubKey `json:"pub_key" bson:"pub_key"`
-}
-
-// -------------------- PubKey --------------------
-
-// PubKey represents a public key object including the key and related metadata
-type PubKey struct {
-	Key    *rsa.PublicKey `json:"-" bson:"-"`
-	KeyPem string         `json:"key_pem" bson:"key_pem" validate:"required"`
-	Alg    string         `json:"alg" bson:"alg" validate:"required"`
-	KeyID  string         `json:"-" bson:"-"`
-}
-
-// LoadKeyFromPem parses "KeyPem" and sets the "Key" and "Kid"
-func (p *PubKey) LoadKeyFromPem() error {
-	if p == nil {
-		return fmt.Errorf("pubkey is nil")
-	}
-
-	key, err := jwt.ParseRSAPublicKeyFromPEM([]byte(p.KeyPem))
-	if err != nil {
-		p.Key = nil
-		p.KeyID = ""
-		return fmt.Errorf("error parsing key string: %v", err)
-	}
-
-	kid, err := authutils.GetKeyFingerprint(key)
-	if err != nil {
-		p.Key = nil
-		p.KeyID = ""
-		return fmt.Errorf("error getting key fingerprint: %v", err)
-	}
-
-	p.Key = key
-	p.KeyID = kid
-
-	return nil
+	ServiceID        string       `json:"service_id" bson:"service_id" validate:"required"`
+	ServiceAccountID string       `json:"service_account_id" bson:"service_account_id"`
+	Host             string       `json:"host" bson:"host" validate:"required"`
+	PubKey           *keys.PubKey `json:"pub_key" bson:"pub_key"`
 }

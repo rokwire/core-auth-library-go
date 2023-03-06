@@ -26,6 +26,7 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v2/keys"
 )
 
 const (
@@ -376,4 +377,26 @@ func GetAccessToken(r *http.Request) (string, error) {
 	idToken := splitAuthorization[1]
 
 	return idToken, nil
+}
+
+// GenerateSignedToken generates and signs a new JWT with the given claims using key
+func GenerateSignedToken(claims *Claims, key *keys.PrivKey) (string, error) {
+	if key == nil {
+		return "", errors.New("private key is missing")
+	}
+
+	sigMethod := jwt.GetSigningMethod(key.Alg)
+	if sigMethod == nil {
+		return "", fmt.Errorf("unsupported signing method for %s", key.Alg)
+	}
+	token := jwt.NewWithClaims(sigMethod, claims)
+	if key.PubKey == nil {
+		err := key.ComputePubKey()
+		if err != nil {
+			return "", fmt.Errorf("error computing pubkey: %v", err)
+		}
+	}
+
+	token.Header["kid"] = key.PubKey.KeyID
+	return token.SignedString(key.Key)
 }

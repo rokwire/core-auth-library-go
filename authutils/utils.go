@@ -16,11 +16,8 @@ package authutils
 
 import (
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -54,42 +51,6 @@ func RemoveString(slice []string, val string) ([]string, bool) {
 		}
 	}
 	return slice, false
-}
-
-// GetKeyFingerprint returns the fingerprint for a given rsa.PublicKey
-func GetKeyFingerprint(key *rsa.PublicKey) (string, error) {
-	if key == nil {
-		return "", errors.New("key cannot be nil")
-	}
-	pubPkcs1 := x509.MarshalPKCS1PublicKey(key)
-
-	hash, err := HashSha256(pubPkcs1)
-	if err != nil {
-		return "", fmt.Errorf("error hashing key: %v", err)
-	}
-
-	return "SHA256:" + base64.StdEncoding.EncodeToString(hash), nil
-}
-
-// GetPubKeyPem returns the PEM encoded public key
-func GetPubKeyPem(key *rsa.PublicKey) (string, error) {
-	if key == nil {
-		return "", errors.New("key cannot be nil")
-	}
-
-	pubASN1, err := x509.MarshalPKIXPublicKey(key)
-	if err != nil {
-		return "", fmt.Errorf("error marshalling public key: %v", err)
-	}
-
-	pemdata := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PUBLIC KEY",
-			Bytes: pubASN1,
-		},
-	)
-
-	return string(pemdata), nil
 }
 
 // HashSha256 returns the SHA256 hash of the input
@@ -128,6 +89,10 @@ func ReadResponseBody(resp *http.Response) ([]byte, error) {
 
 // GenerateRandomBytes returns securely generated random bytes
 func GenerateRandomBytes(n int) ([]byte, error) {
+	if n < 0 {
+		return nil, errors.New("number of bytes cannot be negative")
+	}
+
 	b := make([]byte, n)
 	_, err := rand.Read(b)
 	if err != nil {
