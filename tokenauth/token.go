@@ -74,23 +74,31 @@ func (c Claims) Scopes() []authorization.Scope {
 
 // CanAccess returns an error if the claims do not grant access to a resource with the given appID, orgId, and system status
 func (c Claims) CanAccess(appID string, orgID string, system bool) error {
-	var err error
-	// if system admin or not a system resource, err = nil
+	// forbidden if not system admin and a system resource
 	if !c.System && system {
 		return errors.New("non-system admin access is forbidden")
 	}
 
-	// only system admins may access resources applying to all apps, all orgs
-	if appID == authutils.AllApps && orgID == authutils.AllOrgs {
-		return err
-	}
-	// if resource applies to all apps and orgID matches or applies to all orgs and appID matches, then access granted if system admin or not a system resource
-	if (appID == authutils.AllApps || orgID == authutils.AllOrgs) && (appID == c.AppID || orgID == c.OrgID) {
-		return err
-	}
-	// if appID and orgID match, then access granted if system admin or not a system resource
-	if appID == c.AppID && orgID == c.OrgID {
-		return err
+	if c.Service {
+		// if a service, check if claimed appID, orgID match a pair granting access to resource appID, orgID
+		for _, pair := range authservice.GetAccessPairs(appID, orgID) {
+			if pair.AppID == c.AppID && pair.OrgID == c.OrgID {
+				return nil
+			}
+		}
+	} else {
+		// only system admins may access resources applying to all apps, all orgs
+		if c.System && appID == authutils.AllApps && orgID == authutils.AllOrgs {
+			return nil
+		}
+		// if resource applies to all apps and orgID matches or applies to all orgs and appID matches, then access granted if system admin or not a system resource
+		if (appID == authutils.AllApps && orgID == c.OrgID) || (appID == c.AppID && orgID == authutils.AllOrgs) {
+			return nil
+		}
+		// if appID and orgID match, then access granted if system admin or not a system resource
+		if appID == c.AppID && orgID == c.OrgID {
+			return nil
+		}
 	}
 
 	return fmt.Errorf("access forbidden for app_id %s, org_id %s", c.AppID, c.OrgID)

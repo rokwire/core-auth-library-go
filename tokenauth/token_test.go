@@ -79,7 +79,10 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 
 func TestClaims_CanAccess(t *testing.T) {
 	systemClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", System: true}
-	adminClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", System: false}
+	adminClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1"}
+	serviceClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", Service: true}
+	serviceClaimsAll := tokenauth.Claims{AppID: authutils.AllApps, OrgID: authutils.AllOrgs, Service: true}
+	serviceClaimsAllApps := tokenauth.Claims{AppID: authutils.AllApps, OrgID: "org1", Service: true}
 
 	type args struct {
 		claims *tokenauth.Claims
@@ -98,11 +101,21 @@ func TestClaims_CanAccess(t *testing.T) {
 		{"success on system access app_org", args{&systemClaims, "app1", "org1", true}, false},
 		{"error on access other app_org", args{&systemClaims, "app1", "org2", true}, true},
 
-		{"error on admin access all_all", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, true}, true},
+		{"error on admin access all_all_system", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, true}, true},
+		{"error on admin access all_all", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, false}, true},
 		{"success on admin access all_org", args{&adminClaims, authutils.AllApps, "org1", false}, false},
 		{"error on admin access app_all", args{&adminClaims, "app1", authutils.AllOrgs, true}, true},
 		{"success on admin access app_org", args{&adminClaims, "app1", "org1", false}, false},
 		{"error on access system resource", args{&adminClaims, "app1", "org1", true}, true},
+
+		{"error on service access all_all_system", args{&serviceClaimsAll, authutils.AllApps, authutils.AllOrgs, true}, true},
+		{"error on service access all_all", args{&serviceClaimsAll, authutils.AllApps, authutils.AllOrgs, false}, false},
+		{"success on service access all_org", args{&serviceClaimsAll, authutils.AllApps, "org1", false}, false},
+		{"error on service access app_all", args{&serviceClaimsAll, "app1", authutils.AllOrgs, true}, true},
+		{"success on all service access app_org", args{&serviceClaimsAll, "app1", "org1", false}, false},
+		{"success on all apps service access app_org", args{&serviceClaimsAllApps, "app1", "org1", false}, false},
+		{"success on service access app_org", args{&serviceClaims, "app1", "org1", false}, false},
+		{"error on access system resource", args{&serviceClaims, "app1", "org1", true}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
