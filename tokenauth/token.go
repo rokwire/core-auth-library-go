@@ -98,7 +98,7 @@ func (c Claims) CanAccess(appID string, orgID string, system bool) error {
 	if orgID != c.OrgID && !(c.System && orgID == authutils.AllOrgs) {
 		return fmt.Errorf("access to orgID %s is forbidden", orgID)
 	}
-	
+
 	return nil
 }
 

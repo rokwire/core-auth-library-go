@@ -3,8 +3,8 @@ module github.com/rokwire/core-auth-library-go/v2
 go 1.20
 
 require (
-	github.com/aws/aws-sdk-go v1.44.215
-	github.com/casbin/casbin/v2 v2.65.0
+	github.com/aws/aws-sdk-go v1.44.218
+	github.com/casbin/casbin/v2 v2.65.1
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/rokwire/logging-library-go/v2 v2.2.0
 	github.com/rs/cors v1.8.3
