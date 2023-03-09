@@ -88,12 +88,12 @@ func (c Claims) CanAccess(appID string, orgID string, system bool) error {
 			}
 		}
 	} else {
-		// only system admins may access resources applying to all apps, all orgs
-		if c.System && appID == authutils.AllApps && orgID == authutils.AllOrgs {
+		// only system admins may access resources applying to all apps or appID match, all orgs
+		if c.System && (appID == authutils.AllApps || appID == c.AppID) && orgID == authutils.AllOrgs {
 			return nil
 		}
-		// if resource applies to all apps and orgID matches or applies to all orgs and appID matches, then access granted if system admin or not a system resource
-		if (appID == authutils.AllApps && orgID == c.OrgID) || (appID == c.AppID && orgID == authutils.AllOrgs) {
+		// if resource applies to all apps and orgID matches, then access granted if system admin or not a system resource
+		if appID == authutils.AllApps && orgID == c.OrgID {
 			return nil
 		}
 		// if appID and orgID match, then access granted if system admin or not a system resource

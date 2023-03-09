@@ -94,7 +94,8 @@ func TestClaims_CanAccess(t *testing.T) {
 		{"error on admin access all_all_system", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, true}, true},
 		{"error on admin access all_all", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, false}, true},
 		{"success on admin access all_org", args{&adminClaims, authutils.AllApps, "org1", false}, false},
-		{"error on admin access app_all", args{&adminClaims, "app1", authutils.AllOrgs, true}, true},
+		{"error on admin access app_all_system", args{&adminClaims, "app1", authutils.AllOrgs, true}, true},
+		{"error on admin access app_all", args{&adminClaims, "app1", authutils.AllOrgs, false}, true},
 		{"success on admin access app_org", args{&adminClaims, "app1", "org1", false}, false},
 		{"error on access system resource", args{&adminClaims, "app1", "org1", true}, true},
 
