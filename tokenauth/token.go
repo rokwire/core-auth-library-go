@@ -87,22 +87,18 @@ func (c Claims) CanAccess(appID string, orgID string, system bool) error {
 				return nil
 			}
 		}
+
+		return fmt.Errorf("access forbidden for app_id %s, org_id %s", c.AppID, c.OrgID)
 	} else {
-		// only system admins may access resources applying to all apps or appID match, all orgs
-		if c.System && (appID == authutils.AllApps || appID == c.AppID) && orgID == authutils.AllOrgs {
-			return nil
+		if appID != c.AppID && appID != authutils.AllApps {
+			return fmt.Errorf("access to appID %s is forbidden", appID)
 		}
-		// if resource applies to all apps and orgID matches, then access granted if system admin or not a system resource
-		if appID == authutils.AllApps && orgID == c.OrgID {
-			return nil
-		}
-		// if appID and orgID match, then access granted if system admin or not a system resource
-		if appID == c.AppID && orgID == c.OrgID {
-			return nil
+
+		if orgID != c.OrgID && !(c.System && orgID == authutils.AllOrgs) {
+			return fmt.Errorf("access to orgID %s is forbidden", orgID)
 		}
 	}
-
-	return fmt.Errorf("access forbidden for app_id %s, org_id %s", c.AppID, c.OrgID)
+	return nil
 }
 
 // TokenAuth contains configurations and helper functions required to validate tokens
