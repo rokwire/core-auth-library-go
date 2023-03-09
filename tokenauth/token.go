@@ -89,15 +89,16 @@ func (c Claims) CanAccess(appID string, orgID string, system bool) error {
 		}
 
 		return fmt.Errorf("access forbidden for app_id %s, org_id %s", c.AppID, c.OrgID)
-	} else {
-		if appID != c.AppID && appID != authutils.AllApps {
-			return fmt.Errorf("access to appID %s is forbidden", appID)
-		}
-
-		if orgID != c.OrgID && !(c.System && orgID == authutils.AllOrgs) {
-			return fmt.Errorf("access to orgID %s is forbidden", orgID)
-		}
 	}
+
+	if appID != c.AppID && appID != authutils.AllApps {
+		return fmt.Errorf("access to appID %s is forbidden", appID)
+	}
+
+	if orgID != c.OrgID && !(c.System && orgID == authutils.AllOrgs) {
+		return fmt.Errorf("access to orgID %s is forbidden", orgID)
+	}
+	
 	return nil
 }
 
