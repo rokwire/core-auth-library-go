@@ -27,6 +27,7 @@ import (
 	"github.com/rokwire/core-auth-library-go/v2/authorization"
 	"github.com/rokwire/core-auth-library-go/v2/authservice"
 	"github.com/rokwire/core-auth-library-go/v2/authservice/mocks"
+	"github.com/rokwire/core-auth-library-go/v2/authutils"
 	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
 	"github.com/rokwire/core-auth-library-go/v2/keys"
 	"github.com/rokwire/core-auth-library-go/v2/tokenauth"
@@ -64,6 +65,57 @@ func getSampleExpiredClaims() *tokenauth.Claims {
 	exp := time.Now().Add(-5 * time.Minute)
 	return getTestClaims("test_user_id", "rokwire", "test_org_id", "access",
 		"https://auth.rokwire.com", "example_permission", "all:all:all", "email", exp.Unix())
+}
+
+func TestClaims_CanAccess(t *testing.T) {
+	systemClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", System: true}
+	adminClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1"}
+	serviceClaims := tokenauth.Claims{AppID: "app1", OrgID: "org1", Service: true}
+	serviceClaimsAll := tokenauth.Claims{AppID: authutils.AllApps, OrgID: authutils.AllOrgs, Service: true}
+	serviceClaimsAllApps := tokenauth.Claims{AppID: authutils.AllApps, OrgID: "org1", Service: true}
+
+	type args struct {
+		claims *tokenauth.Claims
+		appID  string
+		orgID  string
+		system bool
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{"success on system access all_all", args{&systemClaims, authutils.AllApps, authutils.AllOrgs, true}, false},
+		{"success on system access all_org", args{&systemClaims, authutils.AllApps, "org1", false}, false},
+		{"success on system access app_all", args{&systemClaims, "app1", authutils.AllOrgs, true}, false},
+		{"success on system access app_org", args{&systemClaims, "app1", "org1", true}, false},
+		{"error on access other app_org", args{&systemClaims, "app1", "org2", true}, true},
+
+		{"error on admin access all_all_system", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, true}, true},
+		{"error on admin access all_all", args{&adminClaims, authutils.AllApps, authutils.AllOrgs, false}, true},
+		{"success on admin access all_org", args{&adminClaims, authutils.AllApps, "org1", false}, false},
+		{"error on admin access app_all_system", args{&adminClaims, "app1", authutils.AllOrgs, true}, true},
+		{"error on admin access app_all", args{&adminClaims, "app1", authutils.AllOrgs, false}, true},
+		{"success on admin access app_org", args{&adminClaims, "app1", "org1", false}, false},
+		{"error on access system resource", args{&adminClaims, "app1", "org1", true}, true},
+
+		{"error on service access all_all_system", args{&serviceClaimsAll, authutils.AllApps, authutils.AllOrgs, true}, true},
+		{"error on service access all_all", args{&serviceClaimsAll, authutils.AllApps, authutils.AllOrgs, false}, false},
+		{"success on service access all_org", args{&serviceClaimsAll, authutils.AllApps, "org1", false}, false},
+		{"error on service access app_all", args{&serviceClaimsAll, "app1", authutils.AllOrgs, true}, true},
+		{"success on all service access app_org", args{&serviceClaimsAll, "app1", "org1", false}, false},
+		{"success on all apps service access app_org", args{&serviceClaimsAllApps, "app1", "org1", false}, false},
+		{"success on service access app_org", args{&serviceClaims, "app1", "org1", false}, false},
+		{"error on access system resource", args{&serviceClaims, "app1", "org1", true}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.args.claims.CanAccess(tt.args.appID, tt.args.orgID, tt.args.system)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Claims.CanAccess() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - BREAKING: Encapsulate key management [#76](https://github.com/rokwire/core-auth-library-go/issues/76)
 - BREAKING: Add webauth package for web apps [#83](https://github.com/rokwire/core-auth-library-go/issues/83)
+- Claims can access resource function [#85](https://github.com/rokwire/core-auth-library-go/issues/85)
 
 ## [2.2.0] - 2022-11-23
 ### Added

@@ -73,6 +73,35 @@ func (c Claims) Scopes() []authorization.Scope {
 	return scopes
 }
 
+// CanAccess returns an error if the claims do not grant access to a resource with the given appID, orgId, and system status
+func (c Claims) CanAccess(appID string, orgID string, system bool) error {
+	// forbidden if not system admin and a system resource
+	if !c.System && system {
+		return errors.New("non-system admin access is forbidden")
+	}
+
+	if c.Service {
+		// if a service, check if claimed appID, orgID match a pair granting access to resource appID, orgID
+		for _, pair := range authservice.GetAccessPairs(appID, orgID) {
+			if pair.AppID == c.AppID && pair.OrgID == c.OrgID {
+				return nil
+			}
+		}
+
+		return fmt.Errorf("access forbidden for app_id %s, org_id %s", c.AppID, c.OrgID)
+	}
+
+	if appID != c.AppID && appID != authutils.AllApps {
+		return fmt.Errorf("access to appID %s is forbidden", appID)
+	}
+
+	if orgID != c.OrgID && !(c.System && orgID == authutils.AllOrgs) {
+		return fmt.Errorf("access to orgID %s is forbidden", orgID)
+	}
+
+	return nil
+}
+
 // TokenAuth contains configurations and helper functions required to validate tokens
 type TokenAuth struct {
 	serviceRegManager   *authservice.ServiceRegManager
