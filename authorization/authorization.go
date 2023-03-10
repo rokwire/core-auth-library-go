@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	"github.com/casbin/casbin/v2"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
 )
 
 const (

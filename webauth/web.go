@@ -21,7 +21,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
 	"github.com/rs/cors"
 )
 

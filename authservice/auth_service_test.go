@@ -19,10 +19,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/rokwire/core-auth-library-go/v2/authservice"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
-	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
-	"github.com/rokwire/core-auth-library-go/v2/keys"
+	"github.com/rokwire/core-auth-library-go/v3/authservice"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/internal/testutils"
+	"github.com/rokwire/core-auth-library-go/v3/keys"
 )
 
 func setupSampleServiceRegSubscriptions() *authservice.ServiceRegSubscriptions {

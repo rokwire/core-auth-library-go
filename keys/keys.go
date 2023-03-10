@@ -29,7 +29,7 @@ import (
 	"io"
 
 	"github.com/golang-jwt/jwt"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
 )
 
 const (

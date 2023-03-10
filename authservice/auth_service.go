@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
-	"github.com/rokwire/core-auth-library-go/v2/keys"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/keys"
 	"golang.org/x/sync/syncmap"
 	"gopkg.in/go-playground/validator.v9"
 )

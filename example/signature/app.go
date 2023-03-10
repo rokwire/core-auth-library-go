@@ -22,10 +22,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/rokwire/core-auth-library-go/v2/authservice"
-	"github.com/rokwire/core-auth-library-go/v2/internal/testutils"
-	"github.com/rokwire/core-auth-library-go/v2/keys"
-	"github.com/rokwire/core-auth-library-go/v2/sigauth"
+	"github.com/rokwire/core-auth-library-go/v3/authservice"
+	"github.com/rokwire/core-auth-library-go/v3/internal/testutils"
+	"github.com/rokwire/core-auth-library-go/v3/keys"
+	"github.com/rokwire/core-auth-library-go/v3/sigauth"
 )
 
 // WebAdapter is the web adapter for signature auth

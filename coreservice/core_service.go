@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rokwire/core-auth-library-go/v2/authservice"
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/authservice"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
 	"github.com/rokwire/logging-library-go/v2/logs"
 )
 

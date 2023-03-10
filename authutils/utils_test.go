@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/rokwire/core-auth-library-go/v2/authutils"
+	"github.com/rokwire/core-auth-library-go/v3/authutils"
 )
 
 func TestHashSha256(t *testing.T) {
