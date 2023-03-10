@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+## [3.0.0] - 2023-03-09
 ### Added
 - BREAKING: Encapsulate key management [#76](https://github.com/rokwire/core-auth-library-go/issues/76)
 - BREAKING: Add webauth package for web apps [#83](https://github.com/rokwire/core-auth-library-go/issues/83)
@@ -95,7 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/rokwire/core-auth-library-go/compare/v2.2.0....HEAD
+[Unreleased]: https://github.com/rokwire/core-auth-library-go/compare/v3.0.0....HEAD
+[3.0.0](https://github.com/rokwire/core-auth-library-go/compare/v2.2.0...v3.0.0)
 [2.2.0]: https://github.com/rokwire/core-auth-library-go/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/rokwire/core-auth-library-go/compare/v2.0.3...v2.1.0
 [2.0.3]: https://github.com/rokwire/core-auth-library-go/compare/v2.0.2...v2.0.3
