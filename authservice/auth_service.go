@@ -301,7 +301,7 @@ func NewServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegL
 }
 
 // NewTestServiceRegManager creates and configures a test ServiceRegManager instance
-func NewTestServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
+func NewTestServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader, allowImmediateRefresh bool) (*ServiceRegManager, error) {
 	err := checkAuthService(authService, false)
 	if err != nil {
 		return nil, fmt.Errorf("error checking auth service: %v", err)
@@ -325,6 +325,12 @@ func NewTestServiceRegManager(authService *AuthService, serviceRegLoader Service
 		return nil, fmt.Errorf("error loading services: %v", err)
 	}
 
+	if allowImmediateRefresh {
+		manager.servicesLock.Lock()
+		updated := time.Now().Add(-time.Duration(manager.minRefreshCacheFreq+1) * time.Minute)
+		manager.servicesUpdated = &updated
+		manager.servicesLock.Unlock()
+	}
 	return manager, nil
 }
 

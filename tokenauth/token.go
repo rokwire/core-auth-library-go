@@ -173,21 +173,34 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	}
 
 	// Check token headers
+
+	// Reload service registration and retry if valid token has mismatching alg header
 	alg, _ := parsedToken.Header["alg"].(string)
 	if alg != authServiceReg.PubKey.Alg {
-		return nil, fmt.Errorf("token alg (%s) does not match %s", alg, authServiceReg.PubKey.Alg)
+		if parsedToken.Valid {
+			refreshed, refreshErr := t.serviceRegManager.CheckForRefresh()
+			if refreshErr != nil {
+				return nil, fmt.Errorf("initial token check returned invalid, error on refresh: %v", refreshErr)
+			}
+			if refreshed {
+				return t.retryCheckToken(token, purpose)
+			}
+			return nil, fmt.Errorf("token alg (%s) does not match %s", alg, authServiceReg.PubKey.Alg)
+		}
 	}
 	typ, _ := parsedToken.Header["typ"].(string)
 	if typ != "JWT" {
 		return nil, fmt.Errorf("token typ (%s) does not match JWT", typ)
 	}
+
+	// Reload service registration and try again if key may have been updated (new key ID on unexpired token)
 	kid, _ := parsedToken.Header["kid"].(string)
 	if kid != authServiceReg.PubKey.KeyID {
 		if !parsedToken.Valid {
 			if claims.ExpiresAt > time.Now().Unix() {
 				refreshed, refreshErr := t.serviceRegManager.CheckForRefresh()
 				if refreshErr != nil {
-					return nil, fmt.Errorf("initial token check returned invalid, error on retry: %v", refreshErr)
+					return nil, fmt.Errorf("initial token check returned invalid, error on refresh: %v", refreshErr)
 				}
 				if refreshed {
 					return t.retryCheckToken(token, purpose)
@@ -209,14 +222,19 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 func (t *TokenAuth) retryCheckToken(token string, purpose string) (*Claims, error) {
 	retryClaims, retryErr := t.CheckToken(token, purpose)
 	if retryErr != nil {
-		t.blacklistLock.Lock()
-		if len(t.blacklist) >= t.blacklistSize {
-			t.blacklist = t.blacklist[1:]
-		}
-		t.blacklist = append(t.blacklist, token)
-		t.blacklistLock.Unlock()
+		t.blacklistToken(token)
+		return retryClaims, fmt.Errorf("error retrying check: %v", retryErr)
 	}
-	return retryClaims, retryErr
+	return retryClaims, nil
+}
+
+func (t *TokenAuth) blacklistToken(token string) {
+	t.blacklistLock.Lock()
+	if len(t.blacklist) >= t.blacklistSize {
+		t.blacklist = t.blacklist[1:]
+	}
+	t.blacklist = append(t.blacklist, token)
+	t.blacklistLock.Unlock()
 }
 
 // CheckRequestToken is a convenience function which retrieves and checks the access token included in a request and returns the claims

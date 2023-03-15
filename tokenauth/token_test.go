@@ -119,7 +119,7 @@ func TestClaims_CanAccess(t *testing.T) {
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.PS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -131,7 +131,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
-	samplePrivKey, err := testutils.GetSamplePrivKey(keys.RS256)
+	samplePrivKey, err := testutils.GetSamplePrivKey(keys.PS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -174,6 +174,33 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 		t.Errorf("Error initializing invalid aud token: %v", err)
 	}
 
+	// Invalid algorithm
+	wrongAlgPrivKey := *samplePrivKey
+	wrongAlgPrivKey.Alg = keys.RS256
+	invalidAlgToken, err := tokenauth.GenerateSignedToken(validClaims, &wrongAlgPrivKey)
+	if err != nil {
+		t.Errorf("Error initializing invalid alg token: %v", err)
+	}
+
+	// Invalid key ID
+	wrongKeyIDPrivKey := *samplePrivKey
+	wrongKeyIDPrivKey.PubKey.KeyID = "wrong"
+	invalidKeyIDToken, err := tokenauth.GenerateSignedToken(validClaims, &wrongKeyIDPrivKey)
+	if err != nil {
+		t.Errorf("Error initializing invalid key ID token: %v", err)
+	}
+
+	// Invalid key
+	wrongPrivKey, _, err := keys.NewAsymmetricKeyPair(keys.PS256, 2048)
+	if err != nil {
+		t.Errorf("Error generating invalid keys: %v", err)
+	}
+	wrongAlgPrivKey.Alg = keys.RS256
+	wrongKeyToken, err := tokenauth.GenerateSignedToken(validClaims, wrongPrivKey)
+	if err != nil {
+		t.Errorf("Error initializing wrong key token: %v", err)
+	}
+
 	type args struct {
 		token   string
 		purpose string
@@ -192,6 +219,9 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 		{"return error on expired token", args{expiredToken, "access"}, true, nil, true, "token is expired"},
 		{"return error on wrong issuer", args{invalidIssToken, "access"}, true, nil, true, ""},
 		{"return error on wrong aud", args{invalidAudToken, "access"}, true, nil, true, ""},
+		{"return error on wrong alg", args{invalidAlgToken, "access"}, true, nil, true, "error retrying check"},
+		{"return error on wrong key id", args{invalidKeyIDToken, "access"}, true, nil, true, "valid signature but invalid kid"},
+		{"return error on wrong key", args{wrongKeyToken, "access"}, true, nil, true, "error retrying check"},
 		{"return error on wrong purpose", args{validToken, "csrf"}, true, nil, true, ""},
 		{"return error on unpermitted rokwire token", args{validToken, "access"}, false, nil, true, ""},
 		//TODO: Fill <invalid retry token> and <valid token after refresh> placeholders

@@ -181,7 +181,7 @@ func SetupMockServiceRegLoader(authService *authservice.AuthService, subscribed 
 
 // SetupTestServiceRegManager returns a test ServiceRegManager
 func SetupTestServiceRegManager(authService *authservice.AuthService, mockDataLoader *mocks.ServiceRegLoader) (*authservice.ServiceRegManager, error) {
-	return authservice.NewTestServiceRegManager(authService, mockDataLoader)
+	return authservice.NewTestServiceRegManager(authService, mockDataLoader, true)
 }
 
 // SetupMockServiceAccountTokenLoader returns a mock ServiceAccountLoader which loads a single access token
