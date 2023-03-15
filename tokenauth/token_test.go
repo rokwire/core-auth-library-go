@@ -195,7 +195,6 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error generating invalid keys: %v", err)
 	}
-	wrongAlgPrivKey.Alg = keys.RS256
 	wrongKeyToken, err := tokenauth.GenerateSignedToken(validClaims, wrongPrivKey)
 	if err != nil {
 		t.Errorf("Error initializing wrong key token: %v", err)
