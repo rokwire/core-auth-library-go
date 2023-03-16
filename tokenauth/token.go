@@ -117,11 +117,13 @@ type TokenAuth struct {
 
 // CheckToken validates the provided token and returns the token claims
 func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
+	t.blacklistLock.RLock()
 	for i := len(t.blacklist) - 1; i >= 0; i-- {
 		if token == t.blacklist[i] {
 			return nil, fmt.Errorf("known invalid token")
 		}
 	}
+	t.blacklistLock.RUnlock()
 	authServiceReg, err := t.serviceRegManager.GetServiceRegWithPubKey("auth")
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve auth service pub key: %v", err)
