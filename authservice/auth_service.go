@@ -268,7 +268,7 @@ func (s *ServiceRegManager) setServices(services []ServiceReg) {
 }
 
 // NewServiceRegManager creates and configures a new ServiceRegManager instance
-func NewServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
+func NewServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader, validate bool) (*ServiceRegManager, error) {
 	err := checkAuthService(authService, false)
 	if err != nil {
 		return nil, fmt.Errorf("error checking auth service: %v", err)
@@ -292,37 +292,28 @@ func NewServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegL
 		return nil, fmt.Errorf("error loading services: %v", err)
 	}
 
-	err = manager.ValidateServiceRegistration()
-	if err != nil {
-		return nil, fmt.Errorf("unable to validate service registration: please contact the service registration system admin to register your service - %v", err)
+	if validate {
+		err = manager.ValidateServiceRegistration()
+		if err != nil {
+			return nil, fmt.Errorf("unable to validate service registration: please contact the service registration system admin to register your service - %v", err)
+		}
 	}
 
 	return manager, nil
 }
 
 // NewTestServiceRegManager creates and configures a test ServiceRegManager instance
-func NewTestServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader) (*ServiceRegManager, error) {
-	err := checkAuthService(authService, false)
+func NewTestServiceRegManager(authService *AuthService, serviceRegLoader ServiceRegLoader, allowImmediateRefresh bool) (*ServiceRegManager, error) {
+	manager, err := NewServiceRegManager(authService, serviceRegLoader, false)
 	if err != nil {
-		return nil, fmt.Errorf("error checking auth service: %v", err)
+		return nil, err
 	}
 
-	if serviceRegLoader == nil {
-		return nil, errors.New("service registration loader is missing")
-	}
-
-	lock := &sync.RWMutex{}
-	services := &syncmap.Map{}
-
-	manager := &ServiceRegManager{AuthService: authService, services: services, servicesLock: lock, minRefreshCacheFreq: 1, maxRefreshCacheFreq: 60,
-		loader: serviceRegLoader}
-
-	// Subscribe to the implementing service to validate registration
-	serviceRegLoader.SubscribeService(authService.ServiceID)
-
-	err = manager.LoadServices()
-	if err != nil {
-		return nil, fmt.Errorf("error loading services: %v", err)
+	if allowImmediateRefresh {
+		manager.servicesLock.Lock()
+		updated := time.Now().Add(-time.Duration(manager.minRefreshCacheFreq+1) * time.Minute)
+		manager.servicesUpdated = &updated
+		manager.servicesLock.Unlock()
 	}
 
 	return manager, nil

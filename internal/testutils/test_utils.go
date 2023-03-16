@@ -173,15 +173,18 @@ func SetupTestAuthService(serviceID string, serviceHost string) *authservice.Aut
 }
 
 // SetupMockServiceRegLoader returns a mock ServiceRegLoader
-func SetupMockServiceRegLoader(authService *authservice.AuthService, subscribed []string, result []authservice.ServiceReg, err error) *mocks.ServiceRegLoader {
+func SetupMockServiceRegLoader(authService *authservice.AuthService, subscribed []string, result []authservice.ServiceReg, err error, once bool) *mocks.ServiceRegLoader {
 	mockLoader := mocks.NewServiceRegLoader(authService, subscribed)
-	mockLoader.On("LoadServices").Return(result, err)
+	loadServicesCall := mockLoader.On("LoadServices").Return(result, err)
+	if once {
+		loadServicesCall.Once()
+	}
 	return mockLoader
 }
 
 // SetupTestServiceRegManager returns a test ServiceRegManager
 func SetupTestServiceRegManager(authService *authservice.AuthService, mockDataLoader *mocks.ServiceRegLoader) (*authservice.ServiceRegManager, error) {
-	return authservice.NewTestServiceRegManager(authService, mockDataLoader)
+	return authservice.NewTestServiceRegManager(authService, mockDataLoader, true)
 }
 
 // SetupMockServiceAccountTokenLoader returns a mock ServiceAccountLoader which loads a single access token

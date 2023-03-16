@@ -69,6 +69,13 @@ To update core-auth-library-go to the latest version, use `go get -u github.com/
 Follow the steps below to upgrade to the associated version of this library. Note that the steps for each version are cumulative, so if you are attempting to upgrade by several versions, be sure to make the changes described for each version between your current version and the latest.
 
 #### Unreleased
+#### [3.0.1](https://github.com/rokwire/core-auth-library-go/compare/v3.0.0...v3.0.1)
+##### Breaking changes
+###### handlers
+* All `tokenauth.Handler` types are now expected to be pointers.
+
+###### authservice
+* `NewServiceRegManager` now takes a `validate bool` argument that determines whether or not the service registration for the caller should be automatically validated. 
 
 #### [3.0.0](https://github.com/rokwire/core-auth-library-go/compare/v2.2.0...v3.0.0)
 ##### Breaking changes

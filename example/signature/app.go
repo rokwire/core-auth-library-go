@@ -141,7 +141,7 @@ func main() {
 	}
 
 	// Instantiate a ServiceRegManager to manage service registration records
-	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader, true)
 	if err != nil {
 		log.Fatalf("Error initializing service registration manager: %v", err)
 	}

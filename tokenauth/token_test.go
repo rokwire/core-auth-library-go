@@ -119,7 +119,7 @@ func TestClaims_CanAccess(t *testing.T) {
 }
 
 func TestTokenAuth_CheckToken(t *testing.T) {
-	pubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	pubKey, err := testutils.GetSamplePubKey(keys.PS256)
 	if err != nil {
 		t.Errorf("Error getting sample pubkey: %v", err)
 		return
@@ -131,7 +131,7 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	serviceRegsValid := []authservice.ServiceReg{authServiceReg, testServiceReg}
 	subscribed := []string{"auth"}
 
-	samplePrivKey, err := testutils.GetSamplePrivKey(keys.RS256)
+	samplePrivKey, err := testutils.GetSamplePrivKey(keys.PS256)
 	if err != nil {
 		t.Errorf("Error getting sample privkey: %v", err)
 		return
@@ -174,49 +174,93 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 		t.Errorf("Error initializing invalid aud token: %v", err)
 	}
 
+	// Invalid algorithm
+	wrongAlgPrivKey := *samplePrivKey
+	wrongAlgPrivKey.Alg = keys.RS256
+	invalidAlgToken, err := tokenauth.GenerateSignedToken(validClaims, &wrongAlgPrivKey)
+	if err != nil {
+		t.Errorf("Error initializing invalid alg token: %v", err)
+	}
+
+	wrongAlgPubKey, err := testutils.GetSamplePubKey(keys.RS256)
+	if err != nil {
+		t.Errorf("Error getting sample pubkey: %v", err)
+		return
+	}
+	wrongAlgServiceRegsValid := []authservice.ServiceReg{{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: wrongAlgPubKey}, testServiceReg}
+
+	// Invalid key ID
+	wrongKeyIDPrivKey := *samplePrivKey
+	wrongKeyIDPrivKey.PubKey.KeyID = "wrong"
+	invalidKeyIDToken, err := tokenauth.GenerateSignedToken(validClaims, &wrongKeyIDPrivKey)
+	if err != nil {
+		t.Errorf("Error initializing invalid key ID token: %v", err)
+	}
+
+	// Invalid key
+	wrongPrivKey, wrongPubKey, err := keys.NewAsymmetricKeyPair(keys.PS256, 2048)
+	if err != nil {
+		t.Errorf("Error generating invalid keys: %v", err)
+	}
+	wrongKeyToken, err := tokenauth.GenerateSignedToken(validClaims, wrongPrivKey)
+	if err != nil {
+		t.Errorf("Error initializing wrong key token: %v", err)
+	}
+	wrongKeyServiceRegsValid := []authservice.ServiceReg{{ServiceID: "auth", Host: "https://auth.rokwire.com", PubKey: wrongPubKey}, testServiceReg}
+
 	type args struct {
 		token   string
 		purpose string
 	}
 	tests := []struct {
-		name          string
-		args          args
-		acceptRokwire bool
-		want          *tokenauth.Claims
-		wantErr       bool
-		errSubstring  string
+		name               string
+		args               args
+		acceptRokwire      bool
+		updatedServiceRegs []authservice.ServiceReg
+		want               *tokenauth.Claims
+		wantErr            bool
+		errSubstring       string
 	}{
-		{"return claims on valid rokwire token", args{validToken, "access"}, true, validClaims, false, ""},
-		{"return claims on valid aud token", args{validAudToken, "access"}, false, validAudClaims, false, ""},
-		{"return error on invalid token", args{"token", "access"}, true, nil, true, "failed to parse token"},
-		{"return error on expired token", args{expiredToken, "access"}, true, nil, true, "token is expired"},
-		{"return error on wrong issuer", args{invalidIssToken, "access"}, true, nil, true, ""},
-		{"return error on wrong aud", args{invalidAudToken, "access"}, true, nil, true, ""},
-		{"return error on wrong purpose", args{validToken, "csrf"}, true, nil, true, ""},
-		{"return error on unpermitted rokwire token", args{validToken, "access"}, false, nil, true, ""},
+		{"return claims on valid rokwire token", args{validToken, "access"}, true, nil, validClaims, false, ""},
+		{"return claims on valid aud token", args{validAudToken, "access"}, false, nil, validAudClaims, false, ""},
+		{"return error on invalid token", args{"token", "access"}, true, nil, nil, true, "failed to parse token"},
+		{"return error on expired token", args{expiredToken, "access"}, true, nil, nil, true, "token is expired"},
+		{"return error on wrong issuer", args{invalidIssToken, "access"}, true, nil, nil, true, ""},
+		{"return error on wrong aud", args{invalidAudToken, "access"}, true, nil, nil, true, ""},
+		{"return error on wrong alg", args{invalidAlgToken, "access"}, true, nil, nil, true, "error retrying check"},
+		{"return claims on wrong alg with update", args{invalidAlgToken, "access"}, true, wrongAlgServiceRegsValid, validClaims, false, ""},
+		{"return error on wrong key id", args{invalidKeyIDToken, "access"}, true, nil, nil, true, "valid signature but invalid kid"},
+		{"return error on wrong key", args{wrongKeyToken, "access"}, true, nil, nil, true, "error retrying check"},
+		{"return claims on wrong key with update", args{wrongKeyToken, "access"}, true, wrongKeyServiceRegsValid, validClaims, false, ""},
+		{"return error on wrong purpose", args{validToken, "csrf"}, true, nil, nil, true, ""},
+		{"return error on unpermitted rokwire token", args{validToken, "access"}, false, nil, nil, true, ""},
 		//TODO: Fill <invalid retry token> and <valid token after refresh> placeholders
 		// {"return error on retry invalid token", args{"<invalid retry token>", "access"}, true, nil, true, "initial token check returned invalid, error on retry"},
 		// {"return claims after refresh", args{"<valid token after refresh>", "access"}, true, &tokenauth.Claims{}, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil, tt.updatedServiceRegs != nil)
 			tr, err := setupTestTokenAuth(authService, tt.acceptRokwire, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
 				return
 			}
+			if tt.updatedServiceRegs != nil {
+				mockLoader.On("LoadServices").Return(tt.updatedServiceRegs, nil)
+			}
+
 			got, err := tr.CheckToken(tt.args.token, tt.args.purpose)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("TokenAuth.CheckToken() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("TokenAuth.CheckToken() error = %v, wantErr = %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr && !strings.Contains(err.Error(), tt.errSubstring) {
-				t.Errorf("TokenAuth.CheckToken() error = %v, errSubstring %s", err, tt.errSubstring)
+				t.Errorf("TokenAuth.CheckToken() error = %v, errSubstring = %s", err, tt.errSubstring)
 				return
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("TokenAuth.CheckToken() = %v, want %v", got, tt.want)
+				t.Errorf("TokenAuth.CheckToken() = %v, want = %v", got, tt.want)
 			}
 		})
 	}
@@ -242,7 +286,7 @@ func TestTokenAuth_CheckRequestToken(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil, false)
 			tr, err := setupTestTokenAuth(authService, true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
@@ -413,7 +457,7 @@ func TestTokenAuth_AuthorizeRequestPermissions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil, false)
 
 			tr, err := setupTestTokenAuth(authService, true, mockLoader)
 			if err != nil || tr == nil {
@@ -465,7 +509,7 @@ func TestTokenAuth_AuthorizeRequestScope(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil)
+			mockLoader := testutils.SetupMockServiceRegLoader(authService, subscribed, serviceRegsValid, nil, false)
 			tr, err := setupTestTokenAuth(authService, true, mockLoader)
 			if err != nil || tr == nil {
 				t.Errorf("Error initializing test token auth: %v", err)
