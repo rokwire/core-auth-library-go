@@ -117,11 +117,13 @@ type TokenAuth struct {
 
 // CheckToken validates the provided token and returns the token claims
 func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
+	t.blacklistLock.RLock()
 	for i := len(t.blacklist) - 1; i >= 0; i-- {
 		if token == t.blacklist[i] {
 			return nil, fmt.Errorf("known invalid token")
 		}
 	}
+	t.blacklistLock.RUnlock()
 	authServiceReg, err := t.serviceRegManager.GetServiceRegWithPubKey("auth")
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve auth service pub key: %v", err)
@@ -173,26 +175,34 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 	}
 
 	// Check token headers
+
+	// Reload service registration and retry if valid token has mismatching alg header
 	alg, _ := parsedToken.Header["alg"].(string)
 	if alg != authServiceReg.PubKey.Alg {
-		return nil, fmt.Errorf("token alg (%s) does not match %s", alg, authServiceReg.PubKey.Alg)
+		if parsedToken.Valid {
+			claims, err = t.retryCheckToken(token, purpose)
+			if err != nil {
+				return nil, fmt.Errorf("token alg (%s) does not match %s: %v", alg, authServiceReg.PubKey.Alg, err)
+			}
+			return claims, nil
+		}
+		return nil, fmt.Errorf("token invalid: %v", tokenErr)
 	}
 	typ, _ := parsedToken.Header["typ"].(string)
 	if typ != "JWT" {
 		return nil, fmt.Errorf("token typ (%s) does not match JWT", typ)
 	}
+
+	// Reload service registration and try again if key may have been updated (new key ID on unexpired token)
 	kid, _ := parsedToken.Header["kid"].(string)
 	if kid != authServiceReg.PubKey.KeyID {
 		if !parsedToken.Valid {
 			if claims.ExpiresAt > time.Now().Unix() {
-				refreshed, refreshErr := t.serviceRegManager.CheckForRefresh()
-				if refreshErr != nil {
-					return nil, fmt.Errorf("initial token check returned invalid, error on retry: %v", refreshErr)
+				claims, err = t.retryCheckToken(token, purpose)
+				if err != nil {
+					return nil, fmt.Errorf("token kid (%s) does not match %s: %v", kid, authServiceReg.PubKey.KeyID, err)
 				}
-				if refreshed {
-					return t.retryCheckToken(token, purpose)
-				}
-				return nil, fmt.Errorf("token invalid: %v", tokenErr)
+				return claims, nil
 			}
 			return nil, fmt.Errorf("token is expired %d", claims.ExpiresAt)
 		}
@@ -207,16 +217,31 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 }
 
 func (t *TokenAuth) retryCheckToken(token string, purpose string) (*Claims, error) {
-	retryClaims, retryErr := t.CheckToken(token, purpose)
-	if retryErr != nil {
-		t.blacklistLock.Lock()
-		if len(t.blacklist) >= t.blacklistSize {
-			t.blacklist = t.blacklist[1:]
-		}
-		t.blacklist = append(t.blacklist, token)
-		t.blacklistLock.Unlock()
+	refreshed, refreshErr := t.serviceRegManager.CheckForRefresh()
+	if refreshErr != nil {
+		return nil, fmt.Errorf("initial token check returned invalid, error on refresh: %v", refreshErr)
 	}
-	return retryClaims, retryErr
+
+	if refreshed {
+		retryClaims, retryErr := t.CheckToken(token, purpose)
+		if retryErr != nil {
+			t.blacklistToken(token)
+			return retryClaims, fmt.Errorf("error retrying check: %v", retryErr)
+		}
+
+		return retryClaims, nil
+	}
+
+	return nil, errors.New("service registrations updated recently (see ServiceRegManager.SetMinRefreshCacheFreq)")
+}
+
+func (t *TokenAuth) blacklistToken(token string) {
+	t.blacklistLock.Lock()
+	if len(t.blacklist) >= t.blacklistSize {
+		t.blacklist = t.blacklist[1:]
+	}
+	t.blacklist = append(t.blacklist, token)
+	t.blacklistLock.Unlock()
 }
 
 // CheckRequestToken is a convenience function which retrieves and checks the access token included in a request and returns the claims

@@ -67,7 +67,7 @@ func TestSignatureAuth_CheckServiceSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil, false)
 	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)
@@ -112,7 +112,7 @@ func TestSignatureAuth_CheckSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil, false)
 
 	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
@@ -164,7 +164,7 @@ func TestSignatureAuth_CheckRequestServiceSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil, false)
 	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)
@@ -237,7 +237,7 @@ func TestSignatureAuth_CheckRequestSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil, false)
 
 	privKey, err := testutils.GetSamplePrivKey(keys.RS256)
 	if err != nil {
@@ -311,7 +311,7 @@ func TestSignatureAuth_CheckParsedRequestSignature(t *testing.T) {
 	testServiceReg := authservice.ServiceReg{ServiceID: authService.ServiceID, Host: authService.ServiceHost, PubKey: pubKey}
 	serviceRegsValid := []authservice.ServiceReg{testServiceReg}
 
-	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil)
+	mockLoader := testutils.SetupMockServiceRegLoader(authService, nil, serviceRegsValid, nil, false)
 	s, err := setupTestSignatureAuth(authService, mockLoader)
 	if err != nil || s == nil {
 		t.Errorf("Error initializing test signature auth: %v", err)

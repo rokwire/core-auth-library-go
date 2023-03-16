@@ -90,7 +90,7 @@ func main() {
 	}
 
 	// Instantiate a ServiceRegManager to manage service registration records
-	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader)
+	serviceRegManager, err := authservice.NewServiceRegManager(&authService, serviceRegLoader, true)
 	if err != nil {
 		log.Fatalf("Error initializing service registration manager: %v", err)
 	}
@@ -102,7 +102,7 @@ func main() {
 	if err != nil || tokenAuth == nil {
 		log.Fatalf("Error initializing token auth: %v", err)
 	}
-	authHandlers := tokenauth.NewHandlers(tokenauth.NewScopeHandler(*tokenAuth, nil))
+	authHandlers := tokenauth.NewHandlers(tokenauth.NewScopeHandler(tokenAuth, nil))
 
 	fmt.Println("Setup complete")
 
