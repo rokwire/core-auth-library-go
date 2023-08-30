@@ -56,6 +56,7 @@ type Claims struct {
 	Name        string            `json:"name,omitempty"`         // User full name
 	Email       string            `json:"email,omitempty"`        // User email address
 	Phone       string            `json:"phone,omitempty"`        // User phone number
+	Username    string            `json:"username,omitempty"`     // Username
 	ExternalIDs map[string]string `json:"external_ids,omitempty"` // External user identifiers for use in external integrations
 
 	//TODO: Once the new user ID scheme has been adopted across all services these claims should be removed
