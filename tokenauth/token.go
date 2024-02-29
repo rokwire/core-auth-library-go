@@ -144,25 +144,25 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 
 	// Check token claims
 	if claims.Subject == "" {
-		return nil, errors.New("token sub missing")
+		return claims, errors.New("token sub missing")
 	}
 	if claims.ExpiresAt == 0 {
-		return nil, errors.New("token exp missing")
+		return claims, errors.New("token exp missing")
 	}
 	if claims.IssuedAt == 0 {
-		return nil, errors.New("token iat missing")
+		return claims, errors.New("token iat missing")
 	}
 	if claims.OrgID == "" {
-		return nil, errors.New("token org_id missing")
+		return claims, errors.New("token org_id missing")
 	}
 	if claims.AuthType == "" {
-		return nil, errors.New("token auth_type missing")
+		return claims, errors.New("token auth_type missing")
 	}
 	if claims.Issuer != authServiceReg.Host {
-		return nil, fmt.Errorf("token iss (%s) does not match %s", claims.Issuer, authServiceReg.Host)
+		return claims, fmt.Errorf("token iss (%s) does not match %s", claims.Issuer, authServiceReg.Host)
 	}
 	if claims.Purpose != purpose {
-		return nil, fmt.Errorf("token purpose (%s) does not match %s", claims.Purpose, purpose)
+		return claims, fmt.Errorf("token purpose (%s) does not match %s", claims.Purpose, purpose)
 	}
 
 	aud := strings.Split(claims.Audience, ",")
@@ -172,7 +172,7 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 			acceptAuds += " or " + AudRokwire
 		}
 
-		return nil, fmt.Errorf("token aud (%s) does not match %s", claims.Audience, acceptAuds)
+		return claims, fmt.Errorf("token aud (%s) does not match %s", claims.Audience, acceptAuds)
 	}
 
 	// Check token headers
@@ -183,15 +183,15 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 		if parsedToken.Valid {
 			claims, err = t.retryCheckToken(token, purpose)
 			if err != nil {
-				return nil, fmt.Errorf("token alg (%s) does not match %s: %v", alg, authServiceReg.PubKey.Alg, err)
+				return claims, fmt.Errorf("token alg (%s) does not match %s: %v", alg, authServiceReg.PubKey.Alg, err)
 			}
 			return claims, nil
 		}
-		return nil, fmt.Errorf("token invalid: %v", tokenErr)
+		return claims, fmt.Errorf("token invalid: %v", tokenErr)
 	}
 	typ, _ := parsedToken.Header["typ"].(string)
 	if typ != "JWT" {
-		return nil, fmt.Errorf("token typ (%s) does not match JWT", typ)
+		return claims, fmt.Errorf("token typ (%s) does not match JWT", typ)
 	}
 
 	// Reload service registration and try again if key may have been updated (new key ID on unexpired token)
@@ -201,17 +201,17 @@ func (t *TokenAuth) CheckToken(token string, purpose string) (*Claims, error) {
 			if claims.ExpiresAt > time.Now().Unix() {
 				claims, err = t.retryCheckToken(token, purpose)
 				if err != nil {
-					return nil, fmt.Errorf("token kid (%s) does not match %s: %v", kid, authServiceReg.PubKey.KeyID, err)
+					return claims, fmt.Errorf("token kid (%s) does not match %s: %v", kid, authServiceReg.PubKey.KeyID, err)
 				}
 				return claims, nil
 			}
-			return nil, fmt.Errorf("token is expired %d", claims.ExpiresAt)
+			return claims, fmt.Errorf("token is expired %d", claims.ExpiresAt)
 		}
-		return nil, fmt.Errorf("token has valid signature but invalid kid %s", kid)
+		return claims, fmt.Errorf("token has valid signature but invalid kid %s", kid)
 	}
 
 	if !parsedToken.Valid {
-		return nil, fmt.Errorf("token invalid: %v", tokenErr)
+		return claims, fmt.Errorf("token invalid: %v", tokenErr)
 	}
 
 	return claims, nil
@@ -255,7 +255,7 @@ func (t *TokenAuth) CheckRequestToken(r *http.Request) (*Claims, error) {
 
 	accessClaims, err := t.CheckToken(accessToken, "access")
 	if err != nil {
-		return nil, fmt.Errorf("error validating access token: %v", err)
+		return accessClaims, fmt.Errorf("error validating access token: %v", err)
 	}
 
 	return accessClaims, nil

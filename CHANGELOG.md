@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+### Changed
+- Expose invalid claims [#94](https://github.com/rokwire/core-auth-library-go/issues/94)
+
 ## [3.1.0] - 2023-08-30
 ### Added
 - Add username field to token claims [#91](https://github.com/rokwire/core-auth-library-go/issues/91)

@@ -56,14 +56,14 @@ type StandardHandler struct {
 func (h *StandardHandler) Check(req *http.Request) (int, *Claims, error) {
 	claims, err := h.tokenAuth.CheckRequestToken(req)
 	if err != nil {
-		return http.StatusUnauthorized, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
+		return http.StatusUnauthorized, claims, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypeToken, nil, err)
 	}
 
 	status := http.StatusOK
 	if h.claimsCheck != nil {
 		status, err = h.claimsCheck(claims, req)
 		if err != nil {
-			return status, nil, err
+			return status, claims, err
 		}
 	}
 
@@ -118,7 +118,7 @@ func (h *PermissionsHandler) Check(req *http.Request) (int, *Claims, error) {
 
 	err = h.auth.GetTokenAuth().AuthorizeRequestPermissions(claims, req)
 	if err != nil {
-		return http.StatusForbidden, nil, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypePermission, nil, err)
+		return http.StatusForbidden, claims, errors.WrapErrorAction(logutils.ActionValidate, logutils.TypePermission, nil, err)
 	}
 
 	return status, claims, err
@@ -148,7 +148,7 @@ func (h *UserHandler) Check(req *http.Request) (int, *Claims, error) {
 	}
 
 	if claims.Anonymous {
-		return http.StatusForbidden, nil, errors.New("token must not be anonymous")
+		return http.StatusForbidden, claims, errors.New("token must not be anonymous")
 	}
 
 	return status, claims, err
@@ -178,7 +178,7 @@ func (h *AuthenticatedHandler) Check(req *http.Request) (int, *Claims, error) {
 	}
 
 	if !claims.Authenticated {
-		return http.StatusForbidden, nil, errors.New("user must login again")
+		return http.StatusForbidden, claims, errors.New("user must login again")
 	}
 
 	return status, claims, err
