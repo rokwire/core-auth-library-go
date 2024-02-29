@@ -153,7 +153,8 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 	}
 
 	// Expired
-	expiredToken, err := tokenauth.GenerateSignedToken(getSampleExpiredClaims(), samplePrivKey)
+	expiredClaims := getSampleExpiredClaims()
+	expiredToken, err := tokenauth.GenerateSignedToken(expiredClaims, samplePrivKey)
 	if err != nil {
 		t.Errorf("Error initializing expired token: %v", err)
 	}
@@ -224,16 +225,16 @@ func TestTokenAuth_CheckToken(t *testing.T) {
 		{"return claims on valid rokwire token", args{validToken, "access"}, true, nil, validClaims, false, ""},
 		{"return claims on valid aud token", args{validAudToken, "access"}, false, nil, validAudClaims, false, ""},
 		{"return error on invalid token", args{"token", "access"}, true, nil, nil, true, "failed to parse token"},
-		{"return error on expired token", args{expiredToken, "access"}, true, nil, nil, true, "token is expired"},
-		{"return error on wrong issuer", args{invalidIssToken, "access"}, true, nil, nil, true, ""},
-		{"return error on wrong aud", args{invalidAudToken, "access"}, true, nil, nil, true, ""},
+		{"return error on expired token", args{expiredToken, "access"}, true, nil, expiredClaims, true, "token is expired"},
+		{"return error on wrong issuer", args{invalidIssToken, "access"}, true, nil, invalidIssClaims, true, ""},
+		{"return error on wrong aud", args{invalidAudToken, "access"}, true, nil, invalidAudClaims, true, ""},
 		{"return error on wrong alg", args{invalidAlgToken, "access"}, true, nil, nil, true, "error retrying check"},
 		{"return claims on wrong alg with update", args{invalidAlgToken, "access"}, true, wrongAlgServiceRegsValid, validClaims, false, ""},
-		{"return error on wrong key id", args{invalidKeyIDToken, "access"}, true, nil, nil, true, "valid signature but invalid kid"},
+		{"return error on wrong key id", args{invalidKeyIDToken, "access"}, true, nil, validClaims, true, "valid signature but invalid kid"},
 		{"return error on wrong key", args{wrongKeyToken, "access"}, true, nil, nil, true, "error retrying check"},
 		{"return claims on wrong key with update", args{wrongKeyToken, "access"}, true, wrongKeyServiceRegsValid, validClaims, false, ""},
-		{"return error on wrong purpose", args{validToken, "csrf"}, true, nil, nil, true, ""},
-		{"return error on unpermitted rokwire token", args{validToken, "access"}, false, nil, nil, true, ""},
+		{"return error on wrong purpose", args{validToken, "csrf"}, true, nil, validClaims, true, ""},
+		{"return error on unpermitted rokwire token", args{validToken, "access"}, false, nil, validClaims, true, ""},
 		//TODO: Fill <invalid retry token> and <valid token after refresh> placeholders
 		// {"return error on retry invalid token", args{"<invalid retry token>", "access"}, true, nil, true, "initial token check returned invalid, error on retry"},
 		// {"return claims after refresh", args{"<valid token after refresh>", "access"}, true, &tokenauth.Claims{}, false, ""},
