@@ -1,5 +1,7 @@
 github.com/aws/aws-sdk-go v1.50.28 h1:cXltYLw4dq10YPAwk8EGYJjeQlCky4tyxAllWmVQZ9Y=
 github.com/aws/aws-sdk-go v1.50.28/go.mod h1:LF8svs817+Nz+DmiMQKTO3ubZ/6IaTpq3TjupRn3Eqk=
+github.com/aws/aws-sdk-go v1.50.29 h1:Ol2FYzesF2tsQrgVSnDWRFI60+FsSqKKdt7MLlZKubc=
+github.com/aws/aws-sdk-go v1.50.29/go.mod h1:LF8svs817+Nz+DmiMQKTO3ubZ/6IaTpq3TjupRn3Eqk=
 github.com/casbin/casbin/v2 v2.82.0 h1:2CgvunqQQoepcbGRnMc9vEcDhuqh3B5yWKoj+kKSxf8=
 github.com/casbin/casbin/v2 v2.82.0/go.mod h1:jX8uoN4veP85O/n2674r2qtfSXI6myvxW85f6TH50fw=
 github.com/casbin/govaluate v1.1.0/go.mod h1:G/UnbIjZk/0uMNaLwZZmFQrR72tYRZWQkO70si/iR7A=
@@ -39,6 +41,8 @@ github.com/rogpeppe/go-internal v1.9.0 h1:73kH8U+JUqXU8lRuOHeVHaa/SZPifC7BkcraZV
 github.com/rogpeppe/go-internal v1.9.0/go.mod h1:WtVeX8xhTBvf0smdhujwtBcq4Qrzq/fJaraNFVN+nFs=
 github.com/rokwire/logging-library-go/v2 v2.2.0 h1:SKFq+rrl+li1RhEhB7CV+pVcptu/nurX9/DWj/oRaw4=
 github.com/rokwire/logging-library-go/v2 v2.2.0/go.mod h1:6QSqTlk5nNQcZweqg0sLCCoIwpRpTu3AmOi7EJy38Tg=
+github.com/rokwire/logging-library-go/v2 v2.3.0 h1:79paNwa+DwvaMNyTqg4emkXbn6xHIkpmDKWfQ2K6FUc=
+github.com/rokwire/logging-library-go/v2 v2.3.0/go.mod h1:ns94awYfgAzKynb/sI4X8TP6UGovfiGHLqVE2wzccR8=
 github.com/rs/cors v1.10.1 h1:L0uuZVXIKlI1SShY2nhFfo44TYvDPQ1w4oFkUJNfhyo=
 github.com/rs/cors v1.10.1/go.mod h1:XyqrcTp5zjWr1wsJ8PIRZssZ8b/WMcMf71DJnit4EMU=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
