@@ -69,6 +69,12 @@ To update core-auth-library-go to the latest version, use `go get -u github.com/
 Follow the steps below to upgrade to the associated version of this library. Note that the steps for each version are cumulative, so if you are attempting to upgrade by several versions, be sure to make the changes described for each version between your current version and the latest.
 
 #### Unreleased
+##### Breaking changes
+###### coreservice
+* `coreservice.DeletedAccountsConfig` has been renamed to `coreservice.DeletedAccountsConfig` and the `Callback` field is now a function that takes `[]DeletedOrgAppMemberships` as its parameter instead of `[]string`.
+* `coreservice.StartDeletedAccountsTimer` has been renamed to `coreservice.StartDeletedMembershipsTimer`.
+* `DeletedOrgAppMemberships` represents a list of tenant account app memberships that have been deleted for the specified tenant (organization) and application. When a full account with multiple memberships is deleted, the ID of that account will appear in the list for multiple tenant-application pairs.
+
 #### [3.0.1](https://github.com/rokwire/core-auth-library-go/compare/v3.0.0...v3.0.1)
 ##### Breaking changes
 ###### handlers
