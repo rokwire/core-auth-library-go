@@ -44,20 +44,20 @@ func main() {
 		log.Fatalf("Error initializing service account manager: %v", err)
 	}
 
-	// Instantiate a CoreService to utilize certain core services, such as reading deleted account IDs
-	deletedAccountsConfig := coreservice.DeletedAccountsConfig{
-		Callback: printDeletedAccountIDs,
+	// Instantiate a CoreService to utilize certain core services, such as fetching account IDs for deleted app memberships
+	deletedMembershipsConfig := coreservice.DeletedMembershipsConfig{
+		Callback: printDeletedMemberships,
 	}
 	logger := logs.NewLogger(authService.ServiceID, nil)
-	coreService, err := coreservice.NewCoreService(serviceAccountManager, &deletedAccountsConfig, logger)
+	coreService, err := coreservice.NewCoreService(serviceAccountManager, &deletedMembershipsConfig, logger)
 	if err != nil {
 		log.Printf("Error initializing core service: %v", err)
 	}
 
-	coreService.StartDeletedAccountsTimer()
+	coreService.StartDeletedMembershipsTimer()
 }
 
-func printDeletedAccountIDs(accountIDs []string) error {
-	log.Printf("Deleted account IDs: %v\n", accountIDs)
+func printDeletedMemberships(memberships []coreservice.DeletedOrgAppMemberships) error {
+	log.Printf("Deleted account memberships: %v\n", memberships)
 	return nil
 }
