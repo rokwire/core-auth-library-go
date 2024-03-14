@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/rokwire/core-auth-library-go/v3/authservice"
@@ -104,7 +105,11 @@ func (c *CoreService) getDeletedMemberships() ([]DeletedOrgAppMemberships, error
 }
 
 func (c *CoreService) buildDeletedMembershipsRequest() (*http.Request, error) {
-	req, err := http.NewRequest(http.MethodGet, c.serviceAccountManager.AuthService.AuthBaseURL+c.deletedMembershipsConfig.path, nil)
+	deletedMembershipsURL := c.serviceAccountManager.AuthService.AuthBaseURL + c.deletedMembershipsConfig.path
+	query := url.Values{}
+	query.Set("service_id", c.serviceAccountManager.AuthService.ServiceID)
+
+	req, err := http.NewRequest(http.MethodGet, deletedMembershipsURL+"?"+query.Encode(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error formatting request to get deleted memberships: %v", err)
 	}
@@ -119,9 +124,9 @@ func NewCoreService(serviceAccountManager *authservice.ServiceAccountManager, de
 	}
 
 	if deletedMembershipsConfig != nil {
-		deletedMembershipsConfig.path = "/tps/memberships"
+		deletedMembershipsConfig.path = "/tps/deleted-memberships"
 		if serviceAccountManager.AuthService.FirstParty {
-			deletedMembershipsConfig.path = "/bbs/memberships"
+			deletedMembershipsConfig.path = "/bbs/deleted-memberships"
 		}
 
 		if deletedMembershipsConfig.Callback != nil {
@@ -149,7 +154,13 @@ type DeletedMembershipsConfig struct {
 
 // DeletedOrgAppMemberships represents a list of tenant (organization) accounts for which the app membership for the given app ID has been deleted
 type DeletedOrgAppMemberships struct {
-	AccountIDs []string `json:"account_ids"`
-	AppID      string   `json:"app_id"`
-	OrgID      string   `json:"org_id"`
+	Memberships []DeletedMembershipContext `json:"memberships"`
+	AppID       string                     `json:"app_id"`
+	OrgID       string                     `json:"org_id"`
+}
+
+// DeletedMembershipContext represents a single deleted account app membership with delete context
+type DeletedMembershipContext struct {
+	AccountID string                 `json:"account_id"`
+	Context   map[string]interface{} `json:"context"`
 }
