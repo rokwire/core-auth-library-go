@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/rokwire/core-auth-library-go/v3/authservice"
@@ -30,119 +31,136 @@ import (
 type CoreService struct {
 	serviceAccountManager *authservice.ServiceAccountManager
 
-	deletedAccountsConfig *DeletedAccountsConfig
+	deletedMembershipsConfig *DeletedMembershipsConfig
 
 	logger *logs.Logger
 }
 
-// StartDeletedAccountsTimer starts a timer that periodically retrieves deleted account IDs
-func (c *CoreService) StartDeletedAccountsTimer() {
+// StartDeletedMembershipsTimer starts a timer that periodically retrieves IDs for accounts with deleted app memberships
+func (c *CoreService) StartDeletedMembershipsTimer() {
 	//cancel if active
-	if c.deletedAccountsConfig.timer != nil {
-		c.deletedAccountsConfig.timerDone <- true
-		c.deletedAccountsConfig.timer.Stop()
+	if c.deletedMembershipsConfig.timer != nil {
+		c.deletedMembershipsConfig.timerDone <- true
+		c.deletedMembershipsConfig.timer.Stop()
 	}
 
-	c.getDeletedAccountsWithCallback(c.deletedAccountsConfig.Callback)
+	c.getDeletedMembershipsWithCallback(c.deletedMembershipsConfig.Callback)
 }
 
-func (c *CoreService) getDeletedAccountsWithCallback(callback func([]string) error) {
-	accountIDs, err := c.getDeletedAccounts()
+func (c *CoreService) getDeletedMembershipsWithCallback(callback func([]DeletedOrgAppMemberships) error) {
+	memberships, err := c.getDeletedMemberships()
 	if err != nil && c.logger != nil {
 		c.logger.Error(err.Error())
 	}
 
-	err = callback(accountIDs)
+	err = callback(memberships)
 	if err != nil && c.logger != nil {
 		c.logger.Errorf("received error from callback function: %v", err)
 	}
 
-	duration := time.Hour * time.Duration(int64(c.deletedAccountsConfig.Period))
-	c.deletedAccountsConfig.timer = time.NewTimer(duration)
+	duration := time.Hour * time.Duration(int64(c.deletedMembershipsConfig.Period))
+	c.deletedMembershipsConfig.timer = time.NewTimer(duration)
 	select {
-	case <-c.deletedAccountsConfig.timer.C:
+	case <-c.deletedMembershipsConfig.timer.C:
 		// timer expired
-		c.deletedAccountsConfig.timer = nil
+		c.deletedMembershipsConfig.timer = nil
 
-		c.getDeletedAccountsWithCallback(callback)
-	case <-c.deletedAccountsConfig.timerDone:
+		c.getDeletedMembershipsWithCallback(callback)
+	case <-c.deletedMembershipsConfig.timerDone:
 		// timer aborted
-		c.deletedAccountsConfig.timer = nil
+		c.deletedMembershipsConfig.timer = nil
 	}
 }
 
-func (c *CoreService) getDeletedAccounts() ([]string, error) {
-	accountIDs := make([]string, 0)
+func (c *CoreService) getDeletedMemberships() ([]DeletedOrgAppMemberships, error) {
+	allDeleted := make([]DeletedOrgAppMemberships, 0)
 
-	req, err := c.buildDeletedAccountsRequest()
+	req, err := c.buildDeletedMembershipsRequest()
 	if err != nil {
-		return nil, fmt.Errorf("error building deleted accounts request: %v", err)
+		return nil, fmt.Errorf("error building deleted memberships request: %v", err)
 	}
 
 	responses := c.serviceAccountManager.MakeRequests(req, nil)
 	for _, reqResp := range responses {
 		if reqResp.Error != nil && c.logger != nil {
-			c.logger.Errorf("error making deleted accounts request: %v", reqResp.Error)
+			c.logger.Errorf("error making deleted memberships request: %v", reqResp.Error)
 			continue
 		}
 
 		body, err := authutils.ReadResponseBody(reqResp.Response)
 		if err != nil {
-			return nil, fmt.Errorf("error reading deleted accounts response body: %v", err)
+			return nil, fmt.Errorf("error reading deleted memberships response body: %v", err)
 		}
 
-		var deleted []string
+		var deleted []DeletedOrgAppMemberships
 		err = json.Unmarshal(body, &deleted)
 		if err != nil {
-			return nil, fmt.Errorf("error unmarshaling deleted accounts response body: %v", err)
+			return nil, fmt.Errorf("error unmarshaling deleted memberships response body: %v", err)
 		}
 
-		accountIDs = append(accountIDs, deleted...)
+		allDeleted = append(allDeleted, deleted...)
 	}
 
-	return accountIDs, nil
+	return allDeleted, nil
 }
 
-func (c *CoreService) buildDeletedAccountsRequest() (*http.Request, error) {
-	req, err := http.NewRequest("GET", c.serviceAccountManager.AuthService.AuthBaseURL+c.deletedAccountsConfig.path, nil)
+func (c *CoreService) buildDeletedMembershipsRequest() (*http.Request, error) {
+	deletedMembershipsURL := c.serviceAccountManager.AuthService.AuthBaseURL + c.deletedMembershipsConfig.path
+	query := url.Values{}
+	query.Set("service_id", c.serviceAccountManager.AuthService.ServiceID)
+
+	req, err := http.NewRequest(http.MethodGet, deletedMembershipsURL+"?"+query.Encode(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("error formatting request to get deleted accounts: %v", err)
+		return nil, fmt.Errorf("error formatting request to get deleted memberships: %v", err)
 	}
 
 	return req, nil
 }
 
 // NewCoreService creates and configures a new CoreService instance
-func NewCoreService(serviceAccountManager *authservice.ServiceAccountManager, deletedAccountsConfig *DeletedAccountsConfig, logger *logs.Logger) (*CoreService, error) {
+func NewCoreService(serviceAccountManager *authservice.ServiceAccountManager, deletedMembershipsConfig *DeletedMembershipsConfig, logger *logs.Logger) (*CoreService, error) {
 	if serviceAccountManager == nil {
 		return nil, errors.New("service account manager is missing")
 	}
 
-	if deletedAccountsConfig != nil {
-		deletedAccountsConfig.path = "/tps/deleted-accounts"
+	if deletedMembershipsConfig != nil {
+		deletedMembershipsConfig.path = "/tps/deleted-memberships"
 		if serviceAccountManager.AuthService.FirstParty {
-			deletedAccountsConfig.path = "/bbs/deleted-accounts"
+			deletedMembershipsConfig.path = "/bbs/deleted-memberships"
 		}
 
-		if deletedAccountsConfig.Callback != nil {
-			deletedAccountsConfig.timerDone = make(chan bool)
-			if deletedAccountsConfig.Period == 0 {
-				deletedAccountsConfig.Period = 2
+		if deletedMembershipsConfig.Callback != nil {
+			deletedMembershipsConfig.timerDone = make(chan bool)
+			if deletedMembershipsConfig.Period == 0 {
+				deletedMembershipsConfig.Period = 2
 			}
 		}
 	}
 
-	core := CoreService{serviceAccountManager: serviceAccountManager, deletedAccountsConfig: deletedAccountsConfig, logger: logger}
+	core := CoreService{serviceAccountManager: serviceAccountManager, deletedMembershipsConfig: deletedMembershipsConfig, logger: logger}
 
 	return &core, nil
 }
 
-// DeletedAccountsConfig represents a configuration for getting deleted accounts from a remote core service
-type DeletedAccountsConfig struct {
-	Callback func([]string) error // Function to call once the deleted accounts are received
-	Period   uint                 // How often to request deleted account list in hours (the default is 2)
+// DeletedMembershipsConfig represents a configuration for getting deleted account app memberships from a remote core service
+type DeletedMembershipsConfig struct {
+	Callback func([]DeletedOrgAppMemberships) error // Function to call once the deleted memberships are received
+	Period   uint                                   // How often to request deleted memberships in hours (the default is 2)
 
 	path      string
 	timerDone chan bool
 	timer     *time.Timer
+}
+
+// DeletedOrgAppMemberships represents a list of tenant (organization) accounts for which the app membership for the given app ID has been deleted
+type DeletedOrgAppMemberships struct {
+	Memberships []DeletedMembershipContext `json:"memberships"`
+	AppID       string                     `json:"app_id"`
+	OrgID       string                     `json:"org_id"`
+}
+
+// DeletedMembershipContext represents a single deleted account app membership with delete context
+type DeletedMembershipContext struct {
+	AccountID string                 `json:"account_id"`
+	Context   map[string]interface{} `json:"context"`
 }
