@@ -7,7 +7,7 @@ require (
 	github.com/casbin/casbin/v2 v2.82.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/rokwire/logging-library-go/v2 v2.3.0
-	github.com/rs/cors v1.10.1
+	github.com/rs/cors v1.11.0
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/sync v0.6.0
 	gopkg.in/go-playground/validator.v9 v9.31.0
